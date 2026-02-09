@@ -70,14 +70,13 @@
     btnToggleLog: document.getElementById('btn-toggle-log'),
     gameLogPanel: document.getElementById('game-log-panel'),
     gameLogContent: document.getElementById('game-log-content'),
-    // 玩家数量选择
-    playerCountBtns: document.querySelectorAll('.player-count-btn')
+    // (玩家数量由外部 JSON 配置决定)
   };
 
   // ========== 游戏状态 ==========
   let deckLib = null;
   let gameLog = [];
-  let selectedPlayerCount = 2;
+  // 玩家数量由 gameConfig.players.length 决定
 
   let gameState = {
     players: [],           // 玩家数组
@@ -878,7 +877,8 @@
     UI.btnCopyLog.style.display = 'none';
     
     // 初始化玩家
-    gameState.players = initializePlayers(selectedPlayerCount);
+    const playerCount = Math.min(Math.max((gameConfig?.players?.length || DEFAULT_CONFIG.players.length), 2), 6);
+    gameState.players = initializePlayers(playerCount);
     gameState.board = [];
     gameState.phase = 'preflop';
     gameState.pot = 0;
@@ -1224,7 +1224,7 @@
   function generateLogText() {
     const lines = [];
     lines.push('═══════════════════════════════════════════════════════════');
-    lines.push(`TEXAS HOLD'EM GAME LOG - ${selectedPlayerCount} Players`);
+    lines.push(`TEXAS HOLD'EM GAME LOG - ${gameState.players.length} Players`);
     lines.push('Generated: ' + new Date().toLocaleString());
     lines.push('═══════════════════════════════════════════════════════════');
     lines.push('');
@@ -1399,16 +1399,6 @@
     UI.raiseAmountDisplay.textContent = '$' + this.value;
   });
 
-  // 玩家数量选择
-  UI.playerCountBtns.forEach(btn => {
-    btn.addEventListener('click', function() {
-      if (gameState.phase !== 'idle') return;
-      
-      UI.playerCountBtns.forEach(b => b.classList.remove('active'));
-      this.classList.add('active');
-      selectedPlayerCount = parseInt(this.dataset.count);
-    });
-  });
 
   UI.btnForceNext.addEventListener('click', () => {
     if (gameState.phase !== 'idle') {

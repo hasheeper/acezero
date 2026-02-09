@@ -991,48 +991,6 @@ body {
   transform: none;
 }
 
-.player-count-selector {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  background: #111;
-  padding: 5px 10px;
-  border-radius: 4px;
-  border: 1px solid rgba(255,255,255,0.1);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-}
-
-.player-count-selector label {
-  font-family: 'JetBrains Mono';
-  font-size: 10px;
-  color: #666;
-  margin-right: 5px;
-}
-
-.player-count-btn {
-  background: #1a1a1a;
-  border: 1px solid #333;
-  color: #888;
-  padding: 5px 12px;
-  font-family: 'JetBrains Mono';
-  font-size: 11px;
-  cursor: pointer;
-  border-radius: 3px;
-  transition: all 0.2s;
-}
-
-.player-count-btn:hover {
-  background: #252525;
-  color: #fff;
-}
-
-.player-count-btn.active {
-  background: var(--gold-dim);
-  color: #000;
-  border-color: var(--gold-main);
-  font-weight: 700;
-}
-
 #debug-panel {
   position: absolute;
   bottom: -160px;
