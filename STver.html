@@ -104,7 +104,7 @@
           const dataNode = document.getElementById('acezero-json');
           if (!dataNode) return null;
           const raw = (dataNode.textContent || dataNode.innerText || '').trim();
-          if (!raw || raw === '$1') return null;
+          if (!raw) return null;
           return JSON.parse(raw);
         } catch (e) {
           console.warn('[AceZero] 解析注入数据失败:', e);

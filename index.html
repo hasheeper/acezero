@@ -32,12 +32,12 @@
     }
 
     /* ============================================
-       ui-scale: 固定尺寸游戏容器 (1100x720)
+       ui-scale: 固定尺寸游戏容器 (1100x850)
        通过 JS 计算 --ui-scale 实现自适应缩放
        ============================================ */
     .ui-scale {
       width: 1100px !important;
-      height: 720px !important;
+      height: 850px !important;
       flex-shrink: 0;
       position: relative;
       z-index: 10;
@@ -135,10 +135,10 @@
 
       // ============================================
       // UI-SCALE 自适应缩放（参考 参考/index.css 模式）
-      // 固定设计尺寸 1100x720，根据窗口大小缩放
+      // 固定设计尺寸 1100x850，根据窗口大小缩放
       // ============================================
       const DESIGN_W = 1100;
-      const DESIGN_H = 720;
+      const DESIGN_H = 850;
       const uiScale = document.getElementById('ui-scale');
 
       function recalcScale() {

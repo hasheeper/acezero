@@ -1372,15 +1372,16 @@
     if (!table) return;
 
     const tableW = 1100;
-    const tableH = 550;
-    const availW = window.innerWidth - 40;
-    const availH = window.innerHeight - 200;
+    // 实际视觉高度 = 表上溢出120 + 牌桌550 + 表下溢出160 = 830
+    const totalVisualH = 830;
+    const availW = window.innerWidth - 20;
+    const availH = window.innerHeight - 20;
 
-    let scale = Math.min(availW / tableW, availH / tableH);
+    let scale = Math.min(availW / tableW, availH / totalVisualH);
     if (!Number.isFinite(scale)) {
       scale = 1;
     }
-    if (scale > 1.1) scale = 1.1;
+    if (scale > 1.05) scale = 1.05;
 
     table.style.transform = `scale(${scale})`;
   }
