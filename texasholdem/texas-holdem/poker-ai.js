@@ -139,6 +139,14 @@
       if (gap === 1) score += 8;
       else if (gap === 2) score += 5;
       else if (gap === 3) score += 2;
+      // Broadway 高张加分：两张都是 T+ 的非对子牌应该更强
+      // AKs=72, AKo=62, AQs=69, KQs=66 — 更接近真实排名
+      if (high >= 14 && low >= 13) score += 20; // AK
+      else if (high >= 14 && low >= 12) score += 15; // AQ
+      else if (high >= 14 && low >= 11) score += 12; // AJ
+      else if (high >= 13 && low >= 12) score += 12; // KQ
+      else if (high >= 14 && low >= 10) score += 8;  // AT
+      else if (high >= 13 && low >= 11) score += 8;  // KJ
     }
     
     return Math.min(100, score);

@@ -390,11 +390,12 @@
     if (activePlayers.length <= 1) return true;
     
     // 检查是否所有活跃玩家都已行动且下注相同
+    // 🛡️ All-in 玩家（chips===0）无法继续下注，不参与 bet-matching 检查
     const maxBet = Math.max(...activePlayers.map(p => p.currentBet));
-    const allMatched = activePlayers.every(p => p.currentBet === maxBet);
+    const allMatched = activePlayers.every(p => p.currentBet === maxBet || p.chips === 0);
     
-    // 确保每个人至少行动过一次
-    const allActed = activePlayers.every(p => p.hasActedThisRound);
+    // 确保每个有筹码的玩家至少行动过一次（all-in 玩家跳过）
+    const allActed = activePlayers.every(p => p.hasActedThisRound || p.chips === 0);
     
     // Preflop 特殊处理：BB 必须有机会行动（Option权）
     // 即使所有人下注相同，如果 BB 还没主动行动过，不能结束
@@ -435,6 +436,15 @@
     }
     
     const currentPlayer = gameState.players[gameState.turnIndex];
+    
+    // 🛡️ 跳过 All-in 玩家（chips===0，无法行动）
+    if (currentPlayer.chips === 0) {
+      currentPlayer.hasActedThisRound = true;
+      gameState.actionCount++;
+      setTimeout(nextTurn, 100);
+      return;
+    }
+    
     setTurnIndicator(gameState.turnIndex);
     
     // 更新toCall显示
@@ -469,10 +479,12 @@
     }
     
     // 更新加注滑块
-    const maxRaise = player.chips;
-    const minRaise = Math.max(getBigBlind(), gameState.currentBet);
+    // 最小加注额 = 大盲注（或上一次加注的增量，简化为大盲注）
+    // 滑块值 = 加注增量（在跟注之上额外加的部分）
+    const maxRaise = player.chips - toCall; // 扣除跟注后剩余可加注的量
+    const minRaise = Math.min(getBigBlind(), maxRaise > 0 ? maxRaise : player.chips);
     UI.raiseSlider.min = minRaise;
-    UI.raiseSlider.max = maxRaise;
+    UI.raiseSlider.max = Math.max(minRaise, maxRaise);
     UI.raiseSlider.value = minRaise;
     UI.raiseAmountDisplay.textContent = '$' + minRaise;
   }
@@ -588,7 +600,7 @@
       aiStack: player.chips,
       playerStack: gameState.players[0].chips,
       phase: gameState.phase,
-      minRaise: Math.max(getBigBlind(), gameState.currentBet),
+      minRaise: getBigBlind(),
       activeOpponentCount: getActivePlayers().length - 1  // 🎯 传递活跃对手数量
     };
     
@@ -876,14 +888,34 @@
     UI.gameLogPanel.style.display = 'none';
     UI.btnCopyLog.style.display = 'none';
     
-    // 初始化玩家
-    const playerCount = Math.min(Math.max((gameConfig?.players?.length || DEFAULT_CONFIG.players.length), 2), 6);
-    gameState.players = initializePlayers(playerCount);
+    // 判断是否需要全新初始化（首局 or 游戏结束后重开）
+    const alivePlayers = gameState.players.filter(p => p.chips > 0);
+    const needFullReset = gameState.players.length === 0 || alivePlayers.length <= 1;
+    
+    if (needFullReset) {
+      // 全新一局：从配置初始化所有玩家
+      const playerCount = Math.min(Math.max((gameConfig?.players?.length || DEFAULT_CONFIG.players.length), 2), 6);
+      gameState.players = initializePlayers(playerCount);
+      gameState.dealerIndex = 0;
+    } else {
+      // 连续对局：保留筹码，重置手牌状态
+      gameState.players.forEach(p => {
+        p.cards = [];
+        p.currentBet = 0;
+        p.totalBet = 0;
+        p.folded = false;
+        p.hasActedThisRound = false;
+        // 已淘汰的玩家保持 isActive = false
+        if (p.chips > 0) {
+          p.isActive = true;
+        }
+      });
+    }
+    
     gameState.board = [];
     gameState.phase = 'preflop';
     gameState.pot = 0;
     gameState.currentBet = 0;
-    gameState.dealerIndex = 0;
     gameState.lastRaiserIndex = -1;
     gameState.actionCount = 0;
     
@@ -904,22 +936,23 @@
   }
 
   function postBlinds() {
-    // Heads-Up (2人): 庄家 = SB，对手 = BB
-    // 多人桌 (3+): 庄家后一位 = SB，庄家后两位 = BB
+    // Heads-Up (2人活跃): 庄家 = SB，对手 = BB
+    // 多人桌 (3+活跃): 庄家后一位活跃玩家 = SB，再下一位 = BB
+    const activePlayers = gameState.players.filter(p => p.isActive);
     let sbIndex, bbIndex;
-    if (gameState.players.length === 2) {
+    if (activePlayers.length === 2) {
       sbIndex = gameState.dealerIndex; // 庄家是SB
-      bbIndex = (gameState.dealerIndex + 1) % gameState.players.length;
+      bbIndex = findFirstActivePlayer((gameState.dealerIndex + 1) % gameState.players.length);
     } else {
-      sbIndex = (gameState.dealerIndex + 1) % gameState.players.length;
-      bbIndex = (gameState.dealerIndex + 2) % gameState.players.length;
+      sbIndex = findFirstActivePlayer((gameState.dealerIndex + 1) % gameState.players.length);
+      bbIndex = findFirstActivePlayer((sbIndex + 1) % gameState.players.length);
     }
     
     const sbPlayer = gameState.players[sbIndex];
     const bbPlayer = gameState.players[bbIndex];
     
-    const sb = getSmallBlind();
-    const bb = getBigBlind();
+    const sb = Math.min(getSmallBlind(), sbPlayer.chips);
+    const bb = Math.min(getBigBlind(), bbPlayer.chips);
     
     sbPlayer.chips -= sb;
     sbPlayer.currentBet = sb;
@@ -946,6 +979,7 @@
     for (let i = 0; i < 2; i++) {
       for (let j = 0; j < gameState.players.length; j++) {
         const player = gameState.players[j];
+        if (!player.isActive) continue; // 跳过已淘汰的玩家
         const faceUp = player.type === 'human';
         const delay = (i * gameState.players.length + j) * 150;
         promises.push(distributeCard(player, faceUp, delay));
@@ -954,17 +988,19 @@
     
     await Promise.all(promises);
     
-    logEvent('DEAL', { playerCount: gameState.players.length });
+    const activeCount = gameState.players.filter(p => p.isActive).length;
+    logEvent('DEAL', { playerCount: activeCount });
     
     // 开始第一轮下注
-    // Heads-Up (2人): SB（庄位）先行动
-    // 多人桌 (3+): UTG先行动 (dealerIndex + 3)
-    if (gameState.players.length === 2) {
-      // 单挑模式：SB = 庄位，先行动
+    // Heads-Up (2人活跃): SB（庄位）先行动
+    // 多人桌 (3+活跃): BB后第一个活跃玩家先行动 (UTG)
+    if (activeCount === 2) {
       gameState.turnIndex = gameState.dealerIndex;
     } else {
-      // 多人桌：UTG位置先行动
-      gameState.turnIndex = (gameState.dealerIndex + 3) % gameState.players.length;
+      // 找到BB位置，然后UTG是BB后第一个活跃玩家
+      const sbIndex = findFirstActivePlayer((gameState.dealerIndex + 1) % gameState.players.length);
+      const bbIndex = findFirstActivePlayer((sbIndex + 1) % gameState.players.length);
+      gameState.turnIndex = findFirstActivePlayer((bbIndex + 1) % gameState.players.length);
     }
     gameState.actionCount = 0;
     
@@ -1181,7 +1217,6 @@
   function endGame() {
     gameState.phase = 'idle';
     setTurnIndicator(-1);
-    UI.btnDeal.disabled = false;
     
     // 移除winner类
     gameState.players.forEach(p => {
@@ -1193,8 +1228,39 @@
     // 显示日志
     showGameLog();
     
-    // 移动庄家按钮
-    gameState.dealerIndex = (gameState.dealerIndex + 1) % gameState.players.length;
+    // 标记淘汰玩家（chips === 0）
+    gameState.players.forEach(p => {
+      if (p.chips <= 0) {
+        p.isActive = false;
+        if (p.seatElement) {
+          p.seatElement.classList.add('folded');
+          const status = p.seatElement.querySelector('.seat-status');
+          if (status) status.textContent = 'BUSTED';
+        }
+      }
+    });
+    
+    // 检查是否只剩一个有筹码的玩家（游戏结束）
+    const alivePlayers = gameState.players.filter(p => p.chips > 0);
+    if (alivePlayers.length <= 1) {
+      const champion = alivePlayers[0];
+      if (champion) {
+        updateMsg(`${champion.name} wins the game!`);
+      }
+      UI.btnDeal.disabled = false;
+      return;
+    }
+    
+    // 移动庄家按钮（跳过已淘汰的玩家）
+    let nextDealer = (gameState.dealerIndex + 1) % gameState.players.length;
+    let safety = 0;
+    while (gameState.players[nextDealer].chips <= 0 && safety < gameState.players.length) {
+      nextDealer = (nextDealer + 1) % gameState.players.length;
+      safety++;
+    }
+    gameState.dealerIndex = nextDealer;
+    
+    UI.btnDeal.disabled = false;
   }
 
   // ========== 日志系统 ==========
