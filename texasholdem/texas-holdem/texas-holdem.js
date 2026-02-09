@@ -1419,38 +1419,48 @@
 
   // ========== 配置加载 ==========
   async function loadConfig() {
-    // 优先使用外部注入的配置（来自 STver.html 的 postMessage）
-    if (window.AceZeroDataLoader) {
-      const injected = window.AceZeroDataLoader.getInjectedConfig();
-      if (injected) {
-        gameConfig = injected;
-        console.log('[CONFIG] 使用外部注入配置:', gameConfig);
-        return;
-      }
+    // 尝试从根目录加载 game-config.json（相对于 GitPage 根）
+    // 路径: ../../game-config.json (从 texasholdem/texas-holdem/ 回到根)
+    const configPaths = ['../../game-config.json', 'game-config.json'];
+    
+    for (const path of configPaths) {
+      try {
+        const response = await fetch(path);
+        if (response.ok) {
+          gameConfig = await response.json();
+          console.log('[CONFIG] 从', path, '加载:', gameConfig);
+          return;
+        }
+      } catch (e) { /* try next */ }
     }
-
-    // 回退：从本地 JSON 文件加载
-    try {
-      const response = await fetch('game-config.json');
-      if (response.ok) {
-        gameConfig = await response.json();
-        console.log('[CONFIG] 从 game-config.json 加载:', gameConfig);
-      }
-    } catch (e) {
-      console.log('[CONFIG] 使用默认内置配置');
-    }
+    
+    console.log('[CONFIG] 使用默认内置配置');
   }
 
   /**
-   * 应用外部注入的配置（可能在 init 之后到达）
+   * 应用外部注入的配置（从主引擎 postMessage 到达）
    * @param {Object} config - 注入的配置对象
    */
   function applyExternalConfig(config) {
     if (!config) return;
     gameConfig = config;
-    console.log('[CONFIG] 外部配置已热更新:', config);
-    // 如果游戏处于空闲状态，可以安全地应用新配置
-    // 如果游戏正在进行中，新配置将在下一局生效
+    console.log('[CONFIG] 外部配置已应用:', config);
+  }
+
+  // ========== postMessage 监听 ==========
+  // 接收来自主引擎 (index.html) 的配置数据
+  window.addEventListener('message', function (event) {
+    const msg = event?.data;
+    if (!msg || msg.type !== 'acezero-game-data') return;
+    console.log('[CONFIG] 收到主引擎 postMessage 配置');
+    applyExternalConfig(msg.payload);
+  });
+
+  // 主动向父窗口请求配置
+  function requestConfigFromEngine() {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: 'acezero-data-request' }, '*');
+    }
   }
 
   // ========== 初始化 ==========
@@ -1461,10 +1471,8 @@
     updatePotDisplay();
     fitTableToScreen();
 
-    // 注册外部配置回调（处理 postMessage 延迟到达的情况）
-    if (window.AceZeroDataLoader) {
-      window.AceZeroDataLoader.onConfigLoaded(applyExternalConfig);
-    }
+    // 如果在 iframe 中，主动请求配置
+    requestConfigFromEngine();
   }
   
   init();

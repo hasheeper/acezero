@@ -1,21 +1,34 @@
 # AceZero
 
-ST iframe-injected games. Current game: Texas Hold'em.
+ST iframe-injected mini-games platform. Current game: Texas Hold'em.
 
 ## Structure
-- `texasholdem/` — game assets
-- `texasholdem/STver.html` — iframe wrapper for ST injection
-- `texasholdem/texas-holdem/` — main game (HTML/CSS/JS, data-loader)
-- `参考/` — reference materials (not required for runtime)
+```
+acezero/                        ← GitPage root
+├── index.html                  ← 主加载引擎（路由 + iframe 嵌入游戏）
+├── data-loader.js              ← 通用外部数据加载器
+├── game-config.json            ← 默认游戏配置（gameId 决定加载哪个游戏）
+├── STver.html                  ← ST 注入包装器
+├── texasholdem/                ← 德州扑克模块
+│   ├── texas-holdem/           ← 游戏本体 (HTML/CSS/JS)
+│   ├── deck-of-cards/          ← 卡牌渲染库
+│   └── pokersolver/            ← 牌型判定库
+└── 参考/                       ← 参考资料（非运行时依赖）
+```
 
 ## Run locally
-Open `texasholdem/texas-holdem/texas-holdem.html` in a browser, or serve the `texasholdem/` folder via static hosting.
+Open `index.html` in a browser (or serve root via static hosting).
 
-## Injection flow (ST)
-1. ST injects JSON into `STver.html` (`<script type="application/json">$1</script>`)
-2. Wrapper routes by `gameId` → loads game iframe
-3. PostMessage delivers JSON to game → `data-loader.js` consumes → `texas-holdem.js` uses config
+## Data flow
+```
+ST (SillyTavern)
+  → STver.html ($1 JSON injection)
+    → index.html (main engine, routes by gameId)
+      → texasholdem/.../texas-holdem.html (iframe)
+        ← postMessage (game config)
+```
 
-## Notes
-- Default config: `texasholdem/texas-holdem/game-config.json` (has `gameId: "texas-holdem"`)
-- External JSON can override config via postMessage
+## Adding a new game
+1. Create game folder: `mygame/mygame.html`
+2. Add route in `index.html` → `GAME_ROUTES`
+3. Set `gameId` in `game-config.json` or ST injection JSON

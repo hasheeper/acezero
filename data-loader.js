@@ -61,14 +61,8 @@
   function applyInjectedConfig(data) {
     if (!data) return;
 
-    // 验证 gameId
-    if (data.gameId && data.gameId !== 'texas-holdem') {
-      console.warn('[DATA-LOADER] gameId 不匹配，期望 texas-holdem，收到:', data.gameId);
-      return;
-    }
-
     _injectedConfig = data;
-    console.log('[DATA-LOADER] 外部配置已加载:', data);
+    console.log('[DATA-LOADER] 外部配置已加载, gameId:', data.gameId || '(none)');
 
     // 触发所有等待中的回调
     _configCallbacks.forEach(cb => {

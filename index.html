@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AceZero - Game Engine</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0b0c10;
+      font-family: 'Segoe UI', sans-serif;
+      color: #e5e5e5;
+    }
+
+    #game-frame {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      display: block;
+      background: transparent;
+    }
+
+    /* 加载状态 */
+    #loading-overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: #0b0c10;
+      z-index: 9999;
+      transition: opacity 0.4s;
+    }
+
+    #loading-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .loading-title {
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: 4px;
+      color: #CFB53B;
+      margin-bottom: 12px;
+    }
+
+    .loading-sub {
+      font-size: 12px;
+      color: #666;
+      letter-spacing: 2px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 加载遮罩 -->
+  <div id="loading-overlay">
+    <div class="loading-title">ACEZERO</div>
+    <div class="loading-sub" id="loading-status">LOADING ENGINE...</div>
+  </div>
+
+  <!-- 游戏 iframe -->
+  <iframe id="game-frame" title="AceZero Game" src="" allowfullscreen></iframe>
+
+  <!-- 通用数据加载器 -->
+  <script src="data-loader.js"></script>
+
+  <script>
+    (function () {
+      'use strict';
+
+      // ============================================
+      // 游戏路由表 - gameId → 游戏入口路径
+      // 新增游戏只需在此添加一行
+      // ============================================
+      const GAME_ROUTES = {
+        'texas-holdem': 'texasholdem/texas-holdem/texas-holdem.html'
+        // 'blackjack': 'blackjack/blackjack.html'
+      };
+
+      const DEFAULT_GAME = 'texas-holdem';
+
+      const frame = document.getElementById('game-frame');
+      const overlay = document.getElementById('loading-overlay');
+      const loadingStatus = document.getElementById('loading-status');
+
+      // ============================================
+      // 1. 确定配置来源（外部注入 or 本地 JSON）
+      // ============================================
+      async function resolveConfig() {
+        // 优先：外部注入（来自 STver.html postMessage）
+        const injected = window.AceZeroDataLoader.getInjectedConfig();
+        if (injected) {
+          console.log('[ENGINE] 使用外部注入配置');
+          return injected;
+        }
+
+        // 回退：加载本地 game-config.json
+        try {
+          loadingStatus.textContent = 'LOADING CONFIG...';
+          const resp = await fetch('game-config.json');
+          if (resp.ok) {
+            const config = await resp.json();
+            console.log('[ENGINE] 从 game-config.json 加载配置');
+            return config;
+          }
+        } catch (e) {
+          console.warn('[ENGINE] game-config.json 加载失败:', e);
+        }
+
+        // 最终回退：默认 gameId
+        return { gameId: DEFAULT_GAME };
+      }
+
+      // ============================================
+      // 2. 根据 gameId 路由到对应游戏
+      // ============================================
+      function resolveGameUrl(gameId) {
+        const route = GAME_ROUTES[gameId] || GAME_ROUTES[DEFAULT_GAME];
+        const base = window.location.href.replace(/[^/]*$/, '');
+        return base + route;
+      }
+
+      // ============================================
+      // 3. 加载游戏并传递配置
+      // ============================================
+      async function boot() {
+        const config = await resolveConfig();
+        const gameId = config.gameId || DEFAULT_GAME;
+
+        console.log('[ENGINE] gameId:', gameId);
+        loadingStatus.textContent = 'LOADING ' + gameId.toUpperCase() + '...';
+
+        // 设置 iframe src
+        let gameSrc = resolveGameUrl(gameId);
+        const sep = gameSrc.includes('?') ? '&' : '?';
+        gameSrc += sep + 'v=' + Date.now();
+        frame.src = gameSrc;
+
+        // iframe 加载完成后：传递配置 + 隐藏 loading
+        frame.addEventListener('load', function onLoad() {
+          // 传递配置到游戏 iframe
+          if (frame.contentWindow) {
+            frame.contentWindow.postMessage({
+              type: 'acezero-game-data',
+              payload: config
+            }, '*');
+          }
+
+          // 隐藏加载遮罩
+          overlay.classList.add('hidden');
+          frame.removeEventListener('load', onLoad);
+        });
+      }
+
+      // ============================================
+      // 4. 监听游戏主动请求配置
+      // ============================================
+      window.addEventListener('message', async (event) => {
+        const msg = event?.data;
+        if (!msg) return;
+
+        // 游戏请求配置数据
+        if (msg.type === 'acezero-data-request') {
+          const config = await resolveConfig();
+          if (frame.contentWindow) {
+            frame.contentWindow.postMessage({
+              type: 'acezero-game-data',
+              payload: config
+            }, '*');
+          }
+        }
+      });
+
+      // ============================================
+      // 5. 处理外部注入延迟到达（STver → index → game）
+      // ============================================
+      window.AceZeroDataLoader.onConfigLoaded(function (config) {
+        console.log('[ENGINE] 外部配置延迟到达，重新启动');
+        boot();
+      });
+
+      // ============================================
+      // 启动
+      // ============================================
+      boot();
+
+    })();
+  </script>
+</body>
+</html>

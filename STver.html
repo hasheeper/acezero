@@ -98,17 +98,6 @@
       const hostFrame = window.frameElement;
 
       // ============================================
-      // 游戏路由表 - 根据 gameId 决定加载哪个游戏
-      // ============================================
-      const GAME_ROUTES = {
-        'texas-holdem': 'texas-holdem/texas-holdem.html',
-        'blackjack': 'blackjack/blackjack.html'
-        // 未来新增游戏在此添加
-      };
-
-      const DEFAULT_GAME = 'texas-holdem';
-
-      // ============================================
       // 解析注入的 JSON 数据
       // ============================================
       function parseInjectedData() {
@@ -125,29 +114,18 @@
       }
 
       // ============================================
-      // 根据 gameId 设置 iframe src
-      // ============================================
-      function resolveGameUrl(gameId) {
-        const route = GAME_ROUTES[gameId] || GAME_ROUTES[DEFAULT_GAME];
-        // 获取当前页面的基础路径
-        const base = window.location.href.replace(/[^/]*$/, '');
-        return base + route;
-      }
-
-      // ============================================
-      // 初始化：解析数据 → 路由游戏 → 设置 iframe
+      // 初始化：解析数据 → 指向 index.html（主引擎）
+      // 路由逻辑由 index.html 统一处理
       // ============================================
       const injectedData = parseInjectedData();
-      const gameId = (injectedData && injectedData.gameId) || DEFAULT_GAME;
 
-      console.log('[AceZero] gameId:', gameId);
-      console.log('[AceZero] injectedData:', injectedData);
+      console.log('[AceZero-ST] injectedData:', injectedData);
 
-      // 设置 iframe src
-      let gameSrc = resolveGameUrl(gameId);
-      const sep = gameSrc.includes('?') ? '&' : '?';
-      gameSrc += sep + 'v=' + Date.now();
-      frame.src = gameSrc;
+      // iframe 指向根目录 index.html（主引擎）
+      const base = window.location.href.replace(/[^/]*$/, '');
+      let engineSrc = base + 'index.html';
+      engineSrc += '?v=' + Date.now();
+      frame.src = engineSrc;
 
       // ============================================
       // 调整宿主 iframe 尺寸（被 ST 嵌入时）
