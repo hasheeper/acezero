@@ -82,10 +82,9 @@
   <iframe
     id="app-frame"
     title="AceZero Game"
-    src=""
+    src="https://hasheeper.github.io/acezero/"
     sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin"
     allow="fullscreen"
-    allowfullscreen
     referrerpolicy="no-referrer"
   ></iframe>
 
@@ -114,18 +113,21 @@
       }
 
       // ============================================
-      // 初始化：解析数据 → 指向 index.html（主引擎）
-      // 路由逻辑由 index.html 统一处理
+      // 初始化：解析数据，缓存破坏
+      // iframe src 已在 HTML 中指向 GitPage 主引擎
       // ============================================
       const injectedData = parseInjectedData();
 
       console.log('[AceZero-ST] injectedData:', injectedData);
 
-      // iframe 指向根目录 index.html（主引擎）
-      const base = window.location.href.replace(/[^/]*$/, '');
-      let engineSrc = base + 'index.html';
-      engineSrc += '?v=' + Date.now();
-      frame.src = engineSrc;
+      // 缓存破坏（不改变目标地址）
+      try {
+        const base = frame.getAttribute('src') || '';
+        if (base && !/\bv=\d+\b/.test(base)) {
+          const sep = base.includes('?') ? '&' : '?';
+          frame.src = base + sep + 'v=' + Date.now();
+        }
+      } catch (e) {}
 
       // ============================================
       // 调整宿主 iframe 尺寸（被 ST 嵌入时）

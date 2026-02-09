@@ -8,14 +8,51 @@
     html, body {
       margin: 0;
       padding: 0;
-      width: 100%;
-      height: 100%;
+      width: 100vw;
+      height: 100vh;
       overflow: hidden;
-      background: #0b0c10;
-      font-family: 'Segoe UI', sans-serif;
-      color: #e5e5e5;
+      background: #000;
+      -webkit-font-smoothing: antialiased;
     }
 
+    /* ============================================
+       ui-root: 全屏居中容器
+       ============================================ */
+    .ui-root {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at 50% 40%, #151515 0%, #000 100%);
+      overflow: hidden;
+    }
+
+    /* ============================================
+       ui-scale: 固定尺寸游戏容器 (1100x720)
+       通过 JS 计算 --ui-scale 实现自适应缩放
+       ============================================ */
+    .ui-scale {
+      width: 1100px !important;
+      height: 720px !important;
+      flex-shrink: 0;
+      position: relative;
+      z-index: 10;
+      margin: 0;
+      border-radius: 24px;
+      overflow: hidden;
+      transform-origin: center center;
+      transform: scale(var(--ui-scale, 1));
+      background: #0b0c10;
+      box-shadow: 0 0 60px rgba(0, 0, 0, 0.8);
+    }
+
+    /* ============================================
+       游戏 iframe: 填满 ui-scale 容器
+       ============================================ */
     #game-frame {
       width: 100%;
       height: 100%;
@@ -24,17 +61,19 @@
       background: transparent;
     }
 
-    /* 加载状态 */
+    /* ============================================
+       加载遮罩
+       ============================================ */
     #loading-overlay {
-      position: fixed;
+      position: absolute;
       inset: 0;
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: center;
       background: #0b0c10;
-      z-index: 9999;
-      transition: opacity 0.4s;
+      z-index: 100;
+      transition: opacity 0.5s ease;
     }
 
     #loading-overlay.hidden {
@@ -43,30 +82,38 @@
     }
 
     .loading-title {
-      font-size: 24px;
+      font-family: 'Cinzel', 'Georgia', serif;
+      font-size: 28px;
       font-weight: 700;
-      letter-spacing: 4px;
+      letter-spacing: 6px;
       color: #CFB53B;
       margin-bottom: 12px;
     }
 
     .loading-sub {
-      font-size: 12px;
-      color: #666;
-      letter-spacing: 2px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: #555;
+      letter-spacing: 3px;
     }
   </style>
 </head>
 <body>
 
-  <!-- 加载遮罩 -->
-  <div id="loading-overlay">
-    <div class="loading-title">ACEZERO</div>
-    <div class="loading-sub" id="loading-status">LOADING ENGINE...</div>
-  </div>
+  <div class="ui-root" id="ui-root">
+    <div class="ui-scale" id="ui-scale">
 
-  <!-- 游戏 iframe -->
-  <iframe id="game-frame" title="AceZero Game" src="" allowfullscreen></iframe>
+      <!-- 加载遮罩 -->
+      <div id="loading-overlay">
+        <div class="loading-title">ACEZERO</div>
+        <div class="loading-sub" id="loading-status">LOADING ENGINE...</div>
+      </div>
+
+      <!-- 游戏 iframe：填满 ui-scale 容器 -->
+      <iframe id="game-frame" title="AceZero Game" src="" allowfullscreen></iframe>
+
+    </div>
+  </div>
 
   <!-- 通用数据加载器 -->
   <script src="data-loader.js"></script>
@@ -86,18 +133,41 @@
 
       const DEFAULT_GAME = 'texas-holdem';
 
+      // ============================================
+      // UI-SCALE 自适应缩放（参考 参考/index.css 模式）
+      // 固定设计尺寸 1100x720，根据窗口大小缩放
+      // ============================================
+      const DESIGN_W = 1100;
+      const DESIGN_H = 720;
+      const uiScale = document.getElementById('ui-scale');
+
+      function recalcScale() {
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const scale = Math.min(vw / DESIGN_W, vh / DESIGN_H, 1.15);
+        uiScale.style.setProperty('--ui-scale', scale.toFixed(4));
+      }
+
+      recalcScale();
+      window.addEventListener('resize', recalcScale);
+
+      // ============================================
+      // 引擎核心
+      // ============================================
       const frame = document.getElementById('game-frame');
       const overlay = document.getElementById('loading-overlay');
       const loadingStatus = document.getElementById('loading-status');
+      let _currentConfig = null;
 
-      // ============================================
       // 1. 确定配置来源（外部注入 or 本地 JSON）
-      // ============================================
       async function resolveConfig() {
+        if (_currentConfig) return _currentConfig;
+
         // 优先：外部注入（来自 STver.html postMessage）
         const injected = window.AceZeroDataLoader.getInjectedConfig();
         if (injected) {
           console.log('[ENGINE] 使用外部注入配置');
+          _currentConfig = injected;
           return injected;
         }
 
@@ -108,6 +178,7 @@
           if (resp.ok) {
             const config = await resp.json();
             console.log('[ENGINE] 从 game-config.json 加载配置');
+            _currentConfig = config;
             return config;
           }
         } catch (e) {
@@ -115,21 +186,27 @@
         }
 
         // 最终回退：默认 gameId
-        return { gameId: DEFAULT_GAME };
+        _currentConfig = { gameId: DEFAULT_GAME };
+        return _currentConfig;
       }
 
-      // ============================================
       // 2. 根据 gameId 路由到对应游戏
-      // ============================================
       function resolveGameUrl(gameId) {
         const route = GAME_ROUTES[gameId] || GAME_ROUTES[DEFAULT_GAME];
         const base = window.location.href.replace(/[^/]*$/, '');
         return base + route;
       }
 
-      // ============================================
-      // 3. 加载游戏并传递配置
-      // ============================================
+      // 3. 向游戏 iframe 发送配置
+      function sendConfigToGame(config) {
+        if (!frame || !frame.contentWindow) return;
+        frame.contentWindow.postMessage({
+          type: 'acezero-game-data',
+          payload: config
+        }, '*');
+      }
+
+      // 4. 启动
       async function boot() {
         const config = await resolveConfig();
         const gameId = config.gameId || DEFAULT_GAME;
@@ -145,49 +222,32 @@
 
         // iframe 加载完成后：传递配置 + 隐藏 loading
         frame.addEventListener('load', function onLoad() {
-          // 传递配置到游戏 iframe
-          if (frame.contentWindow) {
-            frame.contentWindow.postMessage({
-              type: 'acezero-game-data',
-              payload: config
-            }, '*');
-          }
-
-          // 隐藏加载遮罩
+          sendConfigToGame(config);
           overlay.classList.add('hidden');
           frame.removeEventListener('load', onLoad);
         });
       }
 
-      // ============================================
-      // 4. 监听游戏主动请求配置
-      // ============================================
+      // 5. 监听游戏主动请求配置
       window.addEventListener('message', async (event) => {
         const msg = event?.data;
         if (!msg) return;
 
-        // 游戏请求配置数据
         if (msg.type === 'acezero-data-request') {
           const config = await resolveConfig();
-          if (frame.contentWindow) {
-            frame.contentWindow.postMessage({
-              type: 'acezero-game-data',
-              payload: config
-            }, '*');
-          }
+          sendConfigToGame(config);
         }
       });
 
-      // ============================================
-      // 5. 处理外部注入延迟到达（STver → index → game）
-      // ============================================
+      // 6. 处理外部注入延迟到达（STver → index → game）
       window.AceZeroDataLoader.onConfigLoaded(function (config) {
-        console.log('[ENGINE] 外部配置延迟到达，重新启动');
-        boot();
+        console.log('[ENGINE] 外部配置延迟到达');
+        _currentConfig = config;
+        sendConfigToGame(config);
       });
 
       // ============================================
-      // 启动
+      // 启动引擎
       // ============================================
       boot();
 
