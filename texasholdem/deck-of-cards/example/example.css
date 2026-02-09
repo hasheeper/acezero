@@ -1,0 +1,588 @@
+/* =========================================================
+   Luxury Gold Card Style - The Gilded Terminal
+   奢华金色卡牌样式
+========================================================= */
+
+* {
+  -webkit-box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* 黄金炼金术配色 */
+:root {
+  --gold-luster: linear-gradient(
+    135deg, 
+    #bf953f 0%, 
+    #fcf6ba 25%, 
+    #b38728 50%, 
+    #fbf5b7 75%, 
+    #aa771c 100%
+  );
+  --card-bg: radial-gradient(circle at 50% 30%, #1a1a1a 0%, #000000 100%);
+  --card-border: #7c6a28;
+}
+
+html,
+body {
+  height: 100%;
+}
+body {
+  background-color: #45a173;
+  color: #333;
+  font-family: 'Open Sans', sans-serif;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  overflow: hidden;
+  -webkit-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+#container {
+  position: fixed;
+  top: calc(50% + 1.5rem);
+  left: 50%;
+  -webkit-transform: translate3d(-50%, -50%, 0);
+  -moz-transform: translate3d(-50%, -50%, 0);
+  -o-transform: translate3d(-50%, -50%, 0);
+  -ms-transform: translate3d(-50%, -50%, 0);
+  transform: translate3d(-50%, -50%, 0);
+}
+#topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  background-color: #334d41;
+  padding: 0.25rem;
+  text-align: center;
+}
+#topbar button {
+  background: none;
+  border: 1px solid #fff;
+  outline: none;
+  margin: 0.1rem;
+  padding: 0.4rem;
+  font: inherit;
+  font-size: 0.75rem;
+  line-height: 1;
+  color: #fff;
+  cursor: pointer;
+}
+#topbar button:hover {
+  background-color: #fff;
+  color: #444;
+}
+.message {
+  position: fixed;
+  top: 2.5rem;
+  left: 0;
+  width: 100%;
+  padding: 1rem 0.5rem;
+  font-size: 0.5rem;
+  text-align: center;
+}
+
+/* =========================================================
+   卡牌主体 - 奢华黑金风格
+========================================================= */
+.card {
+  position: absolute;
+  display: inline-block;
+  left: -2.90625rem;
+  top: -4.125rem;
+  width: 5.8125rem;
+  height: 8.25rem;
+  
+  /* 黑色渐变背景 */
+  background: var(--card-bg);
+  
+  -webkit-border-radius: 4px;
+  border-radius: 4px;
+  
+  /* 金色细边框 + 深阴影 */
+  border: 1px solid var(--card-border);
+  -webkit-box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+  
+  cursor: default;
+  will-change: transform;
+  
+  /* 内部金框效果 */
+  overflow: hidden;
+  
+  /* 确保卡片在发牌动画时位于最上层 */
+  z-index: 1000;
+}
+
+/* 内部金色双描边 (Art Deco Line) */
+.card::before {
+  content: '';
+  position: absolute;
+  top: 3px; left: 3px; right: 3px; bottom: 3px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: var(--gold-luster) border-box;
+  -webkit-mask: 
+     linear-gradient(#fff 0 0) padding-box, 
+     linear-gradient(#fff 0 0);
+  mask: 
+     linear-gradient(#fff 0 0) padding-box, 
+     linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* 角标基础样式 - 金色渐变 */
+.card::after {
+  position: absolute;
+  font-size: 0.65rem;
+  text-align: center;
+  line-height: 1.1;
+  font-family: 'Times New Roman', serif;
+  font-weight: bold;
+  white-space: pre-line;
+  
+  /* 金色渐变文字 */
+  background: var(--gold-luster);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 1px 0px rgba(0,0,0,0.8));
+  z-index: 3;
+  
+  /* 左上角位置 - 稍微远离边缘 */
+  top: 0.35rem;
+  left: 0.3rem;
+}
+
+/* 卡牌正面 - 黑色底，隐藏原始SVG */
+.card .face {
+  height: 100%;
+  background-color: #000 !important;
+  background-image: none !important;
+  position: relative;
+  border-radius: 3px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* 中心花色符号 */
+.card .face::after {
+  font-size: 2rem;
+  background: var(--gold-luster);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 2px 2px rgba(0,0,0,0.8));
+  padding-bottom: 0.15rem;
+}
+
+/* 右下角标 - 通过.face::before实现 */
+.card .face::before {
+  content: '';
+  position: absolute;
+  font-size: 0.65rem;
+  text-align: center;
+  line-height: 1.1;
+  font-family: 'Times New Roman', serif;
+  font-weight: bold;
+  white-space: pre-line;
+  
+  background: var(--gold-luster);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 1px 0px rgba(0,0,0,0.8));
+  z-index: 3;
+  
+  /* 右下角位置，旋转180度；离边缘更远 */
+  bottom: 0.35rem;
+  right: 0.3rem;
+  transform: rotate(180deg);
+}
+
+/* 各花色的中心符号 */
+.card.spades .face::after { content: '♠'; }
+.card.hearts .face::after { content: '♥'; }
+.card.clubs .face::after { content: '♣'; }
+.card.diamonds .face::after { content: '♦'; }
+
+/* 右下角标内容 - 牌面值 + 花色 */
+.card.spades.rank1 .face::before { content: "A\A♠"; }
+.card.spades.rank2 .face::before { content: "2\A♠"; }
+.card.spades.rank3 .face::before { content: "3\A♠"; }
+.card.spades.rank4 .face::before { content: "4\A♠"; }
+.card.spades.rank5 .face::before { content: "5\A♠"; }
+.card.spades.rank6 .face::before { content: "6\A♠"; }
+.card.spades.rank7 .face::before { content: "7\A♠"; }
+.card.spades.rank8 .face::before { content: "8\A♠"; }
+.card.spades.rank9 .face::before { content: "9\A♠"; }
+.card.spades.rank10 .face::before { content: "10\A♠"; }
+.card.spades.rank11 .face::before { content: "J\A♠"; }
+.card.spades.rank12 .face::before { content: "Q\A♠"; }
+.card.spades.rank13 .face::before { content: "K\A♠"; }
+
+.card.hearts.rank1 .face::before { content: "A\A♥"; }
+.card.hearts.rank2 .face::before { content: "2\A♥"; }
+.card.hearts.rank3 .face::before { content: "3\A♥"; }
+.card.hearts.rank4 .face::before { content: "4\A♥"; }
+.card.hearts.rank5 .face::before { content: "5\A♥"; }
+.card.hearts.rank6 .face::before { content: "6\A♥"; }
+.card.hearts.rank7 .face::before { content: "7\A♥"; }
+.card.hearts.rank8 .face::before { content: "8\A♥"; }
+.card.hearts.rank9 .face::before { content: "9\A♥"; }
+.card.hearts.rank10 .face::before { content: "10\A♥"; }
+.card.hearts.rank11 .face::before { content: "J\A♥"; }
+.card.hearts.rank12 .face::before { content: "Q\A♥"; }
+.card.hearts.rank13 .face::before { content: "K\A♥"; }
+
+.card.clubs.rank1 .face::before { content: "A\A♣"; }
+.card.clubs.rank2 .face::before { content: "2\A♣"; }
+.card.clubs.rank3 .face::before { content: "3\A♣"; }
+.card.clubs.rank4 .face::before { content: "4\A♣"; }
+.card.clubs.rank5 .face::before { content: "5\A♣"; }
+.card.clubs.rank6 .face::before { content: "6\A♣"; }
+.card.clubs.rank7 .face::before { content: "7\A♣"; }
+.card.clubs.rank8 .face::before { content: "8\A♣"; }
+.card.clubs.rank9 .face::before { content: "9\A♣"; }
+.card.clubs.rank10 .face::before { content: "10\A♣"; }
+.card.clubs.rank11 .face::before { content: "J\A♣"; }
+.card.clubs.rank12 .face::before { content: "Q\A♣"; }
+.card.clubs.rank13 .face::before { content: "K\A♣"; }
+
+.card.diamonds.rank1 .face::before { content: "A\A♦"; }
+.card.diamonds.rank2 .face::before { content: "2\A♦"; }
+.card.diamonds.rank3 .face::before { content: "3\A♦"; }
+.card.diamonds.rank4 .face::before { content: "4\A♦"; }
+.card.diamonds.rank5 .face::before { content: "5\A♦"; }
+.card.diamonds.rank6 .face::before { content: "6\A♦"; }
+.card.diamonds.rank7 .face::before { content: "7\A♦"; }
+.card.diamonds.rank8 .face::before { content: "8\A♦"; }
+.card.diamonds.rank9 .face::before { content: "9\A♦"; }
+.card.diamonds.rank10 .face::before { content: "10\A♦"; }
+.card.diamonds.rank11 .face::before { content: "J\A♦"; }
+.card.diamonds.rank12 .face::before { content: "Q\A♦"; }
+.card.diamonds.rank13 .face::before { content: "K\A♦"; }
+
+/* 卡背 - 黑金十字纹图案 */
+.card .back {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  background: radial-gradient(circle at 50% 30%, rgba(207, 181, 59, 0.12), rgba(14, 15, 17, 0.92)), #0E0F11;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.5), 0 0 0 1px rgba(51,51,51,0.6);
+  overflow: hidden;
+}
+
+/* 十字纹理与内框 */
+.card .back::before {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: 5px;
+  background-color: #0b0c0e;
+  background-image:
+    radial-gradient(circle at 50% 50%, rgba(255,255,255,0.02) 0%, transparent 70%),
+    url("data:image/svg+xml,%3Csvg width='24' height='24' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11 6h2v5h5v2h-5v5h-2v-5H6v-2h5V6z' fill='%23C6A649' fill-opacity='0.08'/%3E%3C/svg%3E");
+  background-size: cover, 18px 18px;
+  border: 1px solid rgba(198, 166, 73, 0.35);
+  box-shadow: inset 0 0 0 1px rgba(34,34,34,0.9);
+  filter: drop-shadow(0 3px 6px rgba(0,0,0,0.45));
+}
+
+/* 中央logo菱形 + 星芒 */
+.card .back::after {
+  content: '';
+  position: absolute;
+  width: 42%;
+  aspect-ratio: 1 / 1;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(45deg);
+  border-radius: 4px;
+  background-color: #0b0c0e;
+  border: 1px solid rgba(198, 166, 73, 0.25);
+  box-shadow: 0 0 4px rgba(0,0,0,0.45);
+  background-image:
+    url("data:image/svg+xml,%3Csvg width='120' height='120' viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolygon points='60,5 72,42 115,60 72,78 60,115 48,78 5,60 48,42' fill='%23f2e1a8'/%3E%3Cpolygon points='60,30 80,60 60,90 40,60' fill='%230b0c0e'/%3E%3Ccircle cx='60' cy='60' r='6' fill='%23fff'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 60% 60%;
+}
+
+/* 所有花色统一使用金色 */
+.card.spades,
+.card.clubs,
+.card.joker,
+.card.hearts,
+.card.diamonds,
+.card.joker.rank3 {
+  color: transparent;
+}
+.card.joker.rank1:before,
+.card.joker.rank2:before,
+.card.joker.rank3:before,
+.card.joker.rank1:after,
+.card.joker.rank2:after,
+.card.joker.rank3:after {
+  content: "J\a O\a K\a E\a R";
+  letter-spacing: 0;
+  font-size: 0.4rem;
+  line-height: 0.4rem;
+  padding: 0.15rem 0.05rem;
+  width: 0.5rem;
+}
+/* 左上角标内容 - 牌面值 + 花色 */
+.card.spades.rank1::after { content: "A\A♠"; }
+.card.spades.rank2::after { content: "2\A♠"; }
+.card.spades.rank3::after { content: "3\A♠"; }
+.card.spades.rank4::after { content: "4\A♠"; }
+.card.spades.rank5::after { content: "5\A♠"; }
+.card.spades.rank6::after { content: "6\A♠"; }
+.card.spades.rank7::after { content: "7\A♠"; }
+.card.spades.rank8::after { content: "8\A♠"; }
+.card.spades.rank9::after { content: "9\A♠"; }
+.card.spades.rank10::after { content: "10\A♠"; }
+.card.spades.rank11::after { content: "J\A♠"; }
+.card.spades.rank12::after { content: "Q\A♠"; }
+.card.spades.rank13::after { content: "K\A♠"; }
+
+.card.hearts.rank1::after { content: "A\A♥"; }
+.card.hearts.rank2::after { content: "2\A♥"; }
+.card.hearts.rank3::after { content: "3\A♥"; }
+.card.hearts.rank4::after { content: "4\A♥"; }
+.card.hearts.rank5::after { content: "5\A♥"; }
+.card.hearts.rank6::after { content: "6\A♥"; }
+.card.hearts.rank7::after { content: "7\A♥"; }
+.card.hearts.rank8::after { content: "8\A♥"; }
+.card.hearts.rank9::after { content: "9\A♥"; }
+.card.hearts.rank10::after { content: "10\A♥"; }
+.card.hearts.rank11::after { content: "J\A♥"; }
+.card.hearts.rank12::after { content: "Q\A♥"; }
+.card.hearts.rank13::after { content: "K\A♥"; }
+
+.card.clubs.rank1::after { content: "A\A♣"; }
+.card.clubs.rank2::after { content: "2\A♣"; }
+.card.clubs.rank3::after { content: "3\A♣"; }
+.card.clubs.rank4::after { content: "4\A♣"; }
+.card.clubs.rank5::after { content: "5\A♣"; }
+.card.clubs.rank6::after { content: "6\A♣"; }
+.card.clubs.rank7::after { content: "7\A♣"; }
+.card.clubs.rank8::after { content: "8\A♣"; }
+.card.clubs.rank9::after { content: "9\A♣"; }
+.card.clubs.rank10::after { content: "10\A♣"; }
+.card.clubs.rank11::after { content: "J\A♣"; }
+.card.clubs.rank12::after { content: "Q\A♣"; }
+.card.clubs.rank13::after { content: "K\A♣"; }
+
+.card.diamonds.rank1::after { content: "A\A♦"; }
+.card.diamonds.rank2::after { content: "2\A♦"; }
+.card.diamonds.rank3::after { content: "3\A♦"; }
+.card.diamonds.rank4::after { content: "4\A♦"; }
+.card.diamonds.rank5::after { content: "5\A♦"; }
+.card.diamonds.rank6::after { content: "6\A♦"; }
+.card.diamonds.rank7::after { content: "7\A♦"; }
+.card.diamonds.rank8::after { content: "8\A♦"; }
+.card.diamonds.rank9::after { content: "9\A♦"; }
+.card.diamonds.rank10::after { content: "10\A♦"; }
+.card.diamonds.rank11::after { content: "J\A♦"; }
+.card.diamonds.rank12::after { content: "Q\A♦"; }
+.card.diamonds.rank13::after { content: "K\A♦"; }
+.card.spades.rank1 .face {
+  background-image: url("faces/0_1.svg");
+}
+.card.spades.rank2 .face {
+  background-image: url("faces/0_2.svg");
+}
+.card.spades.rank3 .face {
+  background-image: url("faces/0_3.svg");
+}
+.card.spades.rank4 .face {
+  background-image: url("faces/0_4.svg");
+}
+.card.spades.rank5 .face {
+  background-image: url("faces/0_5.svg");
+}
+.card.spades.rank6 .face {
+  background-image: url("faces/0_6.svg");
+}
+.card.spades.rank7 .face {
+  background-image: url("faces/0_7.svg");
+}
+.card.spades.rank8 .face {
+  background-image: url("faces/0_8.svg");
+}
+.card.spades.rank9 .face {
+  background-image: url("faces/0_9.svg");
+}
+.card.spades.rank10 .face {
+  background-image: url("faces/0_10.svg");
+}
+.card.spades.rank11 .face {
+  background-image: url("faces/0_11.svg");
+}
+.card.spades.rank12 .face {
+  background-image: url("faces/0_12.svg");
+}
+.card.spades.rank13 .face {
+  background-image: url("faces/0_13.svg");
+}
+.card.hearts.rank1 .face {
+  background-image: url("faces/1_1.svg");
+}
+.card.hearts.rank2 .face {
+  background-image: url("faces/1_2.svg");
+}
+.card.hearts.rank3 .face {
+  background-image: url("faces/1_3.svg");
+}
+.card.hearts.rank4 .face {
+  background-image: url("faces/1_4.svg");
+}
+.card.hearts.rank5 .face {
+  background-image: url("faces/1_5.svg");
+}
+.card.hearts.rank6 .face {
+  background-image: url("faces/1_6.svg");
+}
+.card.hearts.rank7 .face {
+  background-image: url("faces/1_7.svg");
+}
+.card.hearts.rank8 .face {
+  background-image: url("faces/1_8.svg");
+}
+.card.hearts.rank9 .face {
+  background-image: url("faces/1_9.svg");
+}
+.card.hearts.rank10 .face {
+  background-image: url("faces/1_10.svg");
+}
+.card.hearts.rank11 .face {
+  background-image: url("faces/1_11.svg");
+}
+.card.hearts.rank12 .face {
+  background-image: url("faces/1_12.svg");
+}
+.card.hearts.rank13 .face {
+  background-image: url("faces/1_13.svg");
+}
+.card.clubs.rank1 .face {
+  background-image: url("faces/2_1.svg");
+}
+.card.clubs.rank2 .face {
+  background-image: url("faces/2_2.svg");
+}
+.card.clubs.rank3 .face {
+  background-image: url("faces/2_3.svg");
+}
+.card.clubs.rank4 .face {
+  background-image: url("faces/2_4.svg");
+}
+.card.clubs.rank5 .face {
+  background-image: url("faces/2_5.svg");
+}
+.card.clubs.rank6 .face {
+  background-image: url("faces/2_6.svg");
+}
+.card.clubs.rank7 .face {
+  background-image: url("faces/2_7.svg");
+}
+.card.clubs.rank8 .face {
+  background-image: url("faces/2_8.svg");
+}
+.card.clubs.rank9 .face {
+  background-image: url("faces/2_9.svg");
+}
+.card.clubs.rank10 .face {
+  background-image: url("faces/2_10.svg");
+}
+.card.clubs.rank11 .face {
+  background-image: url("faces/2_11.svg");
+}
+.card.clubs.rank12 .face {
+  background-image: url("faces/2_12.svg");
+}
+.card.clubs.rank13 .face {
+  background-image: url("faces/2_13.svg");
+}
+.card.diamonds.rank1 .face {
+  background-image: url("faces/3_1.svg");
+}
+.card.diamonds.rank2 .face {
+  background-image: url("faces/3_2.svg");
+}
+.card.diamonds.rank3 .face {
+  background-image: url("faces/3_3.svg");
+}
+.card.diamonds.rank4 .face {
+  background-image: url("faces/3_4.svg");
+}
+.card.diamonds.rank5 .face {
+  background-image: url("faces/3_5.svg");
+}
+.card.diamonds.rank6 .face {
+  background-image: url("faces/3_6.svg");
+}
+.card.diamonds.rank7 .face {
+  background-image: url("faces/3_7.svg");
+}
+.card.diamonds.rank8 .face {
+  background-image: url("faces/3_8.svg");
+}
+.card.diamonds.rank9 .face {
+  background-image: url("faces/3_9.svg");
+}
+.card.diamonds.rank10 .face {
+  background-image: url("faces/3_10.svg");
+}
+.card.diamonds.rank11 .face {
+  background-image: url("faces/3_11.svg");
+}
+.card.diamonds.rank12 .face {
+  background-image: url("faces/3_12.svg");
+}
+.card.diamonds.rank13 .face {
+  background-image: url("faces/3_13.svg");
+}
+.card.joker.rank1 .face {
+  background-image: url("faces/4_1.svg");
+}
+.card.joker.rank2 .face {
+  background-image: url("faces/4_2.svg");
+}
+.card.joker.rank3 .face {
+  background-image: url("faces/4_3.svg");
+}
+@media (max-width: 540px) {
+  #topbar {
+    text-align: left;
+  }
+  .gh-ribbon {
+    -webkit-transform: scale(0.5);
+    -moz-transform: scale(0.5);
+    -o-transform: scale(0.5);
+    -ms-transform: scale(0.5);
+    transform: scale(0.5);
+    -webkit-transform-origin: 100% 0;
+    -moz-transform-origin: 100% 0;
+    -o-transform-origin: 100% 0;
+    -ms-transform-origin: 100% 0;
+    transform-origin: 100% 0;
+  }
+}
+@media (min-width: 640px) {
+  html {
+    font-size: 125%;
+  }
+}

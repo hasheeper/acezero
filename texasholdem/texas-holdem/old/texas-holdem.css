@@ -1,0 +1,720 @@
+/* =========================================================
+   The Gilded Terminal - Poker UI
+   奢华黑暗魔法风格
+========================================================= */
+
+/* =========================================================
+   1. 配色系统 (Palette System)
+========================================================= */
+:root {
+  /* Deep Void - 背景不是死黑，是带着魔法底色的暗黑 */
+  --bg-void: #0b0c10;
+  --bg-table-dark: #0F1215; 
+  --bg-table-felt: radial-gradient(120% 120% at 50% 30%, #1e382d 0%, #101c18 60%, #050505 100%);
+
+  /* Champagne Gold - 贵族的边框与高亮 */
+  --gold-main: #CFB53B;
+  --gold-dim: #7a6e35;
+  --gold-glow: rgba(207, 181, 59, 0.15);
+
+  /* Rino's Magick - 状态与特殊交互 (紫色) */
+  --magic-highlight: #9B59B6;
+  --magic-glow: rgba(155, 89, 182, 0.4);
+
+  /* Status Colors */
+  --win-green: #27ae60;
+  --alert-red: #8b2525;
+
+  /* UI Material */
+  --glass-surface: rgba(15, 17, 22, 0.85);
+  --glass-blur: 16px;
+  
+  /* Card Dimensions - 放大50% */
+  --card-w: 90px;
+  --card-h: 126px;
+  --gap-base: 20px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-color: var(--bg-void);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-family: 'Cinzel', serif;
+  color: #e5e5e5;
+  overflow-x: hidden;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.03'/%3E%3C/svg%3E");
+}
+
+/* =========================================================
+   2. 牌桌主体 (The Stage)
+========================================================= */
+#poker-table {
+  position: relative;
+  width: 900px;
+  max-width: 95vw;
+  min-height: 720px;
+  
+  background: var(--bg-table-felt);
+  border-radius: 60px;
+  
+  box-shadow: 
+    inset 0 0 100px rgba(0,0,0,0.9),
+    0 0 0 6px #1a1a1a,
+    0 0 0 8px var(--gold-dim),
+    0 30px 80px rgba(0,0,0,0.7);
+  
+  display: flex;
+  flex-direction: column;
+  padding: 30px; 
+  gap: 15px;
+  overflow: visible !important;  /* 允许卡片动画飞出 */
+}
+
+#poker-table::before {
+  content: "PROJECT: RINO // TERMINAL ACTIVE";
+  position: absolute;
+  top: 15px; left: 50%; transform: translateX(-50%);
+  font-family: 'JetBrains Mono'; font-size: 10px; color: rgba(255,255,255,0.15); letter-spacing: 2px;
+}
+
+/* =========================================================
+   3. 核心交互区域 (HUD Panels)
+========================================================= */
+.zone {
+  background: var(--glass-surface);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  
+  box-shadow: 
+    0 4px 20px rgba(0,0,0,0.4),
+    0 0 0 1px rgba(0,0,0,0.5),
+    inset 0 0 20px rgba(0,0,0,0.5);
+
+  position: relative;
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+  z-index: 1;  /* 低z-index，让卡片动画能飞过 */
+  overflow: visible !important;  /* 允许卡片飞出 */
+}
+
+.player-zone#zone-opponent {
+  min-height: 140px;
+}
+
+.player-zone#zone-player {
+  min-height: 150px;
+  border-bottom: 2px solid var(--gold-dim);
+}
+
+.player-zone.active {
+  box-shadow: 0 0 25px var(--gold-glow), inset 0 0 10px rgba(207, 181, 59, 0.05);
+  border-color: rgba(207, 181, 59, 0.4);
+}
+
+/* Active Turn Breathing Light Effect */
+.player-zone.turn-active {
+  animation: breathingGold 2s ease-in-out infinite;
+  border: 2px solid var(--gold-main);
+}
+
+.player-zone.turn-active.opponent-turn {
+  animation: breathingRed 2s ease-in-out infinite;
+  border: 2px solid var(--alert-red);
+}
+
+@keyframes breathingGold {
+  0%, 100% {
+    box-shadow: 0 0 20px var(--gold-glow), 0 0 40px var(--gold-glow), inset 0 0 15px rgba(207, 181, 59, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 35px var(--gold-main), 0 0 60px var(--gold-glow), inset 0 0 25px rgba(207, 181, 59, 0.2);
+  }
+}
+
+@keyframes breathingRed {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(139, 37, 37, 0.4), 0 0 40px rgba(139, 37, 37, 0.3), inset 0 0 15px rgba(139, 37, 37, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 35px var(--alert-red), 0 0 60px rgba(139, 37, 37, 0.5), inset 0 0 25px rgba(139, 37, 37, 0.2);
+  }
+}
+
+.board-zone {
+  flex-grow: 1;
+  background: rgba(15, 17, 22, 0.4);
+  border: 1px dashed rgba(255,255,255,0.05);
+  justify-content: space-evenly;
+  min-height: 200px;
+  overflow: visible !important;  /* 允许卡片飞出容器 */
+}
+
+/* HUD 角标装饰 */
+.hud-corner {
+  position: absolute;
+  width: 10px; height: 10px;
+  border: 1px solid var(--gold-dim);
+  opacity: 0.5;
+  transition: opacity 0.3s;
+}
+.hud-tl { top: 4px; left: 4px; border-right: none; border-bottom: none; }
+.hud-tr { top: 4px; right: 4px; border-left: none; border-bottom: none; }
+.hud-bl { bottom: 4px; left: 4px; border-right: none; border-top: none; }
+.hud-br { bottom: 4px; right: 4px; border-left: none; border-top: none; }
+
+.active .hud-corner { opacity: 1; border-color: var(--gold-main); box-shadow: 0 0 4px var(--gold-main); }
+
+/* Dealer Button */
+.dealer-button {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 32px;
+  height: 32px;
+  background: radial-gradient(circle, var(--gold-main) 0%, var(--gold-dim) 100%);
+  border: 2px solid #000;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 15px var(--gold-glow), inset 0 2px 5px rgba(255, 255, 255, 0.3), inset 0 -2px 5px rgba(0, 0, 0, 0.5);
+  z-index: 10;
+  animation: dealerPulse 3s ease-in-out infinite;
+}
+
+.dealer-button span {
+  font-family: 'Cinzel', serif;
+  font-size: 16px;
+  font-weight: 900;
+  color: #000;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
+}
+
+@keyframes dealerPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); box-shadow: 0 0 20px var(--gold-main), inset 0 2px 5px rgba(255, 255, 255, 0.4); }
+}
+
+/* Bet Chips Visualization */
+.bet-chips {
+  position: absolute;
+  bottom: -35px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  z-index: 5;
+}
+
+#zone-opponent .bet-chips {
+  bottom: auto;
+  top: -35px;
+}
+
+.chip-stack {
+  width: 40px;
+  height: 40px;
+  background: radial-gradient(circle at 30% 30%, #ff6b6b, #c92a2a);
+  border: 3px solid #000;
+  border-radius: 50%;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6), inset 0 2px 5px rgba(255, 255, 255, 0.3);
+  position: relative;
+}
+
+.chip-stack::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 20px;
+  height: 20px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  opacity: 0.8;
+}
+
+.chip-amount {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gold-main);
+  background: rgba(0, 0, 0, 0.8);
+  padding: 2px 8px;
+  border-radius: 3px;
+  border: 1px solid var(--gold-dim);
+  white-space: nowrap;
+}
+
+/* Chip Flying Animation */
+@keyframes flyToCenter {
+  0% {
+    transform: translateX(-50%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-50%) translateY(-100px) scale(0.5);
+    opacity: 0;
+  }
+}
+
+.bet-chips.flying {
+  animation: flyToCenter 0.6s ease-in forwards;
+}
+
+/* =========================================================
+   4. 信息元件 (Typography & Labels)
+========================================================= */
+.zone-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  max-width: 400px;
+  margin-bottom: 8px;
+}
+
+.role-label {
+  font-size: 10px;
+  color: var(--gold-dim);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+.role-label.player {
+  color: var(--magic-highlight);
+}
+
+.readout {
+  font-family: 'JetBrains Mono', monospace;
+  color: #fff;
+  background: #000;
+  padding: 4px 12px;
+  border: 1px solid #333;
+  border-left: 3px solid var(--gold-dim);
+  border-radius: 2px;
+  font-size: 14px;
+  min-width: 100px;
+  text-align: right;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+}
+.readout span { color: var(--gold-main); margin-right: 2px; }
+.readout.player { border-left-color: var(--magic-highlight); }
+
+/* 底池特殊样式 */
+.pot-container {
+  margin-bottom: 15px;
+  text-align: center;
+}
+.pot-val {
+  font-family: 'Cinzel', serif;
+  font-size: 32px;
+  font-weight: 700;
+  background: linear-gradient(180deg, #fff 20%, #cfb53b 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.8));
+}
+.pot-cents { font-size: 16px; }
+.pot-label {
+  font-family: 'JetBrains Mono'; font-size: 9px; color: #666; letter-spacing: 4px; margin-top: -5px;
+  display: none;  /* 隐藏底池标签 */
+}
+.pot-label.gold { color: var(--gold-dim); margin-top: 0; display: none; }
+
+/* 状态文字 */
+.terminal-text {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--magic-highlight);
+  text-shadow: 0 0 5px rgba(155, 89, 182, 0.5);
+  animation: pulseText 2s infinite;
+  height: 20px; 
+  margin-top: 5px;
+}
+@keyframes pulseText { 0%{opacity:0.8;} 50%{opacity:1;} 100%{opacity:0.8;} }
+
+#game-message {
+  color: var(--gold-main);
+  letter-spacing: 3px;
+}
+
+/* =========================================================
+   5. 卡牌体系
+========================================================= */
+.card-area {
+  flex-grow: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.card-container {
+  display: flex;
+  justify-content: center;
+  gap: 18px;  /* 放大50%: 12px -> 18px */
+  min-height: var(--card-h); 
+  padding: 5px;
+  position: relative;
+}
+
+/* Ghost Card Slots */
+.ghost-card {
+  width: var(--card-w);
+  height: var(--card-h);
+  border: 1px dashed var(--gold-dim);
+  border-radius: 6px;
+  opacity: 0.2;
+  background: rgba(207, 181, 59, 0.02);
+  position: relative;
+  transition: opacity 0.3s;
+}
+
+.ghost-card::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 30px;
+  height: 30px;
+  border: 2px dashed var(--gold-dim);
+  border-radius: 50%;
+  opacity: 0.3;
+}
+
+.board-zone:hover .ghost-card {
+  opacity: 0.35;
+}
+
+.card-container .card {
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  transform: none !important;
+  width: var(--card-w) !important;
+  height: var(--card-h) !important;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+}
+
+.card-container .card .face,
+.card-container .card .back {
+  width: 100% !important;
+  height: 100% !important;
+  background-size: cover;
+}
+
+/* Deck 牌堆 - 作为poker-table的直接子元素 */
+#deck-wrapper {
+  position: absolute;
+  right: 60px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 100px;
+  height: 140px;
+  border: 1px solid rgba(52, 152, 219, 0.3);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: rgba(52, 152, 219, 0.05);
+  z-index: 9999;  /* 确保牌堆在最上层 */
+  overflow: visible !important;  /* 允许卡片飞出容器 */
+}
+
+.deck-label {
+  font-family: 'JetBrains Mono';
+  font-size: 8px;
+  color: rgba(52, 152, 219, 0.5);
+  text-align: center;
+  line-height: 1.3;
+  position: absolute;
+  bottom: 5px;
+}
+
+#deck-mount {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transform-origin: center center;
+  overflow: visible !important;  /* 允许卡片飞出容器 */
+}
+
+#deck-mount .deck {
+  position: relative;
+  width: var(--card-w);
+  height: var(--card-h);
+}
+
+#deck-mount .deck .card {
+  left: 0 !important;
+  top: 0 !important;
+}
+
+#deck-mount .card {
+  width: var(--card-w) !important;
+  height: var(--card-h) !important;
+}
+
+#deck-mount .card .face,
+#deck-mount .card .back {
+  width: 100% !important;
+  height: 100% !important;
+  background-size: cover;
+}
+
+/* =========================================================
+   6. 控制台区域 (Tactical Controls)
+========================================================= */
+#controls-betting {
+  position: absolute;
+  bottom: -70px;
+  left: 50%; transform: translateX(-50%);
+  
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  
+  background: #111;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 4px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+  padding: 0;
+  z-index: 50;  /* 降低z-index，确保发牌动画时卡片在上层 */
+}
+
+.control-info {
+  padding: 10px 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border-right: 1px solid #333;
+  background: #0a0a0a;
+}
+.info-label { font-size: 9px; color: #666; margin-bottom: 2px; letter-spacing: 1px; font-family: 'JetBrains Mono'; }
+.info-val { font-family: 'JetBrains Mono'; color: var(--alert-red); font-weight: 700; font-size: 16px; }
+
+.btn-group-action {
+  display: flex; 
+}
+
+.action-btn {
+  border: none;
+  outline: none;
+  background: #1a1a1a;
+  color: #888;
+  min-width: 90px;
+  height: 50px;
+  cursor: pointer;
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  font-size: 12px;
+  transition: all 0.2s;
+  position: relative;
+  border-right: 1px solid #000;
+  text-transform: uppercase;
+}
+
+.action-btn:hover:not(:disabled) { background: #252525; color: #fff; }
+
+.action-btn.warning:hover:not(:disabled) { color: #cc7878; box-shadow: inset 0 -3px 0 var(--alert-red); }
+
+.action-btn.primary {
+  background: linear-gradient(135deg, #2a220a 0%, #1a1605 100%);
+  color: var(--gold-main);
+  min-width: 100px;
+  border-right: none;
+}
+.action-btn.primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #bfa030 0%, #8c7112 100%);
+  color: #000;
+  box-shadow: 0 0 20px var(--gold-glow);
+}
+.action-btn.primary::before {
+  content: '';
+  position: absolute;
+  top: 15px; left: 10px; bottom: 15px; width: 2px;
+  background: var(--gold-main);
+  opacity: 0.5;
+}
+
+.action-btn.glow {
+  box-shadow: 0 0 15px var(--gold-glow);
+}
+
+.action-btn.small {
+  min-width: 60px;
+  height: 30px;
+  font-size: 10px;
+}
+
+.action-btn:disabled {
+  opacity: 0.3;
+  pointer-events: none;
+  filter: grayscale(1);
+}
+
+/* 加注控制 */
+.raise-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 15px;
+  background: #0a0a0a;
+  border-left: 1px solid #333;
+}
+
+#raise-slider {
+  width: 150px;
+  accent-color: var(--gold-main);
+}
+
+#raise-amount-display {
+  min-width: 60px;
+  text-align: center;
+  font-weight: bold;
+  color: var(--gold-main);
+  font-family: 'JetBrains Mono';
+}
+
+/* =========================================================
+   7. 游戏控制 & 日志
+========================================================= */
+#controls-game {
+  position: absolute;
+  bottom: -130px;
+  left: 50%; transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  z-index: 100;
+}
+
+#debug-panel {
+  position: absolute;
+  bottom: -160px;
+  left: 50%; transform: translateX(-50%);
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  font-size: 10px;
+  color: #555;
+  opacity: 0.5;
+  font-family: 'JetBrains Mono';
+}
+
+/* 日志终端装饰 */
+.log-terminal {
+  position: absolute;
+  top: 30px; right: 30px;
+  width: 200px;
+  text-align: right;
+  opacity: 0.6;
+  pointer-events: none;
+}
+.log-line {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--win-green);
+  margin-bottom: 2px;
+  text-shadow: 0 0 3px rgba(39, 174, 96, 0.4);
+}
+.log-line.opp { color: #c0392b; }
+
+/* 游戏日志面板 */
+#game-log-panel {
+  position: absolute;
+  bottom: -350px;
+  left: 50%; transform: translateX(-50%);
+  width: 700px;
+  max-width: 90vw;
+  background: rgba(10, 10, 10, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 15px;
+  z-index: 100;
+}
+
+.log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-family: 'JetBrains Mono';
+}
+
+#game-log-content {
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  padding: 15px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #8a8a8a;
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin: 0;
+}
+
+#btn-copy-log {
+  background: linear-gradient(135deg, #1a3020 0%, #0f1a12 100%);
+  color: var(--win-green);
+  border: 1px solid rgba(39, 174, 96, 0.3);
+}
+#btn-copy-log:hover:not(:disabled) {
+  background: linear-gradient(135deg, #27ae60 0%, #1e8449 100%);
+  color: #fff;
+}
+
+/* =========================================================
+   8. 状态效果
+========================================================= */
+.winner-highlight {
+  box-shadow: 0 0 15px 3px var(--gold-main);
+  z-index: 10;
+}
+
+.player-game-win {
+  border-color: var(--gold-main) !important;
+  box-shadow: 0 0 30px var(--gold-glow), inset 0 0 20px rgba(207, 181, 59, 0.1) !important;
+}
+
+.player-game-win .hud-corner {
+  opacity: 1;
+  border-color: var(--gold-main);
+  box-shadow: 0 0 8px var(--gold-main);
+}
+
+/* Pot Glow Effect */
+.pot-container.collecting {
+  animation: potCollect 0.8s ease-out;
+}
+
+@keyframes potCollect {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); filter: brightness(1.5); }
+  100% { transform: scale(1); }
+}

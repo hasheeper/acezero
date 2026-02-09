@@ -1,0 +1,1122 @@
+/* =========================================================
+   The Gilded Terminal - Multi-Player Poker UI
+   奢华黑暗魔法风格 - 支持2-6人
+========================================================= */
+
+/* =========================================================
+   1. 配色系统 (Palette System)
+========================================================= */
+:root {
+  /* Deep Void - 背景不是死黑，是带着魔法底色的暗黑 */
+  --bg-void: #0b0c10;
+  --bg-table-dark: #0F1215; 
+  --bg-table-felt: radial-gradient(120% 120% at 50% 30%, #1e382d 0%, #101c18 60%, #050505 100%);
+
+  /* Champagne Gold - 贵族的边框与高亮 */
+  --gold-main: #CFB53B;
+  --gold-dim: #7a6e35;
+  --gold-glow: rgba(207, 181, 59, 0.15);
+
+  /* Rino's Magick - 状态与特殊交互 (紫色) */
+  --magic-highlight: #9B59B6;
+  --magic-glow: rgba(155, 89, 182, 0.4);
+
+  /* Status Colors */
+  --win-green: #27ae60;
+  --alert-red: #8b2525;
+
+  /* UI Material */
+  --glass-surface: rgba(15, 17, 22, 0.85);
+  --glass-blur: 16px;
+  
+  /* Card Dimensions */
+  --card-w: 70px;
+  --card-h: 98px;
+  --gap-base: 20px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-family: 'Cinzel', serif;
+  color: #e5e5e5;
+  background-color: var(--bg-void);
+  background-image: radial-gradient(circle at 50% 50%, #151515 0%, #000000 100%);
+  overflow: auto;
+}
+
+html {
+  width: 100%;
+  height: 100%;
+}
+
+/* =========================================================
+   2. 牌桌主体 - 经典跑道型布局 (Racetrack Layout)
+========================================================= */
+#poker-table {
+  position: relative;
+  width: 1100px;
+  height: 550px;
+  transform-origin: center center;
+  border-radius: 275px;
+  background:
+    radial-gradient(circle at 50% 40%, rgba(30, 56, 45, 1) 0%, rgba(13, 23, 18, 1) 60%, #050505 100%),
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
+  border: 4px solid var(--bg-table-dark);
+  box-shadow:
+    inset 0 0 100px rgba(0,0,0,0.9),
+    0 0 0 2px var(--gold-dim),
+    0 0 0 40px #1a1a1a,
+    0 0 0 41px rgba(255, 255, 255, 0.05),
+    0 20px 80px 10px rgba(0,0,0,0.8);
+  overflow: visible !important;
+  margin: auto;
+}
+
+#poker-table::after {
+  content: '';
+  position: absolute;
+  top: 60px;
+  left: 60px;
+  right: 60px;
+  bottom: 60px;
+  border: 2px solid rgba(207, 181, 59, 0.1);
+  border-radius: 215px;
+  pointer-events: none;
+  box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+}
+
+#poker-table::before {
+  content: "PROJECT: RINO // TERMINAL V.3.2";
+  position: absolute;
+  top: 100px;
+  width: 100%;
+  text-align: center;
+  font-family: 'JetBrains Mono';
+  font-size: 10px;
+  color: rgba(255,255,255,0.08);
+  letter-spacing: 4px;
+  z-index: 0;
+}
+
+/* =========================================================
+   3. 座位系统 - 绝对定位 (Seat Positioning)
+========================================================= */
+#seats-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.seat {
+  position: absolute;
+  pointer-events: auto;
+  background: var(--glass-surface);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  box-shadow:
+    0 4px 20px rgba(0,0,0,0.4),
+    0 0 0 1px rgba(0,0,0,0.5),
+    inset 0 0 20px rgba(0,0,0,0.5);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+  z-index: 20;
+  width: 160px;
+  min-width: unset;
+}
+
+/* 座位位置预设 - 2人 */
+.seat[data-position="bottom"] {
+  bottom: -65px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.seat[data-position="top"] {
+  top: -60px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* 座位位置预设 - 3人 (三角形) */
+.seat[data-position="bottom-center"] {
+  bottom: -60px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.seat[data-position="top-left"] {
+  top: 10px;
+  left: 80px;
+  transform: none;
+  width: 140px;
+}
+
+.seat[data-position="top-right"] {
+  top: 10px;
+  right: 80px;
+  transform: none;
+  width: 140px;
+}
+
+/* 座位位置预设 - 4人 (菱形) */
+.seat[data-position="left"] {
+  top: 50%;
+  left: 10px;
+  transform: translateY(-50%);
+  width: 140px;
+}
+
+.seat[data-position="right"] {
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  width: 140px;
+}
+
+/* 座位位置预设 - 5人 (五边形) */
+.seat[data-position="bottom-left"] {
+  bottom: 10px;
+  left: 80px;
+  transform: none;
+  width: 140px;
+}
+
+.seat[data-position="bottom-right"] {
+  bottom: 10px;
+  right: 80px;
+  transform: none;
+  width: 140px;
+}
+
+/* 座位位置预设 - 6人 (4角+上下中间) */
+.seat[data-position="top-center"] {
+  top: -60px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 140px;
+}
+
+/* 玩家座位特殊样式 */
+.seat.human-player {
+  border-bottom: 2px solid var(--magic-highlight);
+  min-height: 160px;
+}
+
+.seat.folded {
+  opacity: 0.4;
+  filter: grayscale(0.8);
+}
+
+/* Active Turn Breathing Light Effect */
+.seat.turn-active {
+  animation: breathingGold 2s ease-in-out infinite;
+  border: 2px solid var(--gold-main);
+}
+
+.seat.turn-active.ai-turn {
+  animation: breathingRed 2s ease-in-out infinite;
+  border: 2px solid var(--alert-red);
+}
+
+@keyframes breathingGold {
+  0%, 100% {
+    box-shadow: 0 0 20px var(--gold-glow), 0 0 40px var(--gold-glow), inset 0 0 15px rgba(207, 181, 59, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 35px var(--gold-main), 0 0 60px var(--gold-glow), inset 0 0 25px rgba(207, 181, 59, 0.2);
+  }
+}
+
+@keyframes breathingRed {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(139, 37, 37, 0.4), 0 0 40px rgba(139, 37, 37, 0.3), inset 0 0 15px rgba(139, 37, 37, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 35px var(--alert-red), 0 0 60px rgba(139, 37, 37, 0.5), inset 0 0 25px rgba(139, 37, 37, 0.2);
+  }
+}
+
+/* HUD 角标装饰 */
+.hud-corner {
+  position: absolute;
+  width: 8px; height: 8px;
+  border: 1px solid var(--gold-dim);
+  opacity: 0.5;
+  transition: opacity 0.3s;
+}
+.hud-tl { top: 4px; left: 4px; border-right: none; border-bottom: none; }
+.hud-tr { top: 4px; right: 4px; border-left: none; border-bottom: none; }
+.hud-bl { bottom: 4px; left: 4px; border-right: none; border-top: none; }
+.hud-br { bottom: 4px; right: 4px; border-left: none; border-top: none; }
+
+.seat.turn-active .hud-corner { 
+  opacity: 1; 
+  border-color: var(--gold-main); 
+  box-shadow: 0 0 4px var(--gold-main); 
+}
+
+/* Dealer Button */
+.dealer-button {
+  position: absolute;
+  top: -12px;
+  right: -12px;
+  width: 28px;
+  height: 28px;
+  background: radial-gradient(circle, var(--gold-main) 0%, var(--gold-dim) 100%);
+  border: 2px solid #000;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 15px var(--gold-glow), inset 0 2px 5px rgba(255, 255, 255, 0.3), inset 0 -2px 5px rgba(0, 0, 0, 0.5);
+  z-index: 15;
+  animation: dealerPulse 3s ease-in-out infinite;
+}
+
+.dealer-button span {
+  font-family: 'Cinzel', serif;
+  font-size: 14px;
+  font-weight: 900;
+  color: #000;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
+}
+
+@keyframes dealerPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); box-shadow: 0 0 20px var(--gold-main), inset 0 2px 5px rgba(255, 255, 255, 0.4); }
+}
+
+/* 座位信息显示 */
+.seat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  gap: 10px;
+}
+
+.player-name {
+  font-size: 9px;
+  color: var(--gold-dim);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  flex: 1;
+  text-align: center;
+}
+
+.seat.human-player .player-name {
+  color: var(--magic-highlight);
+  font-weight: 700;
+}
+
+.chip-count {
+  font-family: 'JetBrains Mono', monospace;
+  color: #fff;
+  background: #000;
+  padding: 3px 8px;
+  border: 1px solid #333;
+  border-left: 3px solid var(--gold-dim);
+  border-radius: 2px;
+  font-size: 11px;
+  min-width: 70px;
+  text-align: right;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+}
+
+.chip-count span { color: var(--gold-main); margin-right: 2px; }
+
+.seat.human-player .chip-count { border-left-color: var(--magic-highlight); }
+
+/* 卡牌区域 */
+.seat-cards {
+  display: flex;
+  gap: 8px;
+  min-height: 100px;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+.seat-cards .card {
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  transform: none !important;
+  width: var(--card-w) !important;
+  height: var(--card-h) !important;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.5);
+  flex-shrink: 0;
+}
+
+.seat-cards .card .face,
+.seat-cards .card .back {
+  width: 100% !important;
+  height: 100% !important;
+  background-size: cover;
+}
+
+/* Bet Chips Visualization */
+.bet-chips {
+  position: absolute;
+  bottom: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  z-index: 5;
+}
+
+.seat[data-position="top"] .bet-chips,
+.seat[data-position="top-left"] .bet-chips,
+.seat[data-position="top-right"] .bet-chips {
+  top: auto;
+  bottom: -30px;
+}
+
+/* 筹码通用样式 */
+.chip-stack {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  position: relative;
+  box-shadow: 
+    0 3px 0 rgba(0,0,0,0.5),
+    0 5px 10px rgba(0,0,0,0.6),
+    inset 0 0 8px rgba(0,0,0,0.4);
+  transition: transform 0.2s;
+}
+
+/* 筹码外圈条纹层 */
+.chip-ring {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  z-index: 1;
+}
+
+/* 筹码内部镶嵌层 */
+.chip-inlay {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 60%;
+  height: 60%;
+  border-radius: 50%;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 
+    0 0 0 1px rgba(0,0,0,0.3),
+    inset 0 1px 3px rgba(255,255,255,0.3),
+    inset 0 -1px 3px rgba(0,0,0,0.2);
+}
+
+/* 白色筹码 - 1银弗 (100铜) */
+.chip-stack.white {
+  background: #e0e0e0;
+}
+.chip-stack.white .chip-ring {
+  background: repeating-conic-gradient(
+    #e0e0e0 0deg 30deg,
+    #bdc3c7 30deg 45deg,
+    #e0e0e0 45deg 60deg
+  );
+}
+.chip-stack.white .chip-inlay {
+  background: #fff;
+  border: 2px solid #bdc3c7;
+}
+
+/* 绿色筹码 - 10银弗 (1000铜) */
+.chip-stack.green {
+  background: #27ae60;
+}
+.chip-stack.green .chip-ring {
+  background: repeating-conic-gradient(
+    #27ae60 0deg 40deg,
+    #f1c40f 40deg 45deg,
+    #1e8449 45deg 55deg,
+    #f1c40f 55deg 60deg,
+    #27ae60 60deg 90deg
+  );
+}
+.chip-stack.green .chip-inlay {
+  background: #145a32;
+  border: 2px solid #7a6e35;
+}
+
+/* 蓝色筹码 - 1金弗 (10000铜) */
+.chip-stack.blue {
+  background: #2980b9;
+}
+.chip-stack.blue .chip-ring {
+  background: repeating-conic-gradient(
+    from 15deg,
+    #2980b9 0deg 30deg,
+    #CFB53B 30deg 36deg,
+    #2980b9 36deg 60deg
+  );
+}
+.chip-stack.blue .chip-inlay {
+  background: #0b1a2a;
+  border: 1px dashed #CFB53B;
+}
+
+/* 红色筹码 - 10金弗 (100000铜) */
+.chip-stack.red {
+  background: #c0392b;
+}
+.chip-stack.red .chip-ring {
+  background: repeating-conic-gradient(
+    #922b21 0deg 45deg,
+    #e74c3c 45deg 48deg,
+    #0b0c10 48deg 58deg,
+    #e74c3c 58deg 61deg,
+    #922b21 61deg 90deg
+  );
+}
+.chip-stack.red .chip-inlay {
+  background: #300a0a;
+  border: 2px solid #c0392b;
+}
+
+/* 紫色筹码 - 100金弗 (1000000铜) */
+.chip-stack.purple {
+  background: #8e44ad;
+}
+.chip-stack.purple .chip-ring {
+  background: repeating-conic-gradient(
+    from 0deg,
+    #8e44ad 0% 10%,
+    #CFB53B 10% 12%,
+    #4a235a 12% 14%,
+    #CFB53B 14% 16%,
+    #8e44ad 16% 25%
+  );
+}
+.chip-stack.purple .chip-inlay {
+  background: radial-gradient(circle, #4a235a 30%, #000 100%);
+  border: 1px solid #CFB53B;
+  box-shadow: 0 0 5px #8e44ad;
+}
+
+/* 黑色筹码 - 1000金弗 (10000000铜) */
+.chip-stack.black {
+  background: #1a1a1a;
+}
+.chip-stack.black .chip-ring {
+  background: repeating-conic-gradient(
+    #000 0deg 28deg,
+    #CFB53B 28deg 32deg,
+    #333 32deg 60deg
+  );
+  border: 1px solid #000;
+}
+.chip-stack.black .chip-inlay {
+  background: #000;
+  border: 2px double #CFB53B;
+}
+
+.chip-amount {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--gold-main);
+  background: rgba(0, 0, 0, 0.9);
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid var(--gold-dim);
+  white-space: nowrap;
+}
+
+/* Chip Flying Animation */
+@keyframes flyToCenter {
+  0% {
+    transform: translateX(-50%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-50%) translateY(-80px) scale(0.3);
+    opacity: 0;
+  }
+}
+
+.bet-chips.flying {
+  animation: flyToCenter 0.6s ease-in forwards;
+}
+
+/* 状态文字 */
+.seat-status {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--magic-highlight);
+  text-shadow: 0 0 5px rgba(155, 89, 182, 0.5);
+  height: 16px;
+  text-align: center;
+  width: 100%;
+}
+
+/* =========================================================
+   4. 中央区域 (Modern Re-Layout)
+========================================================= */
+#center-layout {
+  position: absolute;
+  top: 45%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+  width: 80%;
+  pointer-events: none;
+  z-index: 20;
+}
+
+#center-layout > * {
+  pointer-events: auto;
+}
+
+#main-pot-area {
+  position: relative;
+  width: 90px;
+  height: 90px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  cursor: help;
+  transition: transform 0.2s ease;
+}
+
+#main-pot-area:hover {
+  transform: translateY(-2px) scale(1.05);
+}
+
+#main-pot-area.collecting {
+  animation: potCollect 0.8s ease-out;
+}
+
+#pot-clusters {
+  position: relative;
+  width: 50px;
+  height: 70px;
+}
+
+#pot-clusters .chip-stack {
+  position: absolute;
+  left: 5px;
+  box-shadow: 0 3px 6px rgba(0,0,0,0.6);
+}
+
+.pot-info-hover {
+  position: absolute;
+  top: -70px;
+  left: 50%;
+  transform: translate(-50%, 5px);
+  background: rgba(8, 8, 12, 0.95);
+  border: 1px solid var(--gold-dark, #7a6e35);
+  padding: 8px 14px;
+  border-radius: 4px;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: transform 0.3s, opacity 0.3s;
+  box-shadow: 0 12px 25px rgba(0,0,0,0.65);
+  min-width: 130px;
+  z-index: 25;
+}
+
+.pot-info-hover::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  width: 10px;
+  height: 10px;
+  background: inherit;
+  border-right: 1px solid var(--gold-dark, #7a6e35);
+  border-bottom: 1px solid var(--gold-dark, #7a6e35);
+}
+
+#main-pot-area:hover .pot-info-hover {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+}
+
+.pot-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: #847a63;
+  letter-spacing: 2px;
+  margin-bottom: 4px;
+}
+
+.pot-val-hover {
+  font-family: 'Cinzel', serif;
+  font-size: 20px;
+  color: var(--gold-main);
+  text-shadow: 0 0 12px rgba(207, 181, 59, 0.45);
+}
+
+@keyframes potCollect {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); filter: brightness(1.35); }
+  100% { transform: scale(1); }
+}
+
+.card-container {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  min-height: var(--card-h);
+  padding: 5px;
+  position: relative;
+  margin: 0;
+}
+
+.ghost-card {
+  width: var(--card-w);
+  height: var(--card-h);
+  border: 1px dashed var(--gold-dim);
+  border-radius: 6px;
+  opacity: 0.2;
+  background: rgba(207, 181, 59, 0.02);
+  position: relative;
+  transition: opacity 0.3s;
+}
+
+.ghost-card::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 25px;
+  height: 25px;
+  border: 2px dashed var(--gold-dim);
+  border-radius: 50%;
+  opacity: 0.3;
+}
+
+#center-layout:hover .ghost-card {
+  opacity: 0.35;
+}
+
+.card-container .card {
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  transform: none !important;
+  width: var(--card-w) !important;
+  height: var(--card-h) !important;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+}
+
+.card-container .card .face,
+.card-container .card .back {
+  width: 100% !important;
+  height: 100% !important;
+  background-size: cover;
+}
+
+/* 状态文字 */
+.terminal-text {
+  position: absolute;
+  top: 68%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--gold-main);
+  text-shadow: 0 0 5px rgba(207, 181, 59, 0.5);
+  letter-spacing: 2px;
+  padding: 4px 14px;
+  background: rgba(0,0,0,0.75);
+  border-radius: 4px;
+  border: 1px solid rgba(207, 181, 59, 0.2);
+}
+
+/* =========================================================
+   5. Deck 牌堆
+========================================================= */
+#deck-wrapper {
+  position: absolute;
+  right: 40px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 90px;
+  height: 130px;
+  border: 1px solid rgba(52, 152, 219, 0.3);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: rgba(52, 152, 219, 0.05);
+  z-index: 9999;
+  overflow: visible !important;
+}
+
+#deck-wrapper.deck-inline {
+  position: relative !important;
+  right: auto !important;
+  left: auto !important;
+  top: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+  background: rgba(20, 25, 32, 0.5) !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  width: 105px;
+  height: 135px;
+}
+
+#deck-wrapper.deck-inline #deck-mount {
+  justify-content: flex-end;
+  padding-right: 6px;
+}
+
+.deck-label {
+  font-family: 'JetBrains Mono';
+  font-size: 8px;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
+  line-height: 1.4;
+  margin-top: 6px;
+}
+
+#deck-mount {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transform-origin: center center;
+  overflow: visible !important;
+}
+
+#deck-mount .deck {
+  position: relative;
+  width: var(--card-w);
+  height: var(--card-h);
+}
+
+#deck-mount .deck .card {
+  left: 0 !important;
+  top: 0 !important;
+}
+
+#deck-mount .card {
+  width: var(--card-w) !important;
+  height: var(--card-h) !important;
+}
+
+#deck-mount .card .face,
+#deck-mount .card .back {
+  width: 100% !important;
+  height: 100% !important;
+  background-size: cover;
+}
+
+/* =========================================================
+   6. 控制台区域 (Tactical Controls)
+========================================================= */
+#controls-betting {
+  position: absolute;
+  bottom: -160px;
+  left: 50%; transform: translateX(-50%);
+  
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  
+  background: #111;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 4px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+  padding: 0;
+  z-index: 50;
+}
+
+.control-info {
+  padding: 10px 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border-right: 1px solid #333;
+  background: #0a0a0a;
+}
+
+.info-label { 
+  font-size: 9px; 
+  color: #666; 
+  margin-bottom: 2px; 
+  letter-spacing: 1px; 
+  font-family: 'JetBrains Mono'; 
+}
+
+.info-val { 
+  font-family: 'JetBrains Mono'; 
+  color: var(--alert-red); 
+  font-weight: 700; 
+  font-size: 16px; 
+}
+
+.btn-group-action {
+  display: flex; 
+}
+
+.action-btn {
+  border: none;
+  outline: none;
+  background: #1a1a1a;
+  color: #888;
+  min-width: 90px;
+  height: 50px;
+  cursor: pointer;
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  font-size: 12px;
+  transition: all 0.2s;
+  position: relative;
+  border-right: 1px solid #000;
+  text-transform: uppercase;
+}
+
+.action-btn:hover:not(:disabled) { background: #252525; color: #fff; }
+
+.action-btn.warning:hover:not(:disabled) { 
+  color: #cc7878; 
+  box-shadow: inset 0 -3px 0 var(--alert-red); 
+}
+
+.action-btn.primary {
+  background: linear-gradient(135deg, #2a220a 0%, #1a1605 100%);
+  color: var(--gold-main);
+  min-width: 100px;
+  border-right: none;
+}
+
+.action-btn.primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #bfa030 0%, #8c7112 100%);
+  color: #000;
+  box-shadow: 0 0 20px var(--gold-glow);
+}
+
+.action-btn.primary::before {
+  content: '';
+  position: absolute;
+  top: 15px; left: 10px; bottom: 15px; width: 2px;
+  background: var(--gold-main);
+  opacity: 0.5;
+}
+
+.action-btn.glow {
+  box-shadow: 0 0 15px var(--gold-glow);
+}
+
+.action-btn.small {
+  min-width: 60px;
+  height: 30px;
+  font-size: 10px;
+}
+
+.action-btn:disabled {
+  opacity: 0.3;
+  pointer-events: none;
+  filter: grayscale(1);
+}
+
+/* 加注控制 */
+.raise-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 15px;
+  background: #0a0a0a;
+  border-left: 1px solid #333;
+}
+
+#raise-slider {
+  width: 150px;
+  accent-color: var(--gold-main);
+}
+
+#raise-amount-display {
+  min-width: 60px;
+  text-align: center;
+  font-weight: bold;
+  color: var(--gold-main);
+  font-family: 'JetBrains Mono';
+}
+
+/* =========================================================
+   7. 游戏控制 & 日志
+========================================================= */
+#controls-game {
+  position: absolute;
+  top: -120px;
+  right: 40px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  z-index: 120;
+  transform: none;
+}
+
+.player-count-selector {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: #111;
+  padding: 5px 10px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+
+.player-count-selector label {
+  font-family: 'JetBrains Mono';
+  font-size: 10px;
+  color: #666;
+  margin-right: 5px;
+}
+
+.player-count-btn {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  color: #888;
+  padding: 5px 12px;
+  font-family: 'JetBrains Mono';
+  font-size: 11px;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: all 0.2s;
+}
+
+.player-count-btn:hover {
+  background: #252525;
+  color: #fff;
+}
+
+.player-count-btn.active {
+  background: var(--gold-dim);
+  color: #000;
+  border-color: var(--gold-main);
+  font-weight: 700;
+}
+
+#debug-panel {
+  position: absolute;
+  bottom: -160px;
+  left: 50%; transform: translateX(-50%);
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  font-size: 10px;
+  color: #555;
+  opacity: 0.5;
+  font-family: 'JetBrains Mono';
+}
+
+/* 游戏日志面板 */
+#game-log-panel {
+  position: absolute;
+  bottom: -350px;
+  left: 50%; transform: translateX(-50%);
+  width: 700px;
+  max-width: 90vw;
+  background: rgba(10, 10, 10, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 15px;
+  z-index: 100;
+}
+
+.log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-family: 'JetBrains Mono';
+}
+
+#game-log-content {
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  padding: 15px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #8a8a8a;
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin: 0;
+}
+
+#btn-copy-log {
+  background: linear-gradient(135deg, #1a3020 0%, #0f1a12 100%);
+  color: var(--win-green);
+  border: 1px solid rgba(39, 174, 96, 0.3);
+}
+
+#btn-copy-log:hover:not(:disabled) {
+  background: linear-gradient(135deg, #27ae60 0%, #1e8449 100%);
+  color: #fff;
+}
+
+/* =========================================================
+   8. 状态效果
+========================================================= */
+.seat.winner {
+  border-color: var(--gold-main) !important;
+  box-shadow: 0 0 30px var(--gold-glow), inset 0 0 20px rgba(207, 181, 59, 0.1) !important;
+  animation: winnerGlow 1.5s ease-in-out infinite;
+}
+
+@keyframes winnerGlow {
+  0%, 100% {
+    box-shadow: 0 0 30px var(--gold-glow), inset 0 0 20px rgba(207, 181, 59, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 50px var(--gold-main), inset 0 0 30px rgba(207, 181, 59, 0.2);
+  }
+}
+
+.seat.winner .hud-corner {
+  opacity: 1;
+  border-color: var(--gold-main);
+  box-shadow: 0 0 8px var(--gold-main);
+}

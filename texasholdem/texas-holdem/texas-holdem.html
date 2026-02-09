@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The Gilded Terminal - Multi-Player Poker</title>
+  
+  <!-- 字体：Cinzel (魔法/贵族感) + JetBrains Mono (数据终端感) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+  <!-- Deck.js 卡牌样式 -->
+  <link href="../deck-of-cards/example/example.css" rel="stylesheet">
+  <!-- 游戏样式 -->
+  <link href="texas-holdem.css" rel="stylesheet">
+</head>
+<body>
+
+  <!-- 全页面容器 -->
+  <div id="poker-table">
+    
+    <!-- 玩家座位容器 (动态生成) -->
+    <div id="seats-container"></div>
+
+    <!-- 中央区域：底池 + 公共牌 + 牌堆 -->
+    <div id="center-layout">
+      <!-- 底池筹码堆 -->
+      <div id="main-pot-area">
+        <div id="pot-clusters">
+          <div class="chip-stack black" style="top:0; left:0;">
+            <div class="chip-ring"></div>
+            <div class="chip-inlay"></div>
+          </div>
+          <div class="chip-stack red" style="top:-5px; left:0;">
+            <div class="chip-ring"></div>
+            <div class="chip-inlay"></div>
+          </div>
+          <div class="chip-stack blue" style="top:-10px; left:0;">
+            <div class="chip-ring"></div>
+            <div class="chip-inlay"></div>
+          </div>
+        </div>
+        <div class="pot-info-hover">
+          <div class="pot-label">TOTAL POT</div>
+          <div class="pot-val-hover">$<span id="pot-amount">0</span></div>
+        </div>
+      </div>
+
+      <!-- 公共牌 -->
+      <div class="card-container" id="community-cards">
+        <div class="ghost-card"></div>
+        <div class="ghost-card"></div>
+        <div class="ghost-card"></div>
+        <div class="ghost-card"></div>
+        <div class="ghost-card"></div>
+      </div>
+
+      <!-- 牌堆 -->
+      <div id="deck-wrapper" class="deck-inline">
+        <div id="deck-mount"></div>
+        <div class="deck-label">DECK</div>
+      </div>
+    </div>
+
+    <div class="terminal-text" id="game-message">WAITING FOR ACTION</div>
+
+    <!-- 底部：战术控制条 (Controls) -->
+    <div id="controls-betting">
+      
+      <!-- 信息显示 -->
+      <div class="control-info">
+        <div class="info-label">TO CALL</div>
+        <div class="info-val" id="to-call-amount">$0</div>
+      </div>
+
+      <!-- 动作按钮 -->
+      <div class="btn-group-action">
+        <button id="btn-fold" class="action-btn warning" disabled>Fold</button>
+        <button id="btn-check-call" class="action-btn" disabled>Check</button>
+        <button id="btn-raise" class="action-btn primary" disabled>Raise</button>
+      </div>
+
+      <!-- 加注控制 -->
+      <div class="raise-controls" id="raise-controls" style="display:none;">
+        <input type="range" id="raise-slider" min="0" max="1000" value="100">
+        <span id="raise-amount-display">$100</span>
+        <button id="btn-confirm-raise" class="action-btn primary">Confirm</button>
+      </div>
+
+    </div>
+
+    <!-- 游戏控制（开始新局） -->
+    <div id="controls-game">
+      <button id="btn-deal" class="action-btn primary glow">New Game</button>
+      <button id="btn-copy-log" class="action-btn" style="display:none;">📋 Copy Log</button>
+      
+      <!-- 玩家数量选择 (2-6人，6-Max) -->
+      <div class="player-count-selector">
+        <label>Players:</label>
+        <button class="player-count-btn active" data-count="2">2</button>
+        <button class="player-count-btn" data-count="3">3</button>
+        <button class="player-count-btn" data-count="4">4</button>
+        <button class="player-count-btn" data-count="5">5</button>
+        <button class="player-count-btn" data-count="6">6</button>
+      </div>
+    </div>
+
+    <!-- 游戏日志显示区 -->
+    <div id="game-log-panel" style="display:none;">
+      <div class="log-header">
+        <span>Game Log (AI Reference)</span>
+        <button id="btn-toggle-log" class="action-btn small">Hide</button>
+      </div>
+      <pre id="game-log-content"></pre>
+    </div>
+
+    <!-- 调试面板 -->
+    <div id="debug-panel">
+      <span>DEBUG:</span>
+      <button id="btn-force-next" class="action-btn small">Force Next</button>
+    </div>
+
+  </div><!-- End Table -->
+
+  <script src="../deck-of-cards/dist/deck.js"></script>
+  <script src="../pokersolver/pokersolver.js"></script>
+  <script src="data-loader.js"></script>
+  <script src="poker-ai.js"></script>
+  <script src="texas-holdem.js"></script>
+</body>
+</html>
