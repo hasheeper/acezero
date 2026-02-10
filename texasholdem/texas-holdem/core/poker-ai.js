@@ -434,12 +434,18 @@
       const betRatio = toCall / (pot + 0.01);        // 下注占底池比例
       const stackRatio = toCall / (aiStack + 0.01); // 下注占筹码比例
       
-      // 计算压力等级 (0-3)
+      // 计算压力等级 (0-4)
       let pressureLevel = 0;
       if (betRatio > 0.3) pressureLevel++;   // 超过 30% pot
       if (betRatio > 0.6) pressureLevel++;   // 超过 60% pot  
       if (stackRatio > 0.4) pressureLevel++; // 超过 40% 筹码
       if (stackRatio > 0.7) pressureLevel++; // 超过 70% 筹码
+      
+      // 翻牌前只需跟大盲 = 零压力（大盲本身不算加注压力）
+      // 只有面对 3-bet 以上才算真正的翻牌前压力
+      if (phase === 'preflop' && stackRatio < 0.05) {
+        pressureLevel = 0;
+      }
       
       // 根据压力等级和牌力决定是否触发生存本能
       // 压力越大，需要的牌力越高才能继续

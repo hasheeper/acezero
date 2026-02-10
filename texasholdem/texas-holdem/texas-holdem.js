@@ -1544,16 +1544,27 @@
   }
 
   function showGameLog() {
+    // 计算本局最大底池（从日志条目中取最大 pot 值）
+    var maxPot = 0;
+    gameLogger.entries.forEach(function (e) {
+      if (e.pot > maxPot) maxPot = e.pot;
+    });
+
     gameLogger.show({
       playerCount: gameState.players.length,
       playerNames: gameState.players.map(function (p) { return p.name; }),
       players: gameState.players.map(function (p) {
-        return { name: p.name, cardsStr: p.cards && p.cards.length > 0 ? cardsToString(p.cards) : '[unknown]' };
+        return {
+          name: p.name,
+          chips: p.chips,
+          cardsStr: p.cards && p.cards.length > 0 ? cardsToString(p.cards) : '[unknown]'
+        };
       }),
       boardStr: cardsToString(gameState.board),
       initialChips: getInitialChips(),
       smallBlind: getSmallBlind(),
-      bigBlind: getBigBlind()
+      bigBlind: getBigBlind(),
+      maxPot: maxPot
     });
   }
 

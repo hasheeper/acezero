@@ -356,6 +356,8 @@
       this.ui = { panel: null, content: null, btnCopy: null, btnToggle: null };
       // 游戏状态快照回调
       this.getGameSnapshot = null;
+      // 缓存最后一次 show() 的 context，供按钮复制时使用
+      this._lastContext = null;
     }
 
     // ========== 初始化 ==========
@@ -367,7 +369,7 @@
       this.ui.btnToggle = elements.btnToggle || document.getElementById('btn-toggle-log');
 
       if (this.ui.btnCopy) {
-        this.ui.btnCopy.addEventListener('click', () => this.copyToClipboard());
+        this.ui.btnCopy.addEventListener('click', () => this.copyAIPrompt(this._lastContext));
       }
       if (this.ui.btnToggle) {
         this.ui.btnToggle.addEventListener('click', () => this.togglePanel());
@@ -549,6 +551,7 @@
 
     show(context) {
       if (!this.ui.content || !this.ui.panel) return;
+      this._lastContext = context;
       this.ui.content.textContent = this.generateText(context);
       this.ui.panel.style.display = 'block';
       if (this.ui.btnCopy) this.ui.btnCopy.style.display = 'inline-block';
