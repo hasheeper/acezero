@@ -159,6 +159,8 @@
       const loadingStatus = document.getElementById('loading-status');
       let _currentConfig = null;
 
+      let _configSource = null; // 'injected' | 'static'
+
       // 1. 确定配置来源（外部注入 or 本地 JSON）
       async function resolveConfig() {
         if (_currentConfig) return _currentConfig;
@@ -168,6 +170,7 @@
         if (injected) {
           console.log('[ENGINE] 使用外部注入配置');
           _currentConfig = injected;
+          _configSource = 'injected';
           return injected;
         }
 
@@ -175,10 +178,16 @@
         try {
           loadingStatus.textContent = 'LOADING CONFIG...';
           const resp = await fetch('game-config.json');
+          // fetch 期间注入配置可能已到达
+          if (_configSource === 'injected') {
+            console.log('[ENGINE] fetch 期间注入配置已到达，丢弃 game-config.json');
+            return _currentConfig;
+          }
           if (resp.ok) {
             const config = await resp.json();
             console.log('[ENGINE] 从 game-config.json 加载配置');
             _currentConfig = config;
+            _configSource = 'static';
             return config;
           }
         } catch (e) {
@@ -187,6 +196,7 @@
 
         // 最终回退：默认 gameId
         _currentConfig = { gameId: DEFAULT_GAME };
+        _configSource = 'static';
         return _currentConfig;
       }
 
@@ -197,12 +207,13 @@
         return base + route;
       }
 
-      // 3. 向游戏 iframe 发送配置
-      function sendConfigToGame(config) {
+      // 3. 向游戏 iframe 发送配置（附带来源标记）
+      function sendConfigToGame(config, source) {
         if (!frame || !frame.contentWindow) return;
         frame.contentWindow.postMessage({
           type: 'acezero-game-data',
-          payload: config
+          payload: config,
+          source: source || _configSource || 'static'
         }, '*');
       }
 
@@ -220,9 +231,10 @@
         gameSrc += sep + 'v=' + Date.now();
         frame.src = gameSrc;
 
-        // iframe 加载完成后：传递配置 + 隐藏 loading
+        // iframe 加载完成后：传递最新配置 + 隐藏 loading
         frame.addEventListener('load', function onLoad() {
-          sendConfigToGame(config);
+          // 始终发送最新的 _currentConfig（可能在 fetch 期间被注入配置更新）
+          sendConfigToGame(_currentConfig, _configSource);
           overlay.classList.add('hidden');
           frame.removeEventListener('load', onLoad);
         });
@@ -235,7 +247,7 @@
 
         if (msg.type === 'acezero-data-request') {
           const config = await resolveConfig();
-          sendConfigToGame(config);
+          sendConfigToGame(config, _configSource);
         }
       });
 
@@ -243,7 +255,8 @@
       window.AceZeroDataLoader.onConfigLoaded(function (config) {
         console.log('[ENGINE] 外部配置延迟到达');
         _currentConfig = config;
-        sendConfigToGame(config);
+        _configSource = 'injected';
+        sendConfigToGame(config, 'injected');
       });
 
       // ============================================

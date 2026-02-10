@@ -9,6 +9,7 @@
   // ========== 游戏配置（从JSON加载或使用默认值） ==========
   let gameConfig = null;
   let _externalConfigApplied = false;
+  let _configSource = null; // 'injected' | 'static'
 
   // 默认配置（新格式）
   const DEFAULT_CONFIG = {
@@ -1611,26 +1612,25 @@
       return;
     }
 
-    // 尝试从根目录加载 game-config.json（相对于 GitPage 根）
-    // 路径: ../../game-config.json (从 texasholdem/texas-holdem/ 回到根)
+    // 在 iframe 中运行时，配置始终由主引擎通过 postMessage 提供
+    // 不自己 fetch game-config.json，避免竞争
+    if (window.parent && window.parent !== window) {
+      console.log('[CONFIG] 在 iframe 中运行，等待主引擎 postMessage 配置');
+      return;
+    }
+
+    // 独立运行时：加载本地 game-config.json
     const configPaths = ['../../game-config.json', 'game-config.json'];
     
     for (const path of configPaths) {
-      // 再次检查：fetch 期间外部配置可能已到达
-      if (_externalConfigApplied) {
-        console.log('[CONFIG] 外部配置已到达，中止 game-config.json 加载');
-        return;
-      }
+      if (_externalConfigApplied) return;
       try {
         const response = await fetch(path);
-        if (_externalConfigApplied) {
-          console.log('[CONFIG] 外部配置已到达，丢弃 game-config.json');
-          return;
-        }
+        if (_externalConfigApplied) return;
         if (response.ok) {
           gameConfig = await response.json();
+          _configSource = 'static';
           console.log('[CONFIG] 从', path, '加载:', gameConfig);
-          // 注册技能 + 生成UI
           skillUI.registerFromConfig(gameConfig);
           return;
         }
@@ -1644,11 +1644,18 @@
    * 应用外部注入的配置（从主引擎 postMessage 到达）
    * @param {Object} config - 注入的配置对象
    */
-  function applyExternalConfig(config) {
+  function applyExternalConfig(config, source) {
     if (!config) return;
+    source = source || 'static';
+    // 如果已有 injected 配置，拒绝 static 配置覆盖
+    if (_configSource === 'injected' && source === 'static') {
+      console.log('[CONFIG] 已有注入配置，拒绝静态配置覆盖');
+      return;
+    }
     gameConfig = config;
     _externalConfigApplied = true;
-    console.log('[CONFIG] 外部配置已应用:', config);
+    _configSource = source;
+    console.log('[CONFIG] 外部配置已应用 [' + source + ']:', config);
     // 注册技能 + 生成UI
     skillUI.registerFromConfig(config);
   }
@@ -1658,8 +1665,9 @@
   window.addEventListener('message', function (event) {
     const msg = event?.data;
     if (!msg || msg.type !== 'acezero-game-data') return;
-    console.log('[CONFIG] 收到主引擎 postMessage 配置');
-    applyExternalConfig(msg.payload);
+    const source = msg.source || 'static';
+    console.log('[CONFIG] 收到主引擎 postMessage 配置 [' + source + ']');
+    applyExternalConfig(msg.payload, source);
   });
 
   // 主动向父窗口请求配置
