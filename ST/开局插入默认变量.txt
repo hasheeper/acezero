@@ -1,0 +1,15 @@
+{
+  "hero": {
+    "gold": 500,
+    "vanguard": "KAZU",
+    "rearguard": "RINO"
+  },
+  "KAZU": {
+    "role": "vanguard",
+    "level": 3
+  },
+  "RINO": {
+    "role": "rearguard",
+    "level": 5
+  }
+}

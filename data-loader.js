@@ -4,23 +4,22 @@
  * ===========================================
  * 
  * 职责:
- * - 接收 STver.html 通过 postMessage 注入的 JSON 数据
- * - 解析并应用游戏配置（玩家、设置等）
+ * - 接收酒馆插件(acezero-tavern-plugin.js)通过 postMessage 注入的 game-config
+ * - 解析并应用游戏配置（hero、seats、blinds 等）
  * - 提供默认配置（当没有外部注入时）
  * - 主动向父窗口请求数据
  * 
- * JSON 格式:
+ * JSON 格式 (game-config v4):
  * {
- *   "gameId": "texas-holdem",
- *   "gameSettings": {
- *     "initialChips": 1000,
- *     "smallBlind": 10,
- *     "bigBlind": 20
+ *   "blinds": [10, 20],
+ *   "chips": 1000,
+ *   "hero": {
+ *     "vanguard": { "name": "KAZU", "level": 3, "trait": "blank_body" },
+ *     "rearguard": { "name": "RINO", "level": 5, "trait": "fate_weaver" },
+ *     "attrs": { ... },
+ *     "skills": { ... }
  *   },
- *   "players": [
- *     { "id": 0, "name": "...", "type": "human", "chips": 1000 },
- *     { "id": 1, "name": "...", "type": "ai", "chips": 1000, "personality": {...} }
- *   ]
+ *   "seats": { "BTN": { ... }, "SB": { ... }, ... }
  * }
  */
 
@@ -62,7 +61,18 @@
     if (!data) return;
 
     _injectedConfig = data;
-    console.log('[DATA-LOADER] 外部配置已加载, gameId:', data.gameId || '(none)');
+    const heroName = (data.hero && data.hero.vanguard && data.hero.vanguard.name) || '(none)';
+    console.log('[DATA-LOADER] 外部配置已加载, hero:', heroName);
+
+    // 如果 texas-holdem.js 已加载，直接应用配置
+    if (typeof window.applyExternalConfig === 'function') {
+      try {
+        window.applyExternalConfig(data);
+        console.log('[DATA-LOADER] ✓ 已调用 applyExternalConfig');
+      } catch (e) {
+        console.error('[DATA-LOADER] applyExternalConfig 失败:', e);
+      }
+    }
 
     // 触发所有等待中的回调
     _configCallbacks.forEach(cb => {
@@ -117,15 +127,19 @@
       return { valid: false, errors };
     }
 
-    if (!json.gameId) {
-      errors.push('Missing gameId field');
+    // 新格式验证：hero + seats
+    if (json.hero) {
+      if (!json.hero.vanguard || !json.hero.vanguard.name) {
+        errors.push('hero.vanguard.name is required');
+      }
     }
 
-    if (json.players && Array.isArray(json.players)) {
-      json.players.forEach((p, i) => {
-        if (!p.name) errors.push(`Player #${i}: missing name`);
-        if (!p.type) errors.push(`Player #${i}: missing type (human/ai)`);
-      });
+    if (json.seats && typeof json.seats === 'object') {
+      for (const [seat, cfg] of Object.entries(json.seats)) {
+        if (!cfg.vanguard || !cfg.vanguard.name) {
+          errors.push(`seats.${seat}: vanguard.name is required`);
+        }
+      }
     }
 
     return { valid: errors.length === 0, errors };

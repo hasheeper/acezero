@@ -3,59 +3,33 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>The Gilded Terminal - Multi-Player Poker</title>
-  
-  <!-- 字体：Cinzel (魔法/贵族感) + JetBrains Mono (数据终端感) -->
+  <title>The Gilded Terminal - Unified Interface</title>
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-
-  <!-- Deck.js 卡牌样式 -->
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
   <link href="../deck-of-cards/example/example.css" rel="stylesheet">
-  <!-- 游戏样式 -->
   <link href="texas-holdem.css" rel="stylesheet">
 </head>
 <body>
 
-  <!-- 全页面容器 -->
+  <!-- 1. 核心游戏桌容器 (View) -->
   <div id="poker-table">
-    
-    <!-- 玩家座位容器 (动态生成) -->
+    <!-- 座位 -->
     <div id="seats-container"></div>
 
-    <!-- 中央区域：底池 + 公共牌 + 牌堆 -->
+    <!-- 中央公共牌/筹码区域 -->
     <div id="center-layout">
-      <!-- 底池筹码堆 -->
+      <!-- 底池 -->
       <div id="main-pot-area">
-        <div id="pot-clusters">
-          <div class="chip-stack black" style="top:0; left:0;">
-            <div class="chip-ring"></div>
-            <div class="chip-inlay"></div>
-          </div>
-          <div class="chip-stack red" style="top:-5px; left:0;">
-            <div class="chip-ring"></div>
-            <div class="chip-inlay"></div>
-          </div>
-          <div class="chip-stack blue" style="top:-10px; left:0;">
-            <div class="chip-ring"></div>
-            <div class="chip-inlay"></div>
-          </div>
-        </div>
+        <div id="pot-clusters"></div>
         <div class="pot-info-hover">
           <div class="pot-label">TOTAL POT</div>
           <div class="pot-val-hover">$<span id="pot-amount">0</span></div>
         </div>
       </div>
-
       <!-- 公共牌 -->
-      <div class="card-container" id="community-cards">
-        <div class="ghost-card"></div>
-        <div class="ghost-card"></div>
-        <div class="ghost-card"></div>
-        <div class="ghost-card"></div>
-        <div class="ghost-card"></div>
-      </div>
-
+      <div class="card-container" id="community-cards"></div>
       <!-- 牌堆 -->
       <div id="deck-wrapper" class="deck-inline">
         <div id="deck-mount"></div>
@@ -63,59 +37,130 @@
       </div>
     </div>
 
-    <div class="terminal-text" id="game-message">WAITING FOR ACTION</div>
+    <!-- 屏幕中央提示文字 -->
+    <div class="terminal-text" id="game-message">SYSTEM READY</div>
+  </div>
 
-    <!-- 底部：战术控制条 (Controls) -->
-    <div id="controls-betting">
-      
-      <!-- 信息显示 -->
-      <div class="control-info">
-        <div class="info-label">TO CALL</div>
-        <div class="info-val" id="to-call-amount">$0</div>
+
+  <!-- 2. 悬浮的技能信息与反馈层 (Overlay Layers) -->
+  <div id="floating-layers">
+    <!-- 先知预览面板 (浮动在加注区上方) -->
+    <div id="foresight-panel" style="display:none;"></div>
+    <!-- 感知/系统报警 -->
+    <div id="sense-alert" style="display:none;"></div>
+    <!-- 技能反噬等提示 -->
+    <div id="backlash-indicator" style="display:none;"></div>
+    <!-- 透视目标选择面板 -->
+    <div id="peek-panel" style="display:none;">
+      <div class="peek-title">🃏 选择透视目标</div>
+      <div class="peek-tiers" id="peek-tiers"></div>
+      <div class="peek-targets" id="peek-targets"></div>
+      <div class="peek-cancel"><button id="peek-cancel-btn" class="action-btn small">取消</button></div>
+    </div>
+    <!-- 发牌时力量对抗展示（由 JS 动态填充） -->
+    <div id="force-pk-overlay" style="display:none;"></div>
+  </div>
+
+
+  <!-- 3. 全新底部操作仪表盘 (Unified Controller) -->
+  <div id="game-dashboard">
+
+    <!-- = [ SECTION 1: Monitor / Info ] ======================== -->
+    <div class="dash-section monitor">
+      <!-- 局势数据 -->
+      <div class="hud-info-box">
+        <div>CHIPS TO CALL</div>
+        <div class="to-call-display" id="to-call-amount">$0</div>
       </div>
 
-      <!-- 动作按钮 -->
-      <div class="btn-group-action">
-        <button id="btn-fold" class="action-btn warning" disabled>Fold</button>
-        <button id="btn-check-call" class="action-btn" disabled>Check</button>
-        <button id="btn-raise" class="action-btn primary" disabled>Raise</button>
+      <!-- 系统/日志控制 -->
+      <div class="log-controls">
+        <button id="btn-toggle-log" class="action-btn small">LOG</button>
+        <button id="btn-copy-log" class="action-btn small" style="display:none;">CPY</button>
+        <button id="btn-deal" class="action-btn primary small">NEW HAND</button>
       </div>
 
-      <!-- 加注控制 -->
-      <div class="raise-controls" id="raise-controls" style="display:none;">
-        <input type="range" id="raise-slider" min="0" max="1000" value="100">
-        <span id="raise-amount-display">$100</span>
-        <button id="btn-confirm-raise" class="action-btn primary">Confirm</button>
+      <!-- 状态文字容器 -->
+      <div id="moz-status" class="moz-status ready">魔运就绪</div>
+    </div>
+
+
+    <!-- = [ SECTION 2: Action Center ] ======================== -->
+    <div class="dash-section actions">
+
+      <!-- 加注滑块栏 (平时隐藏) -->
+      <div id="raise-controls" style="display:none;">
+        <div class="raise-inner">
+           <span class="raise-label">AMOUNT:</span>
+           <span id="raise-amount-display">$100</span>
+           <input type="range" id="raise-slider" min="0" max="1000" step="10">
+           <button id="btn-confirm-raise" class="action-main-btn btn-confirm">OK</button>
+        </div>
+      </div>
+
+      <!-- 主按钮栏 -->
+      <div class="action-row">
+        <button id="btn-fold" class="action-main-btn warning" disabled>FOLD</button>
+        <button id="btn-check-call" class="action-main-btn" disabled>CHECK</button>
+        <button id="btn-raise" class="action-main-btn prime" disabled>RAISE</button>
       </div>
 
     </div>
 
-    <!-- 游戏控制（开始新局） -->
-    <div id="controls-game">
-      <button id="btn-deal" class="action-btn primary glow">New Game</button>
-      <button id="btn-copy-log" class="action-btn" style="display:none;">📋 Copy Log</button>
+
+    <!-- = [ SECTION 3: Magic / Skills ] ======================== -->
+    <div class="dash-section skills">
+
+        <!-- Force Balance Bar (可选显示) -->
+        <div id="force-balance" style="display:none;">
+           <div class="force-ally"></div>
+           <div class="force-enemy"></div>
+        </div>
+
+        <!-- 技能按钮面板 (由 skill-ui.js 动态填充) -->
+        <div id="skill-panel"></div>
+
+        <!-- Mana Bar & Status -->
+        <div id="new-mana-wrapper">
+             <div class="mana-label-mini">MP</div>
+             <div id="mana-bar-track">
+                <div id="mana-bar" class="mana-fill high"></div>
+             </div>
+             <div id="mana-text">100/100</div>
+        </div>
+
     </div>
 
-    <!-- 游戏日志显示区 -->
-    <div id="game-log-panel" style="display:none;">
-      <div class="log-header">
-        <span>Game Log (AI Reference)</span>
-        <button id="btn-toggle-log" class="action-btn small">Hide</button>
-      </div>
+  </div>
+
+
+  <!-- 日志弹窗 (隐藏状态，点击 LOG 显示) -->
+  <div id="game-log-panel" style="display:none;">
+      <div class="log-header">BATTLE LOG</div>
       <pre id="game-log-content"></pre>
-    </div>
+  </div>
 
-    <!-- 调试面板 -->
-    <div id="debug-panel">
-      <span>DEBUG:</span>
-      <button id="btn-force-next" class="action-btn small">Force Next</button>
-    </div>
+  <!-- Debug 按钮 (隐藏) -->
+  <div id="debug-panel" style="visibility:hidden; position:absolute;">
+     <button id="btn-force-next">Force Next</button>
+  </div>
 
-  </div><!-- End Table -->
 
+  <!-- 第三方库（全局挂载，非 ES Module） -->
   <script src="../deck-of-cards/dist/deck.js"></script>
   <script src="../pokersolver/pokersolver.js"></script>
-  <script src="poker-ai.js"></script>
+
+  <!-- 核心引擎（IIFE，逐步迁移） -->
+  <script src="core/poker-ai.js"></script>
+  <script src="utils/game-logger.js"></script>
+  <script src="core/skill-system.js"></script>
+  <script src="core/monte-of-zero.js"></script>
+  <script src="ui/skill-ui.js"></script>
+
+  <!-- RPG 系统层（ES Module） -->
+  <script type="module" src="rpg/rpg-init.js"></script>
+
+  <!-- 游戏主逻辑（IIFE，逐步迁移） -->
   <script src="texas-holdem.js"></script>
 </body>
 </html>

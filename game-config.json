@@ -1,71 +1,43 @@
 {
-  "gameId": "texas-holdem",
-  "gameSettings": {
-    "initialChips": 1000,
-    "smallBlind": 10,
-    "bigBlind": 20
-  },
-  "players": [
-    {
-      "id": 0,
-      "name": "RINO [ADMIN]",
-      "type": "human",
-      "chips": 1000
-    },
-    {
-      "id": 1,
-      "name": "TARGET_ALPHA",
-      "type": "ai",
-      "chips": 1000,
-      "personality": {
-        "riskAppetite": "balanced",
-        "difficulty": "regular"
-      },
-      "description": "普通市民，标准打法，陪衬角色"
-    },
-    {
-      "id": 2,
-      "name": "TARGET_BETA",
-      "type": "ai",
-      "chips": 1000,
-      "personality": {
-        "riskAppetite": "rock",
-        "difficulty": "regular"
-      },
-      "description": "胆小鬼，只玩强牌，容易被诈唬"
-    },
-    {
-      "id": 3,
-      "name": "TARGET_GAMMA",
-      "type": "ai",
-      "chips": 1000,
-      "personality": {
-        "riskAppetite": "aggressive",
-        "difficulty": "pro"
-      },
-      "description": "小Boss，会算牌，有点难缠"
-    },
-    {
-      "id": 4,
-      "name": "TARGET_DELTA",
-      "type": "ai",
-      "chips": 1000,
-      "personality": {
-        "riskAppetite": "passive",
-        "difficulty": "noob"
-      },
-      "description": "终极鱼，只会Call的死鱼，底池贡献者"
-    },
-    {
-      "id": 5,
-      "name": "TARGET_EPSILON",
-      "type": "ai",
-      "chips": 1000,
-      "personality": {
-        "riskAppetite": "maniac",
-        "difficulty": "noob"
-      },
-      "description": "全桌唯一疯狗，鲶鱼效应制造者"
+  "blinds": [10, 20],
+  "chips": 1000,
+
+  "hero": {
+    "vanguard": { "name": "KAZU", "level": 3, "trait": "blank_body" },
+    "rearguard": { "name": "RINO", "level": 5, "trait": "fate_weaver" },
+    "attrs": { "moirai": 80, "chaos": 20, "psyche": 50, "void": 100 },
+    "skills": {
+      "fortune": 5, "foresight": 3, "sense": 3,
+      "peek": 3, "reversal": 3, "fortune_anchor": 3,
+      "blank_factor": 1, "null_field": 2
     }
-  ]
+  },
+
+  "seats": {
+    "BTN": {
+      "vanguard": { "name": "ALPHA", "level": 0 },
+      "ai": "balanced"
+    },
+    "SB": {
+      "vanguard": { "name": "BETA", "level": 0 },
+      "ai": "rock"
+    },
+    "BB": {
+      "vanguard": { "name": "GAMMA_A", "level": 3, "trait": "iron_nerve" },
+      "rearguard": { "name": "GAMMA_B", "level": 2, "trait": "hex_pulse" },
+      "attrs": { "moirai": 40, "chaos": 30, "psyche": 25, "void": 0 },
+      "skills": { "fortune_passive": 2, "curse": 1, "fortune_burst": 3 },
+      "ai": "aggressive"
+    },
+    "UTG": {
+      "vanguard": { "name": "DELTA", "level": 0 },
+      "ai": "passive"
+    },
+    "CO": {
+      "vanguard": { "name": "EPSILON", "level": 1, "trait": "wild_surge" },
+      "attrs": { "moirai": 10, "chaos": 60, "psyche": 5, "void": 0 },
+      "skills": { "fortune_passive": 1, "curse_active": 1 },
+      "ai": "maniac"
+    }
+  }
 }

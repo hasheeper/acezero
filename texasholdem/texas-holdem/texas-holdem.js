@@ -1,4 +1,4 @@
-/* global Deck, Hand, PokerAI */
+/* global Deck, Hand, PokerAI, MonteOfZero */
 
 (function () {
   'use strict';
@@ -8,30 +8,84 @@
 
   // ========== 游戏配置（从JSON加载或使用默认值） ==========
   let gameConfig = null;
-  
-  // 默认配置
+
+  // 默认配置（新格式）
   const DEFAULT_CONFIG = {
-    gameSettings: {
-      initialChips: 1000,
-      smallBlind: 10,
-      bigBlind: 20
+    blinds: [10, 20],
+    chips: 1000,
+    hero: {
+      vanguard: { name: 'KAZU', level: 3 },
+      rearguard: { name: 'RINO', level: 5 },
+      skills: {}
     },
-    players: [
-      { id: 0, name: 'RINO [ADMIN]', type: 'human', chips: 1000 },
-      { id: 1, name: 'TARGET_ALPHA', type: 'ai', chips: 1000, personality: { riskAppetite: 'balanced', difficulty: 'regular' } },
-      { id: 2, name: 'TARGET_BETA', type: 'ai', chips: 1000, personality: { riskAppetite: 'passive', difficulty: 'noob' } },
-      { id: 3, name: 'TARGET_GAMMA', type: 'ai', chips: 1000, personality: { riskAppetite: 'aggressive', difficulty: 'regular' } },
-      { id: 4, name: 'TARGET_DELTA', type: 'ai', chips: 1000, personality: { riskAppetite: 'rock', difficulty: 'pro' } },
-      { id: 5, name: 'TARGET_EPSILON', type: 'ai', chips: 1000, personality: { riskAppetite: 'maniac', difficulty: 'regular' } }
-    ]
+    seats: {
+      BTN: { vanguard: { name: 'ALPHA', level: 0 }, ai: 'balanced' },
+      SB:  { vanguard: { name: 'BETA',  level: 0 }, ai: 'rock' },
+      BB:  { vanguard: { name: 'GAMMA', level: 3 }, ai: 'aggressive' },
+      UTG: { vanguard: { name: 'DELTA', level: 0 }, ai: 'passive' },
+      CO:  { vanguard: { name: 'EPSILON', level: 1 }, ai: 'maniac' }
+    }
   };
 
-  // 动态获取配置值
-  function getInitialChips() { return gameConfig?.gameSettings?.initialChips || DEFAULT_CONFIG.gameSettings.initialChips; }
-  function getSmallBlind() { return gameConfig?.gameSettings?.smallBlind || DEFAULT_CONFIG.gameSettings.smallBlind; }
-  function getBigBlind() { return gameConfig?.gameSettings?.bigBlind || DEFAULT_CONFIG.gameSettings.bigBlind; }
-  function getPlayerConfig(index) { 
-    return gameConfig?.players?.[index] || DEFAULT_CONFIG.players[index] || DEFAULT_CONFIG.players[0];
+  // 座位顺序（德州规则：UTG 先行动，BB 最后）
+  const SEAT_ORDER = ['UTG', 'HJ', 'CO', 'BTN', 'SB', 'BB'];
+
+  // AI 性格→难度映射
+  const AI_DIFF_MAP = {
+    passive: 'noob', rock: 'regular', balanced: 'regular',
+    aggressive: 'pro', maniac: 'noob'
+  };
+
+  function _cfg() { return gameConfig || DEFAULT_CONFIG; }
+  function getInitialChips() { return _cfg().chips || 1000; }
+  function getSmallBlind() { var b = _cfg().blinds; return b ? b[0] : 10; }
+  function getBigBlind() { var b = _cfg().blinds; return b ? b[1] : 20; }
+
+  /**
+   * 从角色配置提取显示名（vanguard.name 优先）
+   */
+  function _charName(char) {
+    if (char.vanguard && char.vanguard.name) return char.vanguard.name;
+    return char.name || '???';
+  }
+
+  /**
+   * 从 seats 构建玩家配置列表（index 0 = hero, 1+ = NPC）
+   */
+  function getPlayerConfigs() {
+    var cfg = _cfg();
+    var result = [];
+
+    // index 0: hero（显示名用 vanguard.name）
+    result.push({
+      id: 0,
+      name: cfg.hero ? _charName(cfg.hero) : 'RINO',
+      type: 'human',
+      chips: cfg.chips || 1000,
+      personality: null
+    });
+
+    // index 1+: NPC 按 SEAT_ORDER
+    var seats = cfg.seats || {};
+    for (var i = 0; i < SEAT_ORDER.length; i++) {
+      var s = seats[SEAT_ORDER[i]];
+      if (!s) continue;
+      var aiStyle = s.ai || 'balanced';
+      result.push({
+        id: result.length,
+        name: _charName(s),
+        type: 'ai',
+        chips: cfg.chips || 1000,
+        personality: { riskAppetite: aiStyle, difficulty: AI_DIFF_MAP[aiStyle] || 'regular' },
+        seat: SEAT_ORDER[i]
+      });
+    }
+    return result;
+  }
+
+  function getPlayerConfig(index) {
+    var list = getPlayerConfigs();
+    return list[index] || list[0];
   }
 
   // 座位位置映射 (顺时针排列，从玩家位置开始)
@@ -73,9 +127,29 @@
     // (玩家数量由外部 JSON 配置决定)
   };
 
+  // ========== 技能系统 (通过 SkillUI 统一管理) ==========
+  const moz = new MonteOfZero();
+  const skillSystem = new SkillSystem();
+  const skillUI = new SkillUI();
+
+  skillUI.init(skillSystem, moz, {
+    skillPanel: document.getElementById('skill-panel'),
+    manaBar: document.getElementById('mana-bar'),
+    manaText: document.getElementById('mana-text'),
+    backlashIndicator: document.getElementById('backlash-indicator'),
+    mozStatus: document.getElementById('moz-status'),
+    forceBalance: document.getElementById('force-balance'),
+    foresightPanel: document.getElementById('foresight-panel'),
+    senseAlert: document.getElementById('sense-alert')
+  });
+
+  moz.onLog = function (type, data) { logEvent('MOZ_' + type, data); };
+  skillSystem.onLog = function (type, data) { logEvent('SKILL_' + type, data); };
+  skillUI.onLog = function (type, data) { logEvent(type, data); };
+  skillUI.onMessage = function (msg) { updateMsg(msg); };
+
   // ========== 游戏状态 ==========
   let deckLib = null;
-  let gameLog = [];
   // 玩家数量由 gameConfig.players.length 决定
 
   let gameState = {
@@ -454,9 +528,11 @@
     if (currentPlayer.type === 'human') {
       updateMsg(`Your turn - ${gameState.phase.toUpperCase()}`);
       enablePlayerControls(true);
+      skillUI.update({ phase: gameState.phase, isPlayerTurn: true, deckCards: deckLib ? deckLib.cards : [], board: gameState.board, players: gameState.players }); // 玩家回合：启用技能按钮
     } else {
       updateMsg(`${currentPlayer.name}'s turn...`);
       enablePlayerControls(false);
+      skillUI.update({ phase: gameState.phase, isPlayerTurn: false }); // AI回合：禁用技能按钮
       setTimeout(() => aiTurn(currentPlayer), 1000);
     }
   }
@@ -592,6 +668,10 @@
     
     const toCall = gameState.currentBet - player.currentBet;
     
+    // 计算该 AI 的最高魔运等级（影响弃牌倾向）
+    const playerSkills = skillSystem.getPlayerSkills(player.id);
+    const maxMagicLevel = playerSkills.reduce((max, s) => Math.max(max, s.level || 0), 0);
+
     const context = {
       holeCards: player.cards,
       boardCards: gameState.board,
@@ -601,7 +681,8 @@
       playerStack: gameState.players[0].chips,
       phase: gameState.phase,
       minRaise: getBigBlind(),
-      activeOpponentCount: getActivePlayers().length - 1  // 🎯 传递活跃对手数量
+      activeOpponentCount: getActivePlayers().length - 1,
+      magicLevel: maxMagicLevel  // 魔运等级 → AI更自信，不容易弃牌
     };
     
     const decision = player.ai.decide(context);
@@ -804,14 +885,164 @@
     });
   }
 
-  function distributeCommunityCard(delay, cardIndex) {
+  // ========== 蒸特卡洛零模型 - 精确抽牌 ==========
+  /**
+   * 从牌堆中找到指定牌并将其移到末尾，然后 pop
+   * 这样可以复用 deck-of-cards 库的动画系统
+   */
+  function pickSpecificCard(targetCard) {
+    if (!deckLib || !deckLib.cards.length) return null;
+    
+    const index = deckLib.cards.findIndex(c =>
+      c.rank === targetCard.rank && c.suit === targetCard.suit
+    );
+    
+    if (index === -1) {
+      // 找不到目标牌，fallback 到普通 pop
+      console.warn('[MonteOfZero] Target card not found in deck, falling back to random');
+      return deckLib.cards.pop();
+    }
+    
+    // 将目标牌移到末尾
+    const [card] = deckLib.cards.splice(index, 1);
+    deckLib.cards.push(card);
+    return deckLib.cards.pop();
+  }
+
+  /**
+   * 用命运引擎筛选一张公共牌（委托给 skillUI）
+   * @returns {object} deck-of-cards 的 card 对象
+   */
+  function mozSelectAndPick() {
+    if (!deckLib || !deckLib.cards.length) {
+      return deckLib.cards.pop();
+    }
+    
+    const result = skillUI.selectCard(deckLib.cards, gameState.board, gameState.players);
+    
+    if (result && result.card) {
+      const picked = pickSpecificCard(result.card);
+      // 展示力量对抗面板
+      if (result.meta) showForcePK(result.meta);
+      skillUI.updateDisplay();
+      return picked;
+    }
+    
+    return deckLib.cards.pop();
+  }
+
+  // ========== 力量对抗展示 ==========
+  let _fpkTimer = null;
+
+  function showForcePK(meta) {
+    const overlay = document.getElementById('force-pk-overlay');
+    if (!overlay || !meta || !meta.activeForces || meta.activeForces.length === 0) return;
+
+    const forces = meta.activeForces;
+    const ICONS = { fortune: '✦', curse: '☠', backlash: '⚡' };
+    const TYPE_LABELS = { fortune: '魔运', curse: '厄运', backlash: '反噬' };
+
+    // 按玩家分组
+    const byOwner = {};
+    for (const f of forces) {
+      const key = f.owner || ('ID_' + f.ownerId);
+      if (!byOwner[key]) byOwner[key] = { name: key, forces: [], total: 0, isPlayer: false, isSystem: false };
+      byOwner[key].forces.push(f);
+      byOwner[key].total += (f.power || 0);
+    }
+
+    // 标记玩家(ownerId===0)和系统
+    const rinoPlayer = gameState.players.find(p => p.id === 0);
+    const rinoName = rinoPlayer ? rinoPlayer.name : 'RINO';
+    for (const key in byOwner) {
+      const g = byOwner[key];
+      const firstForce = g.forces[0];
+      if (firstForce.ownerId === 0) { g.isPlayer = true; g.name = rinoName; }
+      if (firstForce.ownerId === -1 || key === 'SYSTEM') { g.isSystem = true; g.name = 'SYSTEM'; }
+    }
+
+    const groups = Object.values(byOwner);
+    if (groups.length === 0) return;
+
+    // 构建 HTML
+    let html = '<div class="fpk-title">⚡ 命运对抗 ⚡</div>';
+    html += '<div class="fpk-players">';
+
+    for (const g of groups) {
+      const cssClass = g.isPlayer ? 'fpk-player-ally' : g.isSystem ? 'fpk-player-system' : 'fpk-player-enemy';
+      html += '<div class="fpk-player-card ' + cssClass + '">';
+      html += '<div class="fpk-player-name">' + g.name + '</div>';
+      for (const f of g.forces) {
+        const icon = ICONS[f.type] || '?';
+        const label = TYPE_LABELS[f.type] || f.type;
+        html += '<div class="fpk-force-line">' + icon + ' ' + label + ' <span class="fpk-power">P' + f.power + '</span></div>';
+      }
+      html += '<div class="fpk-player-total">' + g.total + '</div>';
+      html += '</div>';
+    }
+
+    html += '</div>';
+
+    // 结果行：fortune 类型的净值
+    const playerFortune = groups.filter(g => g.isPlayer).reduce((s, g) => s + g.forces.filter(f => f.type === 'fortune').reduce((a, f) => a + f.power, 0), 0);
+    const enemyFortune = groups.filter(g => !g.isPlayer && !g.isSystem).reduce((s, g) => s + g.forces.filter(f => f.type === 'fortune').reduce((a, f) => a + f.power, 0), 0);
+    const net = playerFortune - enemyFortune;
+    const hasBacklash = groups.some(g => g.isSystem);
+
+    let resultClass, resultText;
+    if (hasBacklash) {
+      resultClass = 'fpk-lose';
+      resultText = '⚠ 反噬中 — 命运惩罚 ' + rinoName;
+    } else if (net > 0) {
+      resultClass = 'fpk-win';
+      resultText = '命运倾斜 → ' + rinoName + ' (+' + net + ')';
+    } else if (net < 0) {
+      resultClass = 'fpk-lose';
+      // 找到最强的敌方
+      const strongest = groups.filter(g => !g.isPlayer && !g.isSystem).sort((a, b) => b.total - a.total)[0];
+      resultText = '命运抵抗 → ' + (strongest ? strongest.name : 'NPC') + ' (+' + Math.abs(net) + ')';
+    } else {
+      resultClass = 'fpk-neutral';
+      resultText = '命运均衡 — 混沌';
+    }
+    html += '<div class="fpk-result ' + resultClass + '">' + resultText + '</div>';
+
+    // Style bonus
+    if (meta.styleBonus && meta.styleBonus !== 0) {
+      const sign = meta.styleBonus > 0 ? '+' : '';
+      html += '<div class="fpk-style">时髦命运 ' + sign + meta.styleBonus + '</div>';
+    }
+
+    overlay.innerHTML = html;
+
+    // 显示
+    overlay.classList.remove('fpk-fade-out');
+    overlay.style.display = 'block';
+
+    // 自动隐藏
+    if (_fpkTimer) clearTimeout(_fpkTimer);
+    _fpkTimer = setTimeout(() => {
+      overlay.classList.add('fpk-fade-out');
+      setTimeout(() => { overlay.style.display = 'none'; }, 500);
+    }, 2500);
+  }
+
+  function hideForcePK() {
+    const overlay = document.getElementById('force-pk-overlay');
+    if (overlay) overlay.style.display = 'none';
+    if (_fpkTimer) { clearTimeout(_fpkTimer); _fpkTimer = null; }
+  }
+
+  function distributeCommunityCard(delay, cardIndex, specificCard) {
     return new Promise((resolve) => {
-      if (!deckLib || !deckLib.cards.length) {
+      // 如果有指定牌，跳过牌堆检查（牌已被 pickSpecificCard 移除）
+      if (!specificCard && (!deckLib || !deckLib.cards.length)) {
         resolve();
         return;
       }
       
-      const card = deckLib.cards.pop();
+      // 如果提供了指定牌，使用它；否则普通 pop
+      const card = specificCard || deckLib.cards.pop();
       gameState.board.push(card);
 
       const deckWrapper = document.getElementById('deck-wrapper');
@@ -884,9 +1115,7 @@
     initTable();
     
     // 清空日志
-    gameLog = [];
-    UI.gameLogPanel.style.display = 'none';
-    UI.btnCopyLog.style.display = 'none';
+    gameLogger.clear();
     
     // 判断是否需要全新初始化（首局 or 游戏结束后重开）
     const alivePlayers = gameState.players.filter(p => p.chips > 0);
@@ -894,9 +1123,13 @@
     
     if (needFullReset) {
       // 全新一局：从配置初始化所有玩家
-      const playerCount = Math.min(Math.max((gameConfig?.players?.length || DEFAULT_CONFIG.players.length), 2), 6);
+      const configs = getPlayerConfigs();
+      const playerCount = Math.min(Math.max(configs.length, 2), 6);
       gameState.players = initializePlayers(playerCount);
       gameState.dealerIndex = 0;
+      skillSystem.reset();
+      // 从配置注册所有技能 + 生成UI
+      skillUI.registerFromConfig(_cfg());
     } else {
       // 连续对局：保留筹码，重置手牌状态
       gameState.players.forEach(p => {
@@ -919,9 +1152,13 @@
     gameState.lastRaiserIndex = -1;
     gameState.actionCount = 0;
     
+    // 技能系统：新一手牌开始
+    skillUI.onNewHand();
+    
     // 渲染座位
     renderSeats();
     updateDealerButton();
+    skillUI.updateDisplay();
     
     // 收取盲注
     postBlinds();
@@ -933,6 +1170,7 @@
     
     UI.btnDeal.disabled = true;
     updatePotDisplay();
+    skillUI.update({ phase: gameState.phase, isPlayerTurn: false });
   }
 
   function postBlinds() {
@@ -1033,6 +1271,14 @@
     setTurnIndicator(-1);
     collectBetsIntoPot();
     
+    // 技能系统：每轮结束 → 恢复mana + 重置toggle + 检查触发 + NPC决策
+    skillUI.onRoundEnd({
+      players: gameState.players,
+      pot: gameState.pot,
+      phase: gameState.phase,
+      board: gameState.board
+    });
+    
     setTimeout(() => {
       switch (gameState.phase) {
         case 'preflop':
@@ -1054,10 +1300,14 @@
   async function dealFlop() {
     gameState.phase = 'flop';
     
-    // 顺序发牌，避免ghost card索引偏移问题
-    await distributeCommunityCard(0, 0);
-    await distributeCommunityCard(200, 0);  // 现在第一个ghost card已被替换，新的ghost[0]是原来的ghost[1]
-    await distributeCommunityCard(400, 0);  // 同理
+    // 蒙特卡洛零模型：Flop 只筛选第3张牌
+    // 前2张纯随机，防止雪崩效应（选K→选K→选K）
+    // 第3张经过命运筛选，在已有2张随机牌的基础上微调命运
+    await distributeCommunityCard(0, 0);    // 纯随机
+    await distributeCommunityCard(200, 0);  // 纯随机
+    
+    const flopCard3 = mozSelectAndPick();   // 命运筛选
+    await distributeCommunityCard(400, 0, flopCard3);
     
     logEvent('FLOP', { cards: cardsToString(gameState.board) });
     
@@ -1078,7 +1328,10 @@
 
   async function dealTurn() {
     gameState.phase = 'turn';
-    await distributeCommunityCard(0, 0);  // 第一个剩余的ghost card
+    
+    // 蒙特卡洛零模型：筛选 Turn 牌
+    const turnSelected = mozSelectAndPick();
+    await distributeCommunityCard(0, 0, turnSelected);
     
     const turnCard = gameState.board[3];
     logEvent('TURN', { card: cardToSolverString(turnCard), board: cardsToString(gameState.board) });
@@ -1097,7 +1350,10 @@
 
   async function dealRiver() {
     gameState.phase = 'river';
-    await distributeCommunityCard(0, 0);  // 最后一个ghost card
+    
+    // 蒙特卡洛零模型：筛选 River 牌（最关键的一张）
+    const riverSelected = mozSelectAndPick();
+    await distributeCommunityCard(0, 0, riverSelected);
     
     const riverCard = gameState.board[4];
     logEvent('RIVER', { card: cardToSolverString(riverCard), board: cardsToString(gameState.board) });
@@ -1263,174 +1519,40 @@
     UI.btnDeal.disabled = false;
   }
 
-  // ========== 日志系统 ==========
-  function logEvent(type, data) {
-    const timestamp = new Date().toISOString().substr(11, 8);
-    // 计算有效底池 = 已收集的pot + 当前轮未收集的bet
-    const activeBets = gameState.players.reduce((sum, p) => sum + p.currentBet, 0);
-    const effectivePot = gameState.pot + activeBets;
-    
-    // 收集所有玩家筹码信息
-    const playerChips = {};
-    gameState.players.forEach(p => {
-      playerChips[p.name] = p.chips;
-    });
-    
-    const entry = {
-      time: timestamp,
-      type: type,
+  // ========== 日志系统（委托给 GameLogger） ==========
+  const gameLogger = new GameLogger();
+  gameLogger.bindUI({
+    panel: UI.gameLogPanel,
+    content: UI.gameLogContent,
+    btnCopy: UI.btnCopyLog,
+    btnToggle: UI.btnToggleLog
+  });
+  gameLogger.getGameSnapshot = function () {
+    return {
       phase: gameState.phase,
-      pot: effectivePot,
-      chips: playerChips,
-      ...data
+      pot: gameState.pot,
+      players: gameState.players.map(function (p) {
+        return { name: p.name, chips: p.chips, currentBet: p.currentBet };
+      })
     };
-    gameLog.push(entry);
-  }
+  };
 
-  function generateLogText() {
-    const lines = [];
-    lines.push('═══════════════════════════════════════════════════════════');
-    lines.push(`TEXAS HOLD'EM GAME LOG - ${gameState.players.length} Players`);
-    lines.push('Generated: ' + new Date().toLocaleString());
-    lines.push('═══════════════════════════════════════════════════════════');
-    lines.push('');
-    
-    // 游戏设置
-    lines.push('【GAME SETTINGS】');
-    lines.push('  Initial Chips: $' + getInitialChips());
-    lines.push('  Blinds: SB $' + getSmallBlind() + ' / BB $' + getBigBlind());
-    lines.push('  Players: ' + gameState.players.map(p => p.name).join(', '));
-    lines.push('');
-    
-    // 最终手牌信息
-    lines.push('【FINAL HANDS】');
-    gameState.players.forEach(p => {
-      const cardsStr = p.cards && p.cards.length > 0 ? cardsToString(p.cards) : '[unknown]';
-      lines.push(`  ${p.name}: ${cardsStr}`);
-    });
-    lines.push('  Community Board: ' + cardsToString(gameState.board));
-    lines.push('');
-    
-    // 详细行动日志
-    lines.push('【ACTION LOG】');
-    lines.push('───────────────────────────────────────────────────────────');
-    
-    let currentPhase = '';
-    for (const entry of gameLog) {
-      // 阶段分隔
-      if (entry.phase !== currentPhase) {
-        currentPhase = entry.phase;
-        lines.push('');
-        lines.push('▶ ' + currentPhase.toUpperCase() + ' PHASE');
-        const chipsInfo = Object.entries(entry.chips || {}).map(([name, chips]) => `${name}: $${chips}`).join(' | ');
-        lines.push('  Pot: $' + entry.pot + ' | ' + chipsInfo);
-      }
-      
-      // 行动详情
-      switch (entry.type) {
-        case 'DEAL':
-          lines.push('  [DEAL] Cards dealt to ' + entry.playerCount + ' players');
-          break;
-        case 'BLINDS':
-          lines.push('  [BLINDS] ' + entry.sb + ' posts SB $' + (entry.sbAmount || getSmallBlind()) + ', ' + entry.bb + ' posts BB $' + (entry.bbAmount || getBigBlind()));
-          break;
-        case 'PLAYER_FOLD':
-          lines.push('  [' + entry.playerName + '] FOLD - Surrenders pot');
-          break;
-        case 'PLAYER_CHECK':
-          lines.push('  [' + entry.playerName + '] CHECK');
-          break;
-        case 'PLAYER_CALL':
-          lines.push('  [' + entry.playerName + '] CALL $' + entry.amount);
-          break;
-        case 'PLAYER_BET':
-          lines.push('  [' + entry.playerName + '] BET $' + entry.amount);
-          break;
-        case 'PLAYER_RAISE':
-          lines.push('  [' + entry.playerName + '] RAISE $' + entry.amount + ' (Total bet: $' + entry.totalBet + ')');
-          break;
-        case 'AI_BET':
-          lines.push('  [' + entry.playerName + '] BET $' + entry.amount);
-          break;
-        case 'AI_FOLD':
-          lines.push('  [' + entry.playerName + '] FOLD - Surrenders pot');
-          break;
-        case 'AI_CHECK':
-          lines.push('  [' + entry.playerName + '] CHECK');
-          break;
-        case 'AI_CALL':
-          lines.push('  [' + entry.playerName + '] CALL $' + entry.amount);
-          break;
-        case 'AI_RAISE':
-          lines.push('  [' + entry.playerName + '] RAISE $' + entry.amount + ' (Total bet: $' + entry.totalBet + ')');
-          break;
-        case 'FLOP':
-          lines.push('  [BOARD] Flop dealt: ' + entry.cards);
-          break;
-        case 'TURN':
-          lines.push('  [BOARD] Turn dealt: ' + entry.card + ' (Board: ' + entry.board + ')');
-          break;
-        case 'RIVER':
-          lines.push('  [BOARD] River dealt: ' + entry.card + ' (Board: ' + entry.board + ')');
-          break;
-        case 'SHOWDOWN':
-          lines.push('  [SHOWDOWN] ' + entry.playerName + ': ' + entry.cards + ' (' + entry.handDescr + ')');
-          break;
-        case 'RESULT':
-          lines.push('');
-          lines.push('【RESULT】');
-          if (entry.winners) {
-            lines.push('  Winner(s): ' + entry.winners);
-          } else if (entry.winner) {
-            lines.push('  Winner: ' + entry.winner);
-          }
-          lines.push('  Pot won: $' + entry.potWon);
-          if (entry.reason) {
-            lines.push('  Reason: ' + entry.reason);
-          }
-          if (entry.handDescr) {
-            lines.push('  Winning hand: ' + entry.handDescr);
-          }
-          break;
-        default:
-          // 未知事件类型，输出原始JSON
-          lines.push('  [' + entry.type + '] ' + JSON.stringify(entry));
-      }
-    }
-    
-    lines.push('');
-    lines.push('═══════════════════════════════════════════════════════════');
-    lines.push('END OF LOG');
-    lines.push('═══════════════════════════════════════════════════════════');
-    
-    return lines.join('\n');
+  function logEvent(type, data) {
+    gameLogger.log(type, data);
   }
 
   function showGameLog() {
-    const logText = generateLogText();
-    UI.gameLogContent.textContent = logText;
-    UI.gameLogPanel.style.display = 'block';
-    UI.btnCopyLog.style.display = 'inline-block';
-  }
-
-  function copyGameLog() {
-    const logText = generateLogText();
-    navigator.clipboard.writeText(logText).then(() => {
-      UI.btnCopyLog.textContent = '✓ Copied!';
-      setTimeout(() => {
-        UI.btnCopyLog.textContent = '📋 Copy Log';
-      }, 2000);
+    gameLogger.show({
+      playerCount: gameState.players.length,
+      playerNames: gameState.players.map(function (p) { return p.name; }),
+      players: gameState.players.map(function (p) {
+        return { name: p.name, cardsStr: p.cards && p.cards.length > 0 ? cardsToString(p.cards) : '[unknown]' };
+      }),
+      boardStr: cardsToString(gameState.board),
+      initialChips: getInitialChips(),
+      smallBlind: getSmallBlind(),
+      bigBlind: getBigBlind()
     });
-  }
-
-  function toggleLogPanel() {
-    if (UI.gameLogPanel.style.display === 'none') {
-      UI.gameLogPanel.style.display = 'block';
-      UI.btnToggleLog.textContent = 'Hide';
-    } else {
-      UI.gameLogPanel.style.display = 'none';
-      UI.btnToggleLog.textContent = 'Show';
-    }
   }
 
   function fitTableToScreen() {
@@ -1440,8 +1562,9 @@
     const tableW = 1100;
     // 实际视觉高度 = 表上溢出120 + 牌桌550 + 表下溢出160 = 830
     const totalVisualH = 830;
+    const dashboardH = 100; // 底部仪表盘高度
     const availW = window.innerWidth - 20;
-    const availH = window.innerHeight - 20;
+    const availH = window.innerHeight - dashboardH - 20;
 
     let scale = Math.min(availW / tableW, availH / totalVisualH);
     if (!Number.isFinite(scale)) {
@@ -1449,8 +1572,12 @@
     }
     if (scale > 1.05) scale = 1.05;
 
-    table.style.transform = `scale(${scale})`;
+    // 保留 CSS 的 translate(-50%, -50%) 居中 + 缩放
+    table.style.transform = `translate(-50%, -50%) scale(${scale})`;
   }
+
+  // ========== 技能系统 UI（已迁移到 skill-ui.js） ==========
+  // 所有技能UI逻辑由 skillUI 实例管理，不再硬编码。
 
   // ========== 事件绑定 ==========
   UI.btnDeal.addEventListener('click', startNewGame);
@@ -1458,8 +1585,9 @@
   UI.btnCheckCall.addEventListener('click', playerCheckCall);
   UI.btnRaise.addEventListener('click', playerRaise);
   UI.btnConfirmRaise.addEventListener('click', confirmRaise);
-  UI.btnCopyLog.addEventListener('click', copyGameLog);
-  UI.btnToggleLog.addEventListener('click', toggleLogPanel);
+  // copyGameLog / toggleLogPanel 已由 gameLogger.bindUI 绑定
+
+  // 技能按钮由 skillUI._buildSkillButtons 自动生成和绑定
   
   UI.raiseSlider.addEventListener('input', function() {
     UI.raiseAmountDisplay.textContent = '$' + this.value;
@@ -1486,6 +1614,8 @@
         if (response.ok) {
           gameConfig = await response.json();
           console.log('[CONFIG] 从', path, '加载:', gameConfig);
+          // 注册技能 + 生成UI
+          skillUI.registerFromConfig(gameConfig);
           return;
         }
       } catch (e) { /* try next */ }
@@ -1502,6 +1632,8 @@
     if (!config) return;
     gameConfig = config;
     console.log('[CONFIG] 外部配置已应用:', config);
+    // 注册技能 + 生成UI
+    skillUI.registerFromConfig(config);
   }
 
   // ========== postMessage 监听 ==========
@@ -1520,8 +1652,24 @@
     }
   }
 
+  // ========== 等待 RPG 模块就绪 ==========
+  function waitForRPG() {
+    if (window.__rpgReady) return Promise.resolve();
+    return new Promise(function (resolve) {
+      window.addEventListener('rpg:ready', resolve, { once: true });
+      // 安全超时：2秒后即使 RPG 没加载也继续（降级运行）
+      setTimeout(function () {
+        if (!window.__rpgReady) {
+          console.warn('[INIT] RPG 模块未在 2s 内加载，降级运行');
+        }
+        resolve();
+      }, 2000);
+    });
+  }
+
   // ========== 初始化 ==========
   async function init() {
+    await waitForRPG();
     await loadConfig();
     initTable();
     enablePlayerControls(false);

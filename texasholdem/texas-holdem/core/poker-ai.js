@@ -199,12 +199,22 @@
     decide(context) {
       const { holeCards, boardCards, pot, toCall, aiStack, phase, minRaise, activeOpponentCount } = context;
       
+      // 魔运等级：有魔运的高手更自信，不容易弃牌
+      const magicLevel = context.magicLevel || 0;
+      
       // 1. 计算原始手牌强度
       let rawStrength = this.calculateRawStrength(holeCards, boardCards, phase);
       
       // 2. 添加难度噪音
       const noise = (Math.random() - 0.5) * this.difficulty.noiseRange;
       let adjustedStrength = Math.max(0, Math.min(100, rawStrength + noise));
+      
+      // 2.5 魔运自信加成：有魔运的AI感知到命运偏向自己，更不容易弃牌
+      // magicLevel 1~5 → +3~+15 的心理加成
+      if (magicLevel > 0) {
+        adjustedStrength += magicLevel * 3;
+        adjustedStrength = Math.min(100, adjustedStrength);
+      }
       
       // 3. 计算底池赔率
       const potOdds = toCall > 0 ? toCall / (pot + toCall) : 0;
@@ -223,7 +233,7 @@
       const isBluffing = Math.random() < effectiveBluffFreq && adjustedStrength < 40;
       
       // 5. 决策逻辑
-      return this.makeDecision(context, adjustedStrength, rawStrength, potOdds, isBluffing, opponents);
+      return this.makeDecision(context, adjustedStrength, rawStrength, potOdds, isBluffing, opponents, magicLevel);
     }
 
     calculateRawStrength(holeCards, boardCards, phase) {
@@ -364,7 +374,7 @@
       return Math.max(...ranks);
     }
 
-    makeDecision(context, adjustedStrength, rawStrength, potOdds, isBluffing, opponents) {
+    makeDecision(context, adjustedStrength, rawStrength, potOdds, isBluffing, opponents, magicLevel) {
       const { pot, toCall, aiStack, minRaise, phase } = context;
       
       // ========== 无人下注时的决策 ==========
@@ -373,7 +383,7 @@
       }
       
       // ========== 面对下注时的决策 ==========
-      return this.decideWhenFacingBet(adjustedStrength, rawStrength, pot, toCall, aiStack, minRaise, potOdds, isBluffing, phase, opponents);
+      return this.decideWhenFacingBet(adjustedStrength, rawStrength, pot, toCall, aiStack, minRaise, potOdds, isBluffing, phase, opponents, magicLevel);
     }
 
     /**
@@ -419,7 +429,7 @@
     /**
      * 面对下注时的决策
      */
-    decideWhenFacingBet(adjustedStrength, rawStrength, pot, toCall, aiStack, minRaise, potOdds, isBluffing, phase, opponents) {
+    decideWhenFacingBet(adjustedStrength, rawStrength, pot, toCall, aiStack, minRaise, potOdds, isBluffing, phase, opponents, magicLevel) {
       // 生存本能 v2：多层次恐惧机制
       const betRatio = toCall / (pot + 0.01);        // 下注占底池比例
       const stackRatio = toCall / (aiStack + 0.01); // 下注占筹码比例
@@ -433,7 +443,10 @@
       
       // 根据压力等级和牌力决定是否触发生存本能
       // 压力越大，需要的牌力越高才能继续
-      const survivalThreshold = 30 + pressureLevel * 15; // 30/45/60/75
+      // 魔运加成：有魔运的高手生存阈值更低（更不容易恐惧）
+      // magicLevel 1~5 → 阈值降低 5~25
+      const magicReduction = (magicLevel || 0) * 5;
+      const survivalThreshold = Math.max(10, 30 + pressureLevel * 15 - magicReduction);
       
       if (rawStrength < survivalThreshold && pressureLevel >= 1) {
         // 生存本能触发！
@@ -453,6 +466,12 @@
         // Pro 玩家更理性，但也不会拿空气跟巨注
         if (this.difficultyType === 'pro') {
           foldChance *= 0.9; // Pro 稍微降低弃牌率，但仍然会弃
+        }
+        
+        // 魔运降低弃牌率：有魔运的高手感知到命运偏向自己
+        // magicLevel 1~5 → foldChance × 0.85~0.45
+        if (magicLevel > 0) {
+          foldChance *= Math.max(0.4, 1 - magicLevel * 0.11);
         }
         
         // 如果正在诈唬，降低弃牌率（但诈唬面对巨注也应该放弃）
