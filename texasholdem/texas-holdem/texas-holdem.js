@@ -8,6 +8,7 @@
 
   // ========== 游戏配置（从JSON加载或使用默认值） ==========
   let gameConfig = null;
+  let _externalConfigApplied = false;
 
   // 默认配置（新格式）
   const DEFAULT_CONFIG = {
@@ -1604,13 +1605,28 @@
 
   // ========== 配置加载 ==========
   async function loadConfig() {
+    // 如果外部配置（postMessage）已经到达，跳过静态文件加载
+    if (_externalConfigApplied) {
+      console.log('[CONFIG] 外部配置已存在，跳过 game-config.json 加载');
+      return;
+    }
+
     // 尝试从根目录加载 game-config.json（相对于 GitPage 根）
     // 路径: ../../game-config.json (从 texasholdem/texas-holdem/ 回到根)
     const configPaths = ['../../game-config.json', 'game-config.json'];
     
     for (const path of configPaths) {
+      // 再次检查：fetch 期间外部配置可能已到达
+      if (_externalConfigApplied) {
+        console.log('[CONFIG] 外部配置已到达，中止 game-config.json 加载');
+        return;
+      }
       try {
         const response = await fetch(path);
+        if (_externalConfigApplied) {
+          console.log('[CONFIG] 外部配置已到达，丢弃 game-config.json');
+          return;
+        }
         if (response.ok) {
           gameConfig = await response.json();
           console.log('[CONFIG] 从', path, '加载:', gameConfig);
@@ -1631,6 +1647,7 @@
   function applyExternalConfig(config) {
     if (!config) return;
     gameConfig = config;
+    _externalConfigApplied = true;
     console.log('[CONFIG] 外部配置已应用:', config);
     // 注册技能 + 生成UI
     skillUI.registerFromConfig(config);

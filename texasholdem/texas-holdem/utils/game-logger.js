@@ -248,14 +248,31 @@
 
     copyToClipboard(context) {
       const text = this.generateText(context);
-      navigator.clipboard.writeText(text).then(() => {
+      const done = () => {
         if (this.ui.btnCopy) {
           this.ui.btnCopy.textContent = '✓ Copied!';
-          setTimeout(() => {
-            this.ui.btnCopy.textContent = '📋 Copy Log';
-          }, 2000);
+          setTimeout(() => { this.ui.btnCopy.textContent = '📋 Copy Log'; }, 2000);
         }
-      });
+      };
+      const fallback = () => {
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          done();
+        } catch (e) {
+          console.warn('[GameLogger] 复制失败:', e);
+        }
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(fallback);
+      } else {
+        fallback();
+      }
     }
   }
 

@@ -1,0 +1,172 @@
+<ace0_battle_rules>
+[ACE0 引擎协议]
+ACE0引擎协议是一个德州扑克 × 命运对决的场景模拟器，用在实际发生牌局场景前进行配置和播放。
+触发条件：仅当「牌局逻辑判定 (Battle_Logic_Active) = YES」时，生成纯 JSON 数据并包裹在 ACE0_BATTLE XML标签中。标签内禁输出无关文本。
+核心原则：
+1. 主角(hero)数据**不写入**此 JSON —— 由系统从 ERA 变量自动注入。
+2. AI 只需配置**对手座位(seats)**、盲注(blinds)、筹码(chips)。
+3. 座位标识符：使用德州扑克标准位置 —— UTG, HJ, CO, BTN, SB, BB（最多6个座位）。
+4. 每个座位的 NPC 使用统一的角色接口。
+
+[根结构]
+```
+ACE0_BATTLE 标签内的 JSON:
+{
+  "blinds": [小盲, 大盲],     // Int数组，默认 [10, 20]
+  "chips": 初始筹码,           // Int，默认 1000
+  "seats": {
+    "座位ID": {NPC_CONFIG},
+    ...
+  }
+}
+```
+
+[模块：NPC 配置 (NPC_CONFIG)]
+根据 NPC 复杂度，选择**简易模式**或**完整模式**：
+
+// --- 简易模式：路人 / 杂兵 ---
+// 仅需 vanguard.name 和 ai 风格，系统自动填充默认值
+{
+  "vanguard": { "name": "显示名称" },
+  "ai": "balanced"
+}
+
+// --- 完整模式：有能力的对手 / Boss ---
+// 可配置双角色(主手+副手)、属性、技能
+{
+  "vanguard": {
+    "name": "主手名称",
+    "level": 0~5,              // Int, 等级
+    "trait": "特质ID"          // (可选) String
+  },
+  "rearguard": {               // (可选) 副手，省略则无副手
+    "name": "副手名称",
+    "level": 0~5,
+    "trait": "特质ID"
+  },
+  "attrs": {                   // (可选) 四维属性，省略则全0
+    "moirai": 0~100,           // 命运
+    "chaos": 0~100,            // 混沌
+    "psyche": 0~100,           // 心智
+    "void": 0~100              // 虚空
+  },
+  "skills": {                  // (可选) 技能表，省略则无技能
+    "技能ID": 等级,
+    ...
+  },
+  "ai": "balanced"             // AI 风格 (必填)
+}
+
+[AI 风格 (ai) 枚举]
+- "balanced"   — 均衡型，标准策略
+- "rock"       — 岩石型，紧凑保守，只打强牌
+- "aggressive" — 激进型，频繁加注施压
+- "passive"    — 被动型，多跟注少加注
+- "maniac"     — 疯狂型，高频诈唬，不可预测
+
+[特质ID 参考]
+主手特质: blank_body, iron_nerve, wild_surge
+副手特质: fate_weaver, hex_pulse
+
+[技能ID 参考]
+副手系: fortune, foresight, sense, peek, reversal, fortune_anchor
+主手系: blank_factor, null_field
+NPC专用: fortune_passive, curse, fortune_burst, curse_active
+
+[属性三角克制]
+chaos > moirai > psyche > chaos (三角克制)
+void = 纯减伤，不参与克制循环
+
+===================================================================
+示例
+===================================================================
+
+示例1（标准6人桌 — 混合难度）：
+<ACE0_BATTLE>
+{
+  "blinds": [10, 20],
+  "chips": 1000,
+  "seats": {
+    "BTN": {
+      "vanguard": { "name": "ALPHA" },
+      "ai": "balanced"
+    },
+    "SB": {
+      "vanguard": { "name": "BETA" },
+      "ai": "rock"
+    },
+    "BB": {
+      "vanguard": { "name": "GAMMA_A", "level": 3, "trait": "iron_nerve" },
+      "rearguard": { "name": "GAMMA_B", "level": 2, "trait": "hex_pulse" },
+      "attrs": { "moirai": 40, "chaos": 30, "psyche": 25, "void": 0 },
+      "skills": { "fortune_passive": 2, "curse": 1, "fortune_burst": 3 },
+      "ai": "aggressive"
+    },
+    "UTG": {
+      "vanguard": { "name": "DELTA" },
+      "ai": "passive"
+    },
+    "CO": {
+      "vanguard": { "name": "EPSILON", "level": 1, "trait": "wild_surge" },
+      "attrs": { "moirai": 10, "chaos": 60, "psyche": 5, "void": 0 },
+      "skills": { "fortune_passive": 1, "curse_active": 1 },
+      "ai": "maniac"
+    }
+  }
+}
+</ACE0_BATTLE>
+
+示例2（1v1 单挑 — 简易路人）：
+<ACE0_BATTLE>
+{
+  "blinds": [5, 10],
+  "chips": 500,
+  "seats": {
+    "BTN": {
+      "vanguard": { "name": "街头赌徒" },
+      "ai": "passive"
+    }
+  }
+}
+</ACE0_BATTLE>
+
+示例3（Boss 战 — 高配对手）：
+<ACE0_BATTLE>
+{
+  "blinds": [50, 100],
+  "chips": 5000,
+  "seats": {
+    "BB": {
+      "vanguard": { "name": "VOID_KING", "level": 5, "trait": "iron_nerve" },
+      "rearguard": { "name": "VOID_QUEEN", "level": 4, "trait": "hex_pulse" },
+      "attrs": { "moirai": 70, "chaos": 50, "psyche": 60, "void": 80 },
+      "skills": { "fortune_passive": 3, "curse": 3, "fortune_burst": 5 },
+      "ai": "aggressive"
+    }
+  }
+}
+</ACE0_BATTLE>
+
+示例4（3人桌 — 中等难度）：
+<ACE0_BATTLE>
+{
+  "blinds": [20, 40],
+  "chips": 2000,
+  "seats": {
+    "BTN": {
+      "vanguard": { "name": "SIGMA", "level": 2 },
+      "attrs": { "moirai": 30, "chaos": 40, "psyche": 20, "void": 10 },
+      "skills": { "fortune_passive": 2 },
+      "ai": "balanced"
+    },
+    "SB": {
+      "vanguard": { "name": "OMEGA", "level": 3, "trait": "wild_surge" },
+      "rearguard": { "name": "OMEGA_B", "level": 1 },
+      "attrs": { "moirai": 20, "chaos": 70, "psyche": 10, "void": 0 },
+      "skills": { "curse_active": 2, "fortune_passive": 1 },
+      "ai": "maniac"
+    }
+  }
+}
+</ACE0_BATTLE>
+</ace0_battle_rules>

@@ -25,7 +25,7 @@
   const RISK_PROFILES = {
     rock: {
       description: '极度保守，只玩超强牌',
-      entryThreshold: 70,      // 只玩 Top 10% 起手牌
+      entryThreshold: 55,      // 紧凑但不至于全弃
       raiseThreshold: 80,      // 加注门槛极高
       valueBetThreshold: 65,   // 价值下注门槛
       bluffFrequency: 0.03,    // 几乎不诈唱
@@ -34,7 +34,7 @@
     },
     balanced: {
       description: '平衡型，标准打法',
-      entryThreshold: 40,      // 标准入场
+      entryThreshold: 30,      // 标准入场，愿意看翻牌
       raiseThreshold: 60,
       valueBetThreshold: 55,
       bluffFrequency: 0.12,    // 适度诈唱
@@ -446,7 +446,9 @@
       // 魔运加成：有魔运的高手生存阈值更低（更不容易恐惧）
       // magicLevel 1~5 → 阈值降低 5~25
       const magicReduction = (magicLevel || 0) * 5;
-      const survivalThreshold = Math.max(10, 30 + pressureLevel * 15 - magicReduction);
+      // 翻牌前生存阈值大幅降低：便宜的跟注不应触发恐惧
+      const preflopDiscount = phase === 'preflop' ? 20 : 0;
+      const survivalThreshold = Math.max(10, 30 + pressureLevel * 15 - magicReduction - preflopDiscount);
       
       if (rawStrength < survivalThreshold && pressureLevel >= 1) {
         // 生存本能触发！
@@ -477,6 +479,11 @@
         // 如果正在诈唬，降低弃牌率（但诈唬面对巨注也应该放弃）
         if (isBluffing && pressureLevel <= 1) {
           foldChance *= 0.5;
+        }
+        
+        // 翻牌前面对小注时大幅降低弃牌率（便宜的跟注应该看翻牌）
+        if (phase === 'preflop' && pressureLevel <= 1) {
+          foldChance *= 0.25;
         }
         
         if (Math.random() < foldChance) {
