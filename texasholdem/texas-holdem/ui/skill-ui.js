@@ -23,38 +23,66 @@
   'use strict';
 
   // ========== 静态数据层：技能视觉映射 ==========
-  // 根据 effect 类型提供默认视觉，可被 config 覆盖
-  const EFFECT_VISUALS = {
-    fortune: { icon: '✦', cssClass: 'rino-skill', color: '#9B59B6' },
-    curse:   { icon: '☠', cssClass: 'curse-skill', color: '#e74c3c' },
-    foresight: { icon: '👁', cssClass: 'rino-skill', color: '#3498db' },
-    peek:    { icon: '🃏', cssClass: 'rino-skill', color: '#e67e22' },
-    reversal: { icon: '↺', cssClass: 'rino-skill', color: '#1abc9c' },
-    fortune_anchor: { icon: '⚓', cssClass: 'rino-skill', color: '#9B59B6' },
-    null_field: { icon: '∅', cssClass: 'kazu-skill', color: '#95a5a6' },
-    blank:   { icon: '◇', cssClass: 'kazu-skill', color: '#95a5a6' },
-    sense:   { icon: '🔮', cssClass: 'sense-skill', color: '#a29bfe' }
+  // 按 effect 类型（与 UNIVERSAL_SKILLS 的 effect 字段对应）
+  // SVG 图标工厂（16x16 viewBox，用 CSS 控制大小）
+  var _svg = function (path, color) {
+    return '<svg class="skill-svg-icon" viewBox="0 0 16 16" fill="' + color + '">' + path + '</svg>';
+  };
+  var _svgS = function (path, color) {
+    return '<svg class="skill-svg-icon" viewBox="0 0 16 16" fill="none" stroke="' + color + '" stroke-width="1.5">' + path + '</svg>';
   };
 
-  // 透视三级定义
-  const PEEK_TIERS = [
-    { tier: 1, name: '模糊透视', cost: 10, description: '感知对手可能的牌型范围' },
-    { tier: 2, name: '深层透视', cost: 20, description: '按概率分析对手的手牌' },
-    { tier: 3, name: '完全透视', cost: 35, description: '直接看穿对手的底牌' }
-  ];
+  var SVG_PATHS = {
+    fortune:  '<path d="M8 1l2.2 4.5L15 6.3l-3.5 3.4.8 4.8L8 12.3 3.7 14.5l.8-4.8L1 6.3l4.8-.8z"/>',
+    curse:    '<path d="M8 1C5.2 1 3 3.7 3 7c0 2.2 1 4 2.5 5h5C12 11 13 9.2 13 7c0-3.3-2.2-6-5-6zM6 12v1c0 .6.9 1 2 1s2-.4 2-1v-1H6z"/>',
+    sense:    '<circle cx="8" cy="8" r="3"/><circle cx="8" cy="8" r="6" fill="none" stroke-width="1.2"/>',
+    peek:     '<path d="M8 3C4.4 3 1.4 5.4 0 8c1.4 2.6 4.4 5 8 5s6.6-2.4 8-5c-1.4-2.6-4.4-5-8-5zm0 8.3c-1.8 0-3.3-1.5-3.3-3.3S6.2 4.7 8 4.7s3.3 1.5 3.3 3.3S9.8 11.3 8 11.3zM8 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>',
+    reversal: '<path d="M2 5h9l-3-3h2l4 4-4 4h-2l3-3H2V5zm12 6H5l3 3H6l-4-4 4-4h2L5 9h9v2z"/>',
+    null_field:'<circle cx="8" cy="8" r="6"/><line x1="4" y1="12" x2="12" y2="4"/>',
+    void_shield:'<path d="M8 1L2 4v4c0 3.3 2.6 6.4 6 7 3.4-.6 6-3.7 6-7V4L8 1z"/>',
+    purge_all:'<path d="M8 2L3 8l5 6 5-6-5-6z"/>'
+  };
 
-  // 特殊技能行为标记
+  var EFFECT_VISUALS = {
+    fortune:     { icon: _svg(SVG_PATHS.fortune, '#9B59B6'),   cssClass: 'moirai-skill', color: '#9B59B6', attr: 'moirai' },
+    curse:       { icon: _svg(SVG_PATHS.curse, '#e74c3c'),     cssClass: 'chaos-skill',  color: '#e74c3c', attr: 'chaos' },
+    sense:       { icon: _svg(SVG_PATHS.sense, '#a29bfe'),     cssClass: 'psyche-skill', color: '#a29bfe', attr: 'psyche' },
+    peek:        { icon: _svg(SVG_PATHS.peek, '#3498db'),      cssClass: 'psyche-skill', color: '#3498db', attr: 'psyche' },
+    reversal:    { icon: _svg(SVG_PATHS.reversal, '#1abc9c'),  cssClass: 'psyche-skill', color: '#1abc9c', attr: 'psyche' },
+    null_field:  { icon: _svgS(SVG_PATHS.null_field, '#95a5a6'), cssClass: 'void-skill', color: '#95a5a6', attr: 'void' },
+    void_shield: { icon: _svgS(SVG_PATHS.void_shield, '#7f8c8d'), cssClass: 'void-skill', color: '#7f8c8d', attr: 'void' },
+    purge_all:   { icon: _svgS(SVG_PATHS.purge_all, '#bdc3c7'), cssClass: 'void-skill', color: '#bdc3c7', attr: 'void' }
+  };
+
+  // 技能显示名（skillKey → 中文名）
+  const SKILL_NAMES = {
+    minor_wish:   '小吉',
+    grand_wish:   '大吉',
+    divine_order: '天命',
+    hex:          '小凶',
+    havoc:        '大凶',
+    catastrophe:  '灾变',
+    insight:      '洞察',
+    vision:       '透视',
+    axiom:        '真理',
+    static_field: '屏蔽',
+    insulation:   '绝缘',
+    reality:      '现实'
+  };
+
+  // 行为分类（决定按钮逻辑和 UI 交互方式）
   const BEHAVIOR = {
-    // fortune 类技能有 major/minor 变体
-    FORTUNE_MAJOR: 'fortune_major',
-    FORTUNE_MINOR: 'fortune_minor',
-    FORESIGHT: 'foresight',
-    PEEK: 'peek',
-    REVERSAL: 'reversal',
-    BLANK: 'blank',
-    // 通用主动
-    GENERIC_ACTIVE: 'generic_active'
+    FORCE:   'force',    // 影响发牌的力量型技能 (fortune, curse, reversal, purge_all)
+    INFO:    'info',     // 信息型技能 (peek — 需要选目标)
+    PASSIVE: 'passive'   // 被动技能 (sense, null_field, void_shield — 不生成按钮)
   };
+
+  // effect → behavior 映射
+  function effectToBehavior(effect, activation) {
+    if (activation === 'passive') return BEHAVIOR.PASSIVE;
+    if (effect === 'peek') return BEHAVIOR.INFO;
+    return BEHAVIOR.FORCE;
+  }
 
   // ========== SkillUI 类 ==========
 
@@ -133,7 +161,6 @@
      */
     onNewHand() {
       if (this.skillSystem) this.skillSystem.onNewHand();
-      this._hideForesight();
       this._hideSenseAlert();
     }
 
@@ -164,14 +191,7 @@
 
       const forces = this.skillSystem.collectActiveForces({ players: players });
 
-      // 判断选牌模式（小吉 = weighted 随机）
-      const hasMinor = this.skillSystem.pendingForces.some(
-        f => f.source === 'active' && f.ownerId === this.humanPlayerId && f.power < f.level * 10
-      );
-      const mode = hasMinor ? 'weighted' : 'best';
-
       console.log('[SkillUI.selectCard]', {
-        mode: mode,
         pendingCount: this.skillSystem.pendingForces.length,
         totalForces: forces.length,
         forces: forces.map(f => f.ownerName + ' ' + f.type + ' P=' + f.power)
@@ -179,7 +199,7 @@
 
       const result = this.moz.selectCard(
         deckCards, board, players, forces,
-        { mode: mode, rinoPlayerId: this.humanPlayerId }
+        { rinoPlayerId: this.humanPlayerId }
       );
 
       // 发牌后清除单次 pending forces
@@ -237,7 +257,7 @@
       if (this.containers.backlashIndicator) {
         if (ss.backlash.active) {
           this.containers.backlashIndicator.style.display = 'block';
-          this.containers.backlashIndicator.textContent = '⚡ BACKLASH (' + ss.backlash.counter + ')';
+          this.containers.backlashIndicator.textContent = 'BACKLASH (' + ss.backlash.counter + ')';
         } else {
           this.containers.backlashIndicator.style.display = 'none';
         }
@@ -282,7 +302,7 @@
     }
 
     /**
-     * 更新所有技能按钮的可用状态（通用，不硬编码）
+     * 更新所有技能按钮的可用状态（通用）
      */
     updateButtons() {
       if (!this.skillSystem) return;
@@ -291,59 +311,42 @@
       var isBettingPhase = ['preflop', 'flop', 'turn', 'river'].indexOf(ctx.phase) >= 0;
       var isPlayerTurn = isBettingPhase && ctx.isPlayerTurn;
       var mana = this.skillSystem.getMana(this.humanPlayerId);
-      var canUse = isPlayerTurn && !ss.backlash.active && mana.current > 0;
-      // river 阶段无牌可发，fortune/curse/blank 无意义
+      var canUse = isPlayerTurn && !ss.backlash.active;
       var isRiver = ctx.phase === 'river';
 
-      // 检查是否已有 fortune pending（玩家方）
-      var hasFortuneQueued = ss.pendingForces.some(function (f) {
-        return f.type === 'fortune' && f.ownerId === 0;
+      // 检查是否已有同 effect 的 force pending（玩家方）
+      var queuedEffects = {};
+      ss.pendingForces.forEach(function (f) {
+        if (f.ownerId === 0) queuedEffects[f.type] = true;
       });
 
-      // 遍历所有按钮
       for (var entry of this._buttons) {
         var btnInfo = entry[1];
         var btn = btnInfo.element;
         var skill = btnInfo.skill;
         var behavior = btnInfo.behavior;
-
         if (!btn) continue;
 
+        var cost = skill.manaCost || 0;
         var disabled = true;
 
-        var cost = btnInfo.actualCost || skill.manaCost || 0;
-
         switch (behavior) {
-          case BEHAVIOR.FORTUNE_MAJOR:
-          case BEHAVIOR.FORTUNE_MINOR:
-            disabled = isRiver || hasFortuneQueued || !canUse || mana.current < cost;
-            btn.classList.toggle('skill-active', hasFortuneQueued);
+          case BEHAVIOR.FORCE:
+            // 力量型：river 无意义，同 effect 不能重复激活，需要 mana
+            var isForceEffect = (skill.effect === 'fortune' || skill.effect === 'curse' || skill.effect === 'purge_all');
+            disabled = !canUse || mana.current < cost || skill.currentCooldown > 0;
+            if (isRiver && isForceEffect) disabled = true;
+            if (queuedEffects[skill.effect]) disabled = true;
+            btn.classList.toggle('skill-active', !!queuedEffects[skill.effect]);
             break;
-          case BEHAVIOR.FORESIGHT:
-            disabled = !canUse || mana.current < cost;
-            break;
-          case BEHAVIOR.PEEK:
-            // 只要够最低 tier 的 cost 就可以点开面板
-            disabled = !canUse || mana.current < PEEK_TIERS[0].cost;
-            break;
-          case BEHAVIOR.REVERSAL:
-            disabled = isRiver || !canUse || mana.current < cost;
-            break;
-          case BEHAVIOR.BLANK:
-            var hasBlank = this.skillSystem.hasBlankFactor();
-            disabled = isRiver || hasBlank || !isPlayerTurn;
-            btn.classList.toggle('skill-active', hasBlank);
-            break;
-          case BEHAVIOR.GENERIC_ACTIVE:
-            disabled = !canUse || mana.current < (skill.manaCost || 0);
-            if (skill.currentCooldown > 0) disabled = true;
+          case BEHAVIOR.INFO:
+            // 信息型（透视）：需要 mana，不受 river 限制
+            disabled = !canUse || mana.current < cost || skill.currentCooldown > 0;
             break;
         }
 
         btn.disabled = disabled;
       }
-
-      // 面板始终可见（新Dashboard布局），按钮通过 disabled 控制
     }
 
     // ========== 动态函数层：通用技能激活 ==========
@@ -357,26 +360,11 @@
       if (!this.skillSystem) return;
 
       switch (behavior) {
-        case BEHAVIOR.FORTUNE_MAJOR:
-          this._activateFortune(skill, 'major');
+        case BEHAVIOR.FORCE:
+          this._activateForce(skill);
           break;
-        case BEHAVIOR.FORTUNE_MINOR:
-          this._activateFortune(skill, 'minor');
-          break;
-        case BEHAVIOR.FORESIGHT:
-          this._activateForesight(skill);
-          break;
-        case BEHAVIOR.PEEK:
-          this._activatePeek(skill);
-          break;
-        case BEHAVIOR.REVERSAL:
-          this._activateReversal(skill);
-          break;
-        case BEHAVIOR.BLANK:
-          this._activateBlank(skill);
-          break;
-        case BEHAVIOR.GENERIC_ACTIVE:
-          this._activateGeneric(skill);
+        case BEHAVIOR.INFO:
+          this._activateInfo(skill);
           break;
       }
 
@@ -384,62 +372,54 @@
       this.updateButtons();
     }
 
-    _activateFortune(skill, variant) {
-      // 防止同一轮重复激活（大吉+小吉互斥）
-      var alreadyQueued = this.skillSystem.pendingForces.some(function (f) {
-        return f.type === 'fortune' && f.ownerId === 0;
-      });
-      if (alreadyQueued) {
-        if (this.onMessage) this.onMessage('本轮已激活命运技能');
+    /**
+     * 力量型技能激活（fortune, curse, reversal, purge_all）
+     * 统一走 skillSystem.activatePlayerSkill()
+     */
+    _activateForce(skill) {
+      var result = this.skillSystem.activatePlayerSkill(skill.uniqueId);
+      if (!result.success) {
+        var reasons = {
+          SKILL_NOT_FOUND: '技能不存在',
+          NOT_ACTIVE_TYPE: '被动技能无法手动激活',
+          BACKLASH_ACTIVE: '魔运反噬中',
+          ON_COOLDOWN: '冷却中 (' + (result.cooldown || 0) + '轮)',
+          INSUFFICIENT_MANA: '魔运不足 (需要 ' + (result.cost || 0) + ')'
+        };
+        if (this.onMessage) this.onMessage(reasons[result.reason] || '技能不可用');
         return;
       }
 
-      var baseCost = skill.manaCost || 20;
-      var cost = variant === 'major' ? baseCost : Math.round(baseCost * 0.75);
-      if (!this.skillSystem.spendMana(this.humanPlayerId, cost)) {
-        if (this.onMessage) this.onMessage('魔运不足');
-        return;
-      }
-      var level = skill.level || 5;
-      var power = variant === 'major' ? level * 10 : level * 5;
-      var label = variant === 'major' ? '大吉' : '小吉';
-
-      this.skillSystem.pendingForces.push({
-        ownerId: this.humanPlayerId,
-        ownerName: skill.ownerName || 'PLAYER',
-        type: 'fortune',
-        level: level,
-        power: power,
-        activation: 'active',
-        source: 'active'
-      });
-
-      var icon = variant === 'major' ? '✦' : '✧';
-      if (this.onMessage) this.onMessage(icon + ' 魔运·' + label + ' — 命运向你倾斜...');
+      var name = SKILL_NAMES[skill.skillKey] || skill.skillKey;
+      if (this.onMessage) this.onMessage('[' + name + '] ' + (skill.description || '已激活'));
       if (this.onLog) this.onLog('SKILL_USE', {
-        skill: '魔运·' + label,
+        skill: name,
+        skillKey: skill.skillKey,
+        tier: skill.tier,
         manaRemaining: this.skillSystem.getMana(this.humanPlayerId).current
       });
     }
 
-    _activateForesight(skill) {
-      var cost = skill.manaCost || 10;
-      if (!this.skillSystem.spendMana(this.humanPlayerId, cost)) {
-        if (this.onMessage) this.onMessage('魔运不足');
-        return;
+    /**
+     * 信息型技能激活（peek/vision — 透视）
+     * 需要选择目标，然后根据技能等级决定透视精度
+     */
+    _activateInfo(skill) {
+      if (skill.effect === 'peek') {
+        this._activatePeek(skill);
       }
-      var ctx = this._gameCtx;
-      var previews = this.foresight(ctx.deckCards, ctx.board, ctx.players);
-      this._showForesight(previews);
-      if (this.onMessage) this.onMessage('👁 魔运·先知 — 窥视命运的三条路径...');
-      if (this.onLog) this.onLog('SKILL_USE', {
-        skill: '魔运·先知',
-        manaRemaining: this.skillSystem.getMana(this.humanPlayerId).current,
-        previews: previews
-      });
     }
 
     _activatePeek(skill) {
+      var self = this;
+
+      // 再次点击取消透视瞄准
+      if (self._peekHandlers) {
+        self._peekCleanup();
+        if (self.onMessage) self.onMessage('透视已取消');
+        return;
+      }
+
       var ctx = this._gameCtx;
       var targets = (ctx.players || []).filter(function (p) {
         return p.type === 'ai' && !p.folded && p.cards && p.cards.length >= 2;
@@ -448,224 +428,242 @@
         if (this.onMessage) this.onMessage('没有可透视的对手');
         return;
       }
-      // 打开透视面板
-      this._showPeekPanel(skill, targets);
-    }
 
-    _showPeekPanel(skill, targets) {
-      var panel = document.getElementById('peek-panel');
-      if (!panel) return;
-      var self = this;
-      var selectedTier = null;
-      var mana = this.skillSystem.getMana(this.humanPlayerId);
+      var cost = skill.manaCost || 15;
+      var tier = skill.tier || 3;
 
-      // 构建 tier 按钮
-      var tiersEl = document.getElementById('peek-tiers');
-      tiersEl.innerHTML = '';
-      for (var i = 0; i < PEEK_TIERS.length; i++) {
-        (function (tierDef) {
-          var btn = document.createElement('button');
-          btn.className = 'peek-tier-btn';
-          btn.disabled = mana.current < tierDef.cost;
-          btn.innerHTML = tierDef.name + '<span class="peek-tier-cost">' + tierDef.cost + ' MP</span>';
-          btn.title = tierDef.description;
-          btn.addEventListener('click', function () {
-            selectedTier = tierDef;
-            // 高亮选中
-            var allBtns = tiersEl.querySelectorAll('.peek-tier-btn');
-            for (var j = 0; j < allBtns.length; j++) allBtns[j].classList.remove('active');
-            btn.classList.add('active');
-            // 启用目标按钮
-            var targetBtns = document.getElementById('peek-targets').querySelectorAll('.peek-target-btn');
-            for (var j = 0; j < targetBtns.length; j++) targetBtns[j].disabled = false;
-          });
-          tiersEl.appendChild(btn);
-        })(PEEK_TIERS[i]);
-      }
+      // 高亮所有可透视的座位，点击座位选择目标
+      self._peekCleanup(); // 清除之前的状态
 
-      // 构建目标按钮
-      var targetsEl = document.getElementById('peek-targets');
-      targetsEl.innerHTML = '';
+      if (this.onMessage) this.onMessage('选择透视目标 -- 点击对手座位 (再次点击技能取消)');
+
+      // 给每个可透视目标的座位加高亮 + 点击事件
+      self._peekHandlers = [];
       for (var t = 0; t < targets.length; t++) {
         (function (target) {
-          var btn = document.createElement('button');
-          btn.className = 'peek-target-btn';
-          btn.textContent = target.name;
-          btn.disabled = true; // 先选 tier
-          btn.addEventListener('click', function () {
-            if (!selectedTier) return;
-            self._executePeek(skill, selectedTier, target);
-            panel.style.display = 'none';
-          });
-          targetsEl.appendChild(btn);
+          var seatEl = document.getElementById('seat-' + target.id);
+          if (!seatEl) return;
+
+          seatEl.classList.add('peek-targetable');
+
+          var handler = function () {
+            // 扣 mana
+            if (!self.skillSystem.spendMana(self.humanPlayerId, cost)) {
+              if (self.onMessage) self.onMessage('魔运不足');
+              self._peekCleanup();
+              return;
+            }
+            self._peekCleanup();
+            // 注入 peek 标记到 pendingForces（用于 Psyche > Chaos 克制）
+            if (self.skillSystem && self.skillSystem.pendingForces) {
+              self.skillSystem.pendingForces.push({
+                ownerId: self.humanPlayerId,
+                ownerName: 'RINO',
+                type: 'peek',
+                attr: 'psyche',
+                tier: skill.tier,
+                power: 0,
+                activation: 'active',
+                skillKey: skill.skillKey,
+                _infoMarker: true
+              });
+            }
+            self._executePeek(skill, target, tier);
+          };
+          seatEl.addEventListener('click', handler);
+          self._peekHandlers.push({ el: seatEl, handler: handler });
         })(targets[t]);
       }
 
-      // 取消按钮
-      var cancelBtn = document.getElementById('peek-cancel-btn');
-      cancelBtn.onclick = function () { panel.style.display = 'none'; };
+      // ESC 或点击空白取消
+      self._peekEscHandler = function (e) {
+        if (e.key === 'Escape') self._peekCleanup();
+      };
+      document.addEventListener('keydown', self._peekEscHandler);
 
-      panel.style.display = 'block';
+      // 隐藏旧面板
+      var panel = document.getElementById('peek-panel');
+      if (panel) panel.style.display = 'none';
     }
 
-    _executePeek(skill, tierDef, target) {
-      // 扣 mana
-      if (!this.skillSystem.spendMana(this.humanPlayerId, tierDef.cost)) {
-        if (this.onMessage) this.onMessage('魔运不足');
-        return;
+    _peekCleanup() {
+      // 移除所有座位高亮和点击事件
+      if (this._peekHandlers) {
+        for (var i = 0; i < this._peekHandlers.length; i++) {
+          var h = this._peekHandlers[i];
+          h.el.classList.remove('peek-targetable');
+          h.el.removeEventListener('click', h.handler);
+        }
+        this._peekHandlers = null;
       }
+      if (this._peekEscHandler) {
+        document.removeEventListener('keydown', this._peekEscHandler);
+        this._peekEscHandler = null;
+      }
+    }
 
-      var RANK_NAMES = { 1: 'A', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '8', 9: '9', 10: '10', 11: 'J', 12: 'Q', 13: 'K' };
-      var SUIT_NAMES = { 0: '♠', 1: '♥', 2: '♣', 3: '♦' };
+    _executePeek(skill, target, tier) {
+      var RANK_NAMES = { 1: 'A', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '8', 9: '9', 10: 'T', 11: 'J', 12: 'Q', 13: 'K' };
+      var SUIT_SYMBOLS = { 0: '♠', 1: '♥', 2: '♣', 3: '♦' };
+      var SUIT_COLORS = { 0: '#ecf0f1', 1: '#e74c3c', 2: '#2ecc71', 3: '#3498db' };
 
-      if (tierDef.tier === 3) {
-        // 完全透视：直接翻开手牌
+      // ---- Moirai > Psyche 克制：幸运迷雾降低透视精度 ----
+      // 目标拥有活跃 fortune forces 时，tier 被降级
+      var effectiveTier = tier;
+      if (this.skillSystem) {
+        var targetFortunePower = (this.skillSystem.pendingForces || [])
+          .filter(function (f) { return f.ownerId === target.id && f.type === 'fortune'; })
+          .reduce(function (sum, f) { return sum + (f.power || 0); }, 0);
+        if (targetFortunePower >= 30) {
+          // 大吉级别(P30+)：降两级
+          effectiveTier = Math.min(3, tier + 2);
+          if (this.onMessage) this.onMessage('[幸运迷雾] ' + target.name + ' 的强运严重干扰了透视!');
+        } else if (targetFortunePower >= 15) {
+          // 小吉级别(P15+)：降一级
+          effectiveTier = Math.min(3, tier + 1);
+          if (this.onMessage) this.onMessage('[幸运迷雾] ' + target.name + ' 的运气干扰了透视精度');
+        }
+      }
+      tier = effectiveTier;
+
+      if (tier <= 1) {
+        // T1: 直接翻开手牌（在座位上显示）
         target.cards.forEach(function (c) {
           if (c.$el && !c.$el.classList.contains('peek-revealed')) {
             c.setSide('front');
             c.$el.classList.add('peek-revealed');
           }
         });
-        this.skillSystem.emit('peek:reveal', { targetId: target.id, targetName: target.name, tier: 3 });
-        if (this.onMessage) this.onMessage('🃏 完全透视 — ' + target.name + ' 的底牌完全暴露！');
-      } else if (tierDef.tier === 2) {
-        // 深层透视：按概率分析（高/中/低概率）
+        this.skillSystem.emit('peek:reveal', { targetId: target.id, targetName: target.name });
+        this._showPeekCards(target, target.cards, 'perfect');
+        if (this.onMessage) this.onMessage('[透视] ' + target.name + ' 的底牌完全暴露!');
+      } else if (tier <= 2) {
+        // T2: 概率分析 — 显示真实牌 + 干扰牌
+        var realCards = [];
         var cards = target.cards;
-        var lines = [];
         for (var i = 0; i < cards.length; i++) {
-          var c = cards[i];
-          var rName = RANK_NAMES[c.rank] || '?';
-          var sName = SUIT_NAMES[c.suit] || '?';
-          // 真实牌作为高概率，生成干扰项
-          var roll = Math.random();
-          if (roll < 0.7) {
-            // 70% 概率正确显示为高概率
-            lines.push('<span class="peek-confidence-high">高概率</span> ' + sName + rName);
-          } else {
-            // 30% 概率降级为中概率
-            lines.push('<span class="peek-confidence-mid">中概率</span> ' + sName + rName);
-          }
+          realCards.push({
+            rank: RANK_NAMES[cards[i].rank] || '?',
+            suit: cards[i].suit,
+            confidence: Math.random() < 0.7 ? 'high' : 'mid',
+            real: true
+          });
         }
-        // 加入1-2个干扰项（低概率）
+        // 加 1~2 张干扰牌
         var fakeCount = 1 + Math.floor(Math.random() * 2);
         for (var f = 0; f < fakeCount; f++) {
-          var fakeRank = RANK_NAMES[1 + Math.floor(Math.random() * 13)];
-          var fakeSuit = SUIT_NAMES[Math.floor(Math.random() * 4)];
-          lines.push('<span class="peek-confidence-low">低概率</span> ' + fakeSuit + fakeRank);
+          realCards.push({
+            rank: RANK_NAMES[1 + Math.floor(Math.random() * 13)] || '?',
+            suit: Math.floor(Math.random() * 4),
+            confidence: 'low',
+            real: false
+          });
         }
         // 打乱顺序
-        lines.sort(function () { return Math.random() - 0.5; });
-        this._showPeekResult(target.name, '深层透视', lines.join('<br>'));
-        if (this.onMessage) this.onMessage('🃏 深层透视 — 感知到 ' + target.name + ' 的手牌波动...');
+        realCards.sort(function () { return Math.random() - 0.5; });
+        this._showPeekCards(target, realCards, 'analysis');
+        if (this.onMessage) this.onMessage('[透视] 感知到 ' + target.name + ' 的手牌波动...');
       } else {
-        // 模糊透视：告诉可能的牌型范围
+        // T3: 模糊范围
         var cards = target.cards;
-        var hints = [];
+        var vague = [];
         for (var i = 0; i < cards.length; i++) {
-          var c = cards[i];
-          var r = c.rank;
-          // 模糊化：只给范围
-          if (r >= 10) hints.push('高牌 (10~A)');
-          else if (r >= 6) hints.push('中牌 (6~9)');
-          else hints.push('低牌 (2~5)');
+          var r = cards[i].rank;
+          var rangeText;
+          if (r >= 10 || r === 1) rangeText = '高牌';
+          else if (r >= 6) rangeText = '中牌';
+          else rangeText = '低牌';
+          vague.push({ rangeText: rangeText, suit: cards[i].suit, confidence: 'vague' });
         }
-        // 花色只给一个模糊提示
-        var suits = {};
-        cards.forEach(function (c) { suits[c.suit] = true; });
-        var suitCount = Object.keys(suits).length;
-        if (suitCount === 1) hints.push('同花色');
-        else hints.push('混合花色');
-
-        this._showPeekResult(target.name, '模糊透视', hints.map(function (h) { return '• ' + h; }).join('<br>'));
-        if (this.onMessage) this.onMessage('🃏 模糊透视 — 隐约感知到 ' + target.name + ' 的牌力...');
+        this._showPeekCards(target, vague, 'vague');
+        if (this.onMessage) this.onMessage('[透视] 隐约感知到 ' + target.name + ' 的牌力...');
       }
 
       if (this.onLog) this.onLog('SKILL_USE', {
-        skill: '透视·' + tierDef.name,
-        tier: tierDef.tier,
+        skill: SKILL_NAMES[skill.skillKey] || '透视',
         target: target.name,
-        cost: tierDef.cost,
+        tier: tier,
         manaRemaining: this.skillSystem.getMana(this.humanPlayerId).current
       });
     }
 
-    _showPeekResult(targetName, tierName, contentHtml) {
-      // 创建浮层显示结果
+    _showPeekCards(target, cardData, mode) {
+      // suit index → deck-of-cards CSS class name
+      var SUIT_CLASSES = { 0: 'spades', 1: 'hearts', 2: 'clubs', 3: 'diamonds' };
+      var CONF_LABELS = { high: '确信', mid: '模糊', low: '干扰', vague: '感知' };
+      var CONF_CLASSES = { high: 'peek-conf-high', mid: 'peek-conf-mid', low: 'peek-conf-low', vague: 'peek-conf-vague' };
+      // rank number → deck-of-cards rank class number (1=A, 11=J, 12=Q, 13=K)
+      var RANK_NAMES = { 1: 'A', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '8', 9: '9', 10: 'T', 11: 'J', 12: 'Q', 13: 'K' };
+
+      // 移除旧的
       var existing = document.querySelector('.peek-result-overlay');
       if (existing) existing.remove();
 
       var overlay = document.createElement('div');
       overlay.className = 'peek-result-overlay';
-      overlay.innerHTML =
-        '<div class="peek-result-title">🃏 ' + tierName + ' — ' + targetName + '</div>' +
-        '<div class="peek-result-content">' + contentHtml + '</div>';
+
+      var html = '<div class="peek-result-header">';
+      html += '<div class="peek-result-title">[透视] ' + target.name + '</div>';
+      if (mode === 'perfect') html += '<div class="peek-result-mode">完美透视</div>';
+      else if (mode === 'analysis') html += '<div class="peek-result-mode">概率分析</div>';
+      else html += '<div class="peek-result-mode">模糊感知</div>';
+      html += '</div>';
+
+      html += '<div class="peek-cards-row">';
+      for (var i = 0; i < cardData.length; i++) {
+        var cd = cardData[i];
+        var conf = cd.confidence || 'high';
+        var confLabel = CONF_LABELS[conf] || '';
+        var confClass = CONF_CLASSES[conf] || '';
+
+        html += '<div class="peek-card-wrapper">';
+        if (mode === 'vague') {
+          // 模糊模式：显示牌背 + 范围文字
+          var vaguesuit = SUIT_CLASSES[cd.suit] || 'spades';
+          html += '<div class="card peek-deck-card ' + vaguesuit + '">';
+          html += '<div class="back"></div>';
+          html += '</div>';
+          html += '<div class="peek-card-range-label">' + cd.rangeText + '</div>';
+        } else {
+          // 正常/分析模式：用 deck-of-cards 的 .card 样式
+          var suitCls = SUIT_CLASSES[cd.suit] || 'spades';
+          var rankNum = cd.rank;
+          // cd.rank 可能是数字(来自 target.cards) 或字符串(来自 RANK_NAMES 转换)
+          if (typeof rankNum === 'string') {
+            // 从字符串反查数字: A=1, T=10, J=11, Q=12, K=13
+            var rkMap = { A:1, '2':2, '3':3, '4':4, '5':5, '6':6, '7':7, '8':8, '9':9, T:10, J:11, Q:12, K:13 };
+            rankNum = rkMap[rankNum] || 1;
+          }
+          html += '<div class="card peek-deck-card ' + suitCls + ' rank' + rankNum + '">';
+          html += '<div class="face"></div>';
+          html += '</div>';
+        }
+        if (mode === 'analysis') {
+          html += '<div class="peek-card-conf ' + confClass + '">' + confLabel + '</div>';
+        }
+        html += '</div>';
+      }
+      html += '</div>';
+
+      overlay.innerHTML = html;
+      overlay.addEventListener('click', function () {
+        overlay.style.opacity = '0';
+        overlay.style.transition = 'opacity 0.3s';
+        setTimeout(function () { overlay.remove(); }, 300);
+      });
       document.body.appendChild(overlay);
 
-      // 3秒后自动消失
+      // 自动消失
       setTimeout(function () {
-        overlay.style.opacity = '0';
-        overlay.style.transition = 'opacity 0.5s';
-        setTimeout(function () { overlay.remove(); }, 500);
-      }, 3500);
-    }
-
-    _activateReversal(skill) {
-      var cost = skill.manaCost || 25;
-      if (!this.skillSystem.spendMana(this.humanPlayerId, cost)) {
-        if (this.onMessage) this.onMessage('魔运不足');
-        return;
-      }
-      // 找到 pendingForces 中针对玩家的诅咒，转化为自己的 fortune
-      var converted = 0;
-      var pending = this.skillSystem.pendingForces;
-      for (var i = 0; i < pending.length; i++) {
-        var f = pending[i];
-        if (f.type === 'curse' && f.targetId === this.humanPlayerId) {
-          // 转化：诅咒变祝福，归属变为玩家
-          f.type = 'fortune';
-          f.ownerId = this.humanPlayerId;
-          f.ownerName = skill.ownerName || 'RINO';
-          f.power = Math.round(f.power * 0.6); // 转化效率60%
-          delete f.targetId;
-          converted++;
+        if (overlay.parentNode) {
+          overlay.style.opacity = '0';
+          overlay.style.transition = 'opacity 0.5s';
+          setTimeout(function () { if (overlay.parentNode) overlay.remove(); }, 500);
         }
-      }
-      if (converted > 0) {
-        if (this.onMessage) this.onMessage('↺ 逆转 — ' + converted + '道厄运被转化为命运之力！');
-      } else {
-        if (this.onMessage) this.onMessage('↺ 逆转 — 未检测到厄运…力量消散了');
-      }
-      if (this.onLog) this.onLog('SKILL_USE', {
-        skill: '逆转',
-        converted: converted,
-        manaRemaining: this.skillSystem.getMana(this.humanPlayerId).current
-      });
+      }, 6000);
     }
 
-    _activateBlank(skill) {
-      this.skillSystem.pendingForces = [];
-      this.skillSystem.pendingForces.push({
-        ownerId: -1, ownerName: 'KAZU', type: 'blank',
-        level: 0, power: 0, activation: 'active', source: 'active'
-      });
-      if (this.onMessage) this.onMessage('◇ 空白因子 — 命运回归混沌...');
-      if (this.onLog) this.onLog('SKILL_USE', { skill: '空白因子' });
-    }
-
-    _activateGeneric(skill) {
-      var result = this.skillSystem.activatePlayerSkill(skill.uniqueId);
-      if (!result.success) {
-        if (this.onMessage) this.onMessage('技能不可用: ' + (result.reason || ''));
-        return;
-      }
-      if (this.onMessage) this.onMessage('⚡ ' + (skill.description || skill.skillKey) + ' 已激活');
-      if (this.onLog) this.onLog('SKILL_USE', {
-        skill: skill.skillKey,
-        manaRemaining: this.skillSystem.getMana(this.humanPlayerId).current
-      });
-    }
-
-    // ========== UI 生成（数据驱动，不硬编码） ==========
+    // ========== UI 生成（数据驱动） ==========
 
     /**
      * 从 skillSystem 注册表自动生成技能按钮
@@ -673,98 +671,42 @@
     _buildSkillButtons() {
       if (!this.containers.skillPanel || !this.skillSystem) return;
 
-      // 清空现有按钮
       this.containers.skillPanel.innerHTML = '';
       this._buttons.clear();
 
-      // 获取人类玩家的技能
       var humanSkills = this.skillSystem.getPlayerSkills(this.humanPlayerId);
 
-      // 按 effect 排序: fortune → foresight → sense → blank
-      var order = { fortune: 0, curse: 1, foresight: 2, peek: 3, reversal: 4, sense: 5, blank: 6 };
+      // 按属性分组排序：moirai → chaos → psyche → void，同属性内按 tier 升序 (T1 优先)
+      var attrOrder = { moirai: 0, chaos: 1, psyche: 2, void: 3 };
       humanSkills.sort(function (a, b) {
-        return (order[a.effect] || 99) - (order[b.effect] || 99);
+        var ao = attrOrder[a.attr] != null ? attrOrder[a.attr] : 99;
+        var bo = attrOrder[b.attr] != null ? attrOrder[b.attr] : 99;
+        if (ao !== bo) return ao - bo;
+        return a.tier - b.tier;
       });
 
-      var addedFortune = false;
+      var lastAttr = null;
 
       for (var i = 0; i < humanSkills.length; i++) {
         var skill = humanSkills[i];
+        var behavior = effectToBehavior(skill.effect, skill.activation);
 
-        // 被动技能（sense等）不生成按钮
-        if (skill.activation === 'passive') continue;
+        // 被动技能不生成按钮
+        if (behavior === BEHAVIOR.PASSIVE) continue;
 
-        // fortune 类特殊处理：生成大吉+小吉两个按钮
-        if (skill.effect === 'fortune' && !addedFortune) {
-          addedFortune = true;
-          this._createButton(skill, BEHAVIOR.FORTUNE_MAJOR, {
-            icon: '✦', name: '大吉', cost: skill.manaCost
-          });
-          this._createButton(skill, BEHAVIOR.FORTUNE_MINOR, {
-            icon: '✧', name: '小吉', cost: Math.round((skill.manaCost || 20) * 0.75)
-          });
-          continue;
-        } else if (skill.effect === 'fortune' && addedFortune) {
-          continue; // 跳过重复的 fortune
-        }
-
-        // foresight
-        if (skill.effect === 'foresight') {
-          this._createButton(skill, BEHAVIOR.FORESIGHT, {
-            icon: '👁', name: '先知', cost: skill.manaCost
-          });
-          continue;
-        }
-
-        // peek
-        if (skill.effect === 'peek') {
-          this._createButton(skill, BEHAVIOR.PEEK, {
-            icon: '🃏', name: '透视', cost: PEEK_TIERS[0].cost + '~' + PEEK_TIERS[2].cost
-          });
-          continue;
-        }
-
-        // reversal
-        if (skill.effect === 'reversal') {
-          this._createButton(skill, BEHAVIOR.REVERSAL, {
-            icon: '↺', name: '逆转', cost: skill.manaCost
-          });
-          continue;
-        }
-
-        // blank
-        if (skill.effect === 'blank') {
-          // 在 blank 前加分隔线
+        // 属性分组分隔线
+        if (lastAttr && skill.attr !== lastAttr) {
           var divider = document.createElement('div');
           divider.className = 'skill-divider';
           this.containers.skillPanel.appendChild(divider);
-
-          this._createButton(skill, BEHAVIOR.BLANK, {
-            icon: '◇', name: '空白', cost: null
-          });
-          continue;
         }
+        lastAttr = skill.attr;
 
-        // 通用主动技能
         var visual = EFFECT_VISUALS[skill.effect] || EFFECT_VISUALS.fortune;
-        this._createButton(skill, BEHAVIOR.GENERIC_ACTIVE, {
-          icon: visual.icon, name: skill.skillKey, cost: skill.manaCost
-        });
-      }
+        var name = SKILL_NAMES[skill.skillKey] || skill.skillKey;
 
-      // 如果有 blank factor（非人类玩家拥有但可用），也加上
-      // 检查是否有 Kazu 的空白因子
-      var allSkills = Array.from(this.skillSystem.skills.values());
-      var blankSkill = allSkills.find(function (s) {
-        return s.effect === 'blank' && s.ownerId !== 0;
-      });
-      if (blankSkill && !this._buttons.has('blank_factor')) {
-        var divider2 = document.createElement('div');
-        divider2.className = 'skill-divider';
-        this.containers.skillPanel.appendChild(divider2);
-
-        this._createButton(blankSkill, BEHAVIOR.BLANK, {
-          icon: '◇', name: '空白', cost: null
+        this._createButton(skill, behavior, {
+          icon: visual.icon, name: name, cost: skill.manaCost || null
         });
       }
     }
@@ -783,9 +725,13 @@
       if (skill.description) title += '\n' + skill.description;
       btn.title = title;
 
+      // T1 技能加特殊标记
+      var tierBadge = skill.tier === 1 ? '<span class="skill-tier tier-1">T1</span>' : '';
+
       btn.innerHTML =
         '<span class="skill-icon">' + visual.icon + '</span>' +
         '<span class="skill-name">' + (visual.name || skill.skillKey) + '</span>' +
+        tierBadge +
         (visual.cost ? '<span class="skill-cost">' + visual.cost + '</span>' : '');
 
       var self = this;
@@ -795,12 +741,11 @@
 
       this.containers.skillPanel.appendChild(btn);
 
-      var buttonId = skill.uniqueId + '_' + behavior;
+      var buttonId = skill.uniqueId;
       this._buttons.set(buttonId, {
         element: btn,
         skill: skill,
-        behavior: behavior,
-        actualCost: visual.cost || skill.manaCost || 0
+        behavior: behavior
       });
     }
 
@@ -823,7 +768,7 @@
         if (self.onLog) {
           self.onLog('NPC_SKILL', {
             owner: data.ownerName, skill: data.skillKey,
-            effect: data.effect, level: data.level
+            effect: data.effect, tier: data.tier
           });
         }
       });
@@ -842,32 +787,6 @@
 
     // ========== 子面板 ==========
 
-    _showForesight(previews) {
-      if (!this.containers.foresightPanel || !previews || previews.length === 0) return;
-
-      this.containers.foresightPanel.innerHTML = previews.map(function (p) {
-        var labelClass = p.label === 'BEST' ? 'foresight-best' :
-                         p.label === 'WORST' ? 'foresight-worst' : 'foresight-neutral';
-        return '<div class="foresight-card ' + labelClass + '">' +
-          '<div class="foresight-label">' + p.label + '</div>' +
-          '<div class="foresight-value">' + p.card + '</div>' +
-          '<div class="foresight-score">' + Math.round(p.rinoScore) + '%</div>' +
-          '</div>';
-      }).join('');
-
-      this.containers.foresightPanel.style.display = 'flex';
-      var panel = this.containers.foresightPanel;
-      setTimeout(function () {
-        if (panel) panel.style.display = 'none';
-      }, 5000);
-    }
-
-    _hideForesight() {
-      if (this.containers.foresightPanel) {
-        this.containers.foresightPanel.style.display = 'none';
-      }
-    }
-
     _showSenseAlert(message) {
       if (!message) return;
       var el = this.containers.senseAlert;
@@ -880,7 +799,7 @@
           el.classList.remove('sense-flash');
         }, 4000);
       }
-      if (this.onMessage) this.onMessage('🔮 ' + message);
+      if (this.onMessage) this.onMessage('[感知] ' + message);
       if (this.onLog) this.onLog('SENSE', { message: message });
     }
 
@@ -908,5 +827,6 @@
   global.SkillUI = SkillUI;
   global.SkillUI.BEHAVIOR = BEHAVIOR;
   global.SkillUI.EFFECT_VISUALS = EFFECT_VISUALS;
+  global.SkillUI.SKILL_NAMES = SKILL_NAMES;
 
 })(typeof window !== 'undefined' ? window : global);

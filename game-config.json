@@ -6,38 +6,39 @@
     "vanguard": { "name": "KAZU", "level": 3, "trait": "blank_body" },
     "rearguard": { "name": "RINO", "level": 5, "trait": "fate_weaver" },
     "attrs": { "moirai": 80, "chaos": 20, "psyche": 50, "void": 100 },
-    "skills": {
-      "fortune": 5, "foresight": 3, "sense": 3,
-      "peek": 3, "reversal": 3, "fortune_anchor": 3,
-      "blank_factor": 1, "null_field": 2
-    }
+    "skills": ["grand_wish", "minor_wish", "vision", "insight", "axiom", "static_field", "insulation", "reality"]
   },
 
   "seats": {
     "BTN": {
       "vanguard": { "name": "ALPHA", "level": 0 },
-      "ai": "balanced"
+      "ai": "balanced",
+      "emotion": "calm"
     },
     "SB": {
       "vanguard": { "name": "BETA", "level": 0 },
-      "ai": "rock"
+      "ai": "rock",
+      "emotion": "calm"
     },
     "BB": {
       "vanguard": { "name": "GAMMA_A", "level": 3, "trait": "iron_nerve" },
       "rearguard": { "name": "GAMMA_B", "level": 2, "trait": "hex_pulse" },
       "attrs": { "moirai": 40, "chaos": 30, "psyche": 25, "void": 0 },
-      "skills": { "fortune_passive": 2, "curse": 1, "fortune_burst": 3 },
-      "ai": "aggressive"
+      "skills": ["minor_wish", "hex", "grand_wish"],
+      "ai": "aggressive",
+      "emotion": "confident"
     },
     "UTG": {
       "vanguard": { "name": "DELTA", "level": 0 },
-      "ai": "passive"
+      "ai": "passive",
+      "emotion": "fearful"
     },
     "CO": {
       "vanguard": { "name": "EPSILON", "level": 1, "trait": "wild_surge" },
       "attrs": { "moirai": 10, "chaos": 60, "psyche": 5, "void": 0 },
-      "skills": { "fortune_passive": 1, "curse_active": 1 },
-      "ai": "maniac"
+      "skills": ["hex", "havoc"],
+      "ai": "maniac",
+      "emotion": "tilt"
     }
   }
 }

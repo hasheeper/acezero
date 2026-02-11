@@ -82,7 +82,7 @@ export class CombatFormula {
       for (const f of resolvedForces) {
         // Void 只减伤敌方对我方的效果
         if (f.ownerId === playerSide) continue; // 己方 force 不受影响
-        if (f.type === 'fortune_anchor' || f.type === 'null_field') continue; // meta 力不受影响
+        if (f.type === 'null_field' || f.type === 'void_shield' || f.type === 'reversal') continue; // meta 力不受影响
 
         // 敌方 fortune（帮敌人赢）和 curse（害我方）都被削弱
         if (f.effectivePower > 0) {

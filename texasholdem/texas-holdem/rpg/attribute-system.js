@@ -13,10 +13,10 @@
  *   Void 不参与克制，纯减伤
  *
  * 技能→属性映射：
- *   fortune / fortune_anchor → Moirai
- *   curse                    → Chaos
- *   peek / sense / reversal / foresight → Psyche
- *   blank / null_field       → Void
+ *   fortune              → Moirai
+ *   curse                → Chaos
+ *   sense / peek / reversal → Psyche
+ *   null_field / void_shield / purge_all → Void
  */
 
 // ========== 属性常量 ==========
@@ -39,15 +39,14 @@ export const DISADVANTAGE_MULT = 0.75;
 const NEUTRAL_MULT = 1.0;
 
 export const EFFECT_TO_ATTR = {
-  fortune:        ATTR.MOIRAI,
-  fortune_anchor: ATTR.MOIRAI,
-  curse:          ATTR.CHAOS,
-  foresight:      ATTR.PSYCHE,
-  peek:           ATTR.PSYCHE,
-  sense:          ATTR.PSYCHE,
-  reversal:       ATTR.PSYCHE,
-  blank:          ATTR.VOID,
-  null_field:     ATTR.VOID
+  fortune:     ATTR.MOIRAI,
+  curse:       ATTR.CHAOS,
+  sense:       ATTR.PSYCHE,
+  peek:        ATTR.PSYCHE,
+  reversal:    ATTR.PSYCHE,
+  null_field:  ATTR.VOID,
+  void_shield: ATTR.VOID,
+  purge_all:   ATTR.VOID
 };
 
 const DEFAULT_ATTRIBUTES = {

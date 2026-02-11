@@ -31,44 +31,105 @@
     TRIGGERED: 'triggered'
   };
 
-  // 力的效果类型
+  // 效果类型常量（从通用技能目录中提取的所有 effect 值）
   const EFFECT = {
-    FORTUNE: 'fortune',             // 幸运：让自己赢
-    CURSE: 'curse',                 // 诅咒：让目标输
-    FORESIGHT: 'foresight',         // 先知：预览命运（不影响发牌）
-    SENSE: 'sense',                 // 感知：探测敌方魔力使用
-    PEEK: 'peek',                   // 透视：窥视对手手牌（三级）
-    REVERSAL: 'reversal',           // 逆转：将厄运转化为命运
-    FORTUNE_ANCHOR: 'fortune_anchor', // 命运之锚：削弱敌方被动fortune
-    NULL_FIELD: 'null_field',       // 概率死角：Kazu的被动，削弱所有被动力
-    BLANK: 'blank'                  // 空白因子：打碎一切命运
+    FORTUNE:     'fortune',       // Moirai: 概率偏斜，让自己赢
+    CURSE:       'curse',         // Chaos:  概率污蚀，让目标输
+    SENSE:       'sense',         // Psyche T3: 被动感知敌方魔力
+    PEEK:        'peek',          // Psyche T2: 窥视对手底牌/公共牌
+    REVERSAL:    'reversal',      // Psyche T1: 拦截 Chaos 并逆转为己方幸运
+    NULL_FIELD:  'null_field',    // Void T3:   阻断 Psyche 侦查
+    VOID_SHIELD: 'void_shield',   // Void T2:   Moirai/Chaos 效果减半
+    PURGE_ALL:   'purge_all'      // Void T1:   清除所有非 Void 技能
   };
 
-  // 预定义技能 ID（快捷引用）
-  const SKILL_ID = {
-    RINO_FORTUNE_MAJOR: 'rino_fortune_major',
-    RINO_FORTUNE_MINOR: 'rino_fortune_minor',
-    RINO_FORESIGHT: 'rino_foresight',
-    KAZU_BLANK_FACTOR: 'kazu_blank_factor',
-    BACKLASH: 'backlash'
+  // ========== 通用技能目录 ==========
+  // 4属性 × 3等级 (T3=基础 T2=进阶 T1=终极)
+  // threshold = 需要的单项属性值才能习得
+  // power = 固定力量值（MoZ 引擎消费）
+  // suppressTiers / suppressAttr / suppressAll = 阶级压制规则
+
+  const UNIVERSAL_SKILLS = {
+    // ===== Moirai (天命) =====
+    minor_wish:   { attr: 'moirai', tier: 3, threshold: 20, effect: 'fortune',     activation: 'active',  manaCost: 10, cooldown: 0, power: 15, description: '小吉 — 概率偏斜' },
+    grand_wish:   { attr: 'moirai', tier: 2, threshold: 40, effect: 'fortune',     activation: 'active',  manaCost: 20, cooldown: 0, power: 30, description: '大吉 — 疯狂强运' },
+    divine_order: { attr: 'moirai', tier: 1, threshold: 60, effect: 'fortune',     activation: 'active',  manaCost: 40, cooldown: 3, power: 50, suppressTiers: [2, 3], description: '天命 — 绝对既定' },
+
+    // ===== Chaos (狂厄) =====
+    hex:          { attr: 'chaos',  tier: 3, threshold: 20, effect: 'curse',       activation: 'active',  manaCost: 10, cooldown: 0, power: 15, target: 'enemy', description: '小凶 — 概率污蚀' },
+    havoc:        { attr: 'chaos',  tier: 2, threshold: 40, effect: 'curse',       activation: 'active',  manaCost: 20, cooldown: 0, power: 30, target: 'enemy', description: '大凶 — 恶意筛除' },
+    catastrophe:  { attr: 'chaos',  tier: 1, threshold: 60, effect: 'curse',       activation: 'active',  manaCost: 40, cooldown: 3, power: 50, target: 'enemy', suppressTiers: [2, 3], description: '灾变 — 痛苦锁死' },
+
+    // ===== Psyche (灵视) =====
+    insight:      { attr: 'psyche', tier: 3, threshold: 20, effect: 'sense',       activation: 'passive', manaCost: 0,  cooldown: 0, power: 0,  description: '洞察 — 数据解析' },
+    vision:       { attr: 'psyche', tier: 2, threshold: 40, effect: 'peek',        activation: 'active',  manaCost: 15, cooldown: 0, power: 0,  description: '透视 — 绝对视界' },
+    axiom:        { attr: 'psyche', tier: 1, threshold: 60, effect: 'reversal',    activation: 'active',  manaCost: 30, cooldown: 3, power: 50, suppressAttr: 'chaos', description: '真理 — 因果逆转' },
+
+    // ===== Void (虚无) =====
+    static_field: { attr: 'void',   tier: 3, threshold: 20, effect: 'null_field',  activation: 'passive', manaCost: 0,  cooldown: 0, power: 8,  description: '屏蔽 — 信息干涉' },
+    insulation:   { attr: 'void',   tier: 2, threshold: 40, effect: 'void_shield', activation: 'passive', manaCost: 0,  cooldown: 0, power: 15, description: '绝缘 — 数值衰减' },
+    reality:      { attr: 'void',   tier: 1, threshold: 60, effect: 'purge_all',   activation: 'active',  manaCost: 50, cooldown: 5, power: 0,  suppressAll: true, description: '现实 — 物理回滚' }
   };
 
-  // ========== 静态技能目录（所有技能的完整定义） ==========
+  /**
+   * 查找技能定义
+   * @param {string} skillKey - UNIVERSAL_SKILLS 中的 key
+   * @returns {object|null}
+   */
+  function lookupSkill(skillKey) {
+    return UNIVERSAL_SKILLS[skillKey] || null;
+  }
 
-  const SKILL_CATALOG = {
-    fortune:        { effect: 'fortune',        activation: 'active',  manaCost: 20, cooldown: 0, target: null,     description: '魔运·大吉 — 概率操控，命运倾斜' },
-    foresight:      { effect: 'foresight',      activation: 'active',  manaCost: 10, cooldown: 0, target: null,     description: '魔运·先知 — 窥视命运的多条路径' },
-    sense:          { effect: 'sense',          activation: 'passive', manaCost: 0,  cooldown: 0, target: null,     description: '魔运·感知 — 感知敌方魔力波动' },
-    peek:           { effect: 'peek',           activation: 'active',  manaCost: 10, cooldown: 0, target: null,     description: '魔运·透视 — 窥视对手底牌' },
-    reversal:       { effect: 'reversal',       activation: 'active',  manaCost: 25, cooldown: 2, target: null,     description: '魔运·逆转 — 将厄运转化为命运之力' },
-    fortune_anchor: { effect: 'fortune_anchor', activation: 'passive', manaCost: 0,  cooldown: 0, target: null,     description: '命运之锚 — 削弱敌方被动魔运' },
-    blank_factor:   { effect: 'blank',          activation: 'active',  manaCost: 0,  cooldown: 3, target: null,     description: '空白因子 — 打碎一切命运' },
-    null_field:     { effect: 'null_field',     activation: 'passive', manaCost: 0,  cooldown: 0, target: null,     description: '概率死角 — 削弱所有被动魔运力量' },
-    curse:          { effect: 'curse',          activation: 'passive', manaCost: 0,  cooldown: 0, target: 'player', description: '魔运·厄运 — 被动诅咒' },
-    curse_active:   { effect: 'curse',          activation: 'active',  manaCost: 15, cooldown: 3, target: 'player', description: '魔运·诅咒 — 主动释放厄运' },
-    fortune_burst:  { effect: 'fortune',        activation: 'active',  manaCost: 25, cooldown: 2, target: null,     description: '魔运·爆发 — 主动强化幸运' },
-    fortune_passive:{ effect: 'fortune',        activation: 'passive', manaCost: 0,  cooldown: 0, target: null,     description: '魔运·幸运 — 微弱被动运势偏移' }
-  };
+  // ========== 技能槽位计算 ==========
+
+  /**
+   * 广度：四维总和决定技能槽数量
+   * @param {object} attrs - { moirai, chaos, psyche, void }
+   * @returns {number} 槽位数 (1-4)
+   */
+  function calculateSlots(attrs) {
+    const total = (attrs.moirai || 0) + (attrs.chaos || 0) +
+                  (attrs.psyche || 0) + (attrs.void || 0);
+    if (total >= 120) return 4;
+    if (total >= 80)  return 3;
+    if (total >= 40)  return 2;
+    return 1;
+  }
+
+  /**
+   * 深度：单项属性值决定能否学会某技能
+   * @param {object} skillDef - 技能定义（需要 attr + threshold）
+   * @param {object} attrs - 角色属性面板
+   * @returns {boolean}
+   */
+  function canLearnSkill(skillDef, attrs) {
+    if (!skillDef.attr || !skillDef.threshold) return true; // 无门槛限制
+    return (attrs[skillDef.attr] || 0) >= skillDef.threshold;
+  }
+
+  /**
+   * 从属性面板自动推导可用技能列表
+   * @param {object} attrs - { moirai, chaos, psyche, void }
+   * @param {number} maxSlots - 最大槽位数
+   * @returns {Array<{key, ...skillDef}>} 按优先级排序的技能列表
+   */
+  function deriveSkillsFromAttrs(attrs, maxSlots) {
+    const available = [];
+    for (const key in UNIVERSAL_SKILLS) {
+      const def = UNIVERSAL_SKILLS[key];
+      if (canLearnSkill(def, attrs)) {
+        available.push({ key: key, ...def });
+      }
+    }
+    // 同属性内高阶优先（T1 > T2 > T3），跨属性按属性值高的优先
+    available.sort(function (a, b) {
+      if (a.tier !== b.tier) return a.tier - b.tier; // T1=1 最高优先
+      const aVal = attrs[a.attr] || 0;
+      const bVal = attrs[b.attr] || 0;
+      return bVal - aVal; // 属性值高的优先
+    });
+    return available.slice(0, maxSlots);
+  }
 
   // ========== Mana 池按等级推导（通用规则） ==========
   // 等级取 max(vanguard.level, rearguard.level)
@@ -145,17 +206,12 @@
     // ========== 技能注册（从 config 加载） ==========
 
     /**
-     * 从 game-config.json 注册所有技能
+     * 从 game-config 注册所有技能
      * 统一接口：每个角色都有 vanguard/rearguard/skills/attrs
+     * skills key 必须是 UNIVERSAL_SKILLS 中的 key
      * mana 由 max(vanguard.level, rearguard.level) 推导
-     *
-     * 兼容旧格式: [{ id, name, type, magicSkills }]
      */
     registerFromConfig(config) {
-      if (Array.isArray(config)) {
-        return this._registerLegacy(config);
-      }
-
       this.skills.clear();
       this.manaPools.clear();
 
@@ -164,8 +220,15 @@
         const h = config.hero;
         const level = this._getCharLevel(h);
         const name = this._getCharName(h);
-        const mana = MANA_BY_LEVEL[Math.min(5, level)] || MANA_BY_LEVEL[0];
-        this._registerEntity(0, name, 'human', h.skills || {}, mana);
+        const manaTemplate = MANA_BY_LEVEL[Math.min(5, level)] || MANA_BY_LEVEL[0];
+        // 如果 config 提供了 mana/maxMana（来自 ERA 变量），使用它们
+        const manaConfig = {
+          max: (h.maxMana != null) ? h.maxMana : manaTemplate.max,
+          regen: manaTemplate.regen
+        };
+        // current: 优先用 ERA 的 mana，否则满值
+        manaConfig.current = (h.mana != null) ? Math.min(h.mana, manaConfig.max) : manaConfig.max;
+        this._registerEntity(0, name, 'human', h.skills || {}, manaConfig);
       }
 
       // --- Seats (NPC) ---
@@ -211,20 +274,28 @@
      * 注册单个实体的所有技能
      * @private
      */
-    _registerEntity(ownerId, ownerName, ownerType, skillMap, manaConfig) {
+    _registerEntity(ownerId, ownerName, ownerType, skillList, manaConfig) {
       // Mana 池
       if (manaConfig) {
         this.manaPools.set(ownerId, {
-          current: manaConfig.max,
+          current: (manaConfig.current != null) ? manaConfig.current : manaConfig.max,
           max: manaConfig.max,
           regen: manaConfig.regen || 5
         });
       }
 
-      // 展开技能
-      for (const [skillKey, skillLevel] of Object.entries(skillMap)) {
-        const catalog = SKILL_CATALOG[skillKey];
-        if (!catalog) continue;
+      // 展开技能（skillList 是 key 数组，如 ["grand_wish", "vision"]）
+      // 兼容旧格式 { key: level } → 忽略 level 值，只取 key
+      const keys = Array.isArray(skillList)
+        ? skillList
+        : Object.keys(skillList || {});
+
+      for (const skillKey of keys) {
+        const catalog = lookupSkill(skillKey);
+        if (!catalog) {
+          console.warn('[SkillSystem] 未知技能 key:', skillKey, '(owner:', ownerName, ')');
+          continue;
+        }
 
         const activation = catalog.activation || ACTIVATION.PASSIVE;
         const initialActive = (activation === ACTIVATION.PASSIVE);
@@ -236,89 +307,30 @@
           ownerType: ownerType,
           skillKey: skillKey,
           effect: catalog.effect,
-          level: skillLevel,
           activation: activation,
           manaCost: catalog.manaCost || 0,
+          power: catalog.power || 0,
           active: initialActive,
           description: catalog.description || '',
           target: catalog.target || null,
           trigger: null,
           cooldown: catalog.cooldown || 0,
-          currentCooldown: 0
+          currentCooldown: 0,
+          // 阶级压制元数据
+          tier: catalog.tier || 3,
+          attr: catalog.attr || null,
+          suppressTiers: catalog.suppressTiers || null,
+          suppressAttr: catalog.suppressAttr || null,
+          suppressAll: catalog.suppressAll || false,
+          cannotAffect: catalog.cannotAffect || null
         };
 
         this.skills.set(skill.uniqueId, skill);
         this._log('SKILL_REGISTERED', {
           owner: ownerName, key: skillKey, effect: skill.effect,
-          level: skillLevel, activation: activation
+          activation: activation, tier: skill.tier, power: skill.power
         });
       }
-    }
-
-    /**
-     * 旧格式兼容：从 players 数组注册
-     * @private
-     */
-    _registerLegacy(playerConfigs) {
-      this.skills.clear();
-      this.manaPools.clear();
-
-      for (const pc of playerConfigs) {
-        if (!pc.magicSkills) continue;
-
-        const manaConfig = pc.magicSkills._mana || {};
-        this.manaPools.set(pc.id, {
-          current: manaConfig.max || 100,
-          max: manaConfig.max || 100,
-          regen: manaConfig.regen || 5
-        });
-
-        for (const [skillKey, skillDef] of Object.entries(pc.magicSkills)) {
-          if (skillKey === '_mana') continue;
-          if (!skillDef || typeof skillDef !== 'object') continue;
-
-          const activation = skillDef.activation || ACTIVATION.PASSIVE;
-          const initialActive = (activation === ACTIVATION.PASSIVE);
-
-          const skill = {
-            uniqueId: pc.id + '_' + skillKey,
-            ownerId: pc.id,
-            ownerName: pc.name,
-            ownerType: pc.type || 'ai',
-            skillKey: skillKey,
-            effect: skillDef.effect || this._inferEffect(skillKey),
-            level: skillDef.level || 1,
-            activation: activation,
-            manaCost: skillDef.manaCost || 0,
-            active: initialActive,
-            description: skillDef.description || '',
-            target: skillDef.target || null,
-            trigger: skillDef.trigger || null,
-            cooldown: skillDef.cooldown || 0,
-            currentCooldown: 0
-          };
-
-          this.skills.set(skill.uniqueId, skill);
-        }
-      }
-
-      this.emit('skills:loaded', { total: this.skills.size });
-    }
-
-    /**
-     * 从 skillKey 推断 effect 类型
-     */
-    _inferEffect(skillKey) {
-      if (skillKey.includes('fortune') || skillKey.includes('luck')) return EFFECT.FORTUNE;
-      if (skillKey.includes('curse') || skillKey.includes('hex')) return EFFECT.CURSE;
-      if (skillKey.includes('foresight') || skillKey.includes('vision')) return EFFECT.FORESIGHT;
-      if (skillKey.includes('sense') || skillKey.includes('detect')) return EFFECT.SENSE;
-      if (skillKey.includes('peek') || skillKey.includes('spy')) return EFFECT.PEEK;
-      if (skillKey.includes('reversal') || skillKey.includes('reverse')) return EFFECT.REVERSAL;
-      if (skillKey.includes('anchor')) return EFFECT.FORTUNE_ANCHOR;
-      if (skillKey.includes('null_field')) return EFFECT.NULL_FIELD;
-      if (skillKey.includes('blank')) return EFFECT.BLANK;
-      return EFFECT.FORTUNE; // 默认
     }
 
     // ========== Mana 管理 ==========
@@ -389,22 +401,31 @@
       skill.currentCooldown = skill.cooldown;
 
       // 根据 effect 类型处理
-      if (skill.effect === EFFECT.SENSE) {
-        // 感知是被动的，不加入 pendingForces
-        // 但主动激活可以增强感知
-        this.emit('skill:activated', { skill, type: 'sense_boost' });
-      } else if (skill.effect === EFFECT.FORESIGHT) {
-        // 先知不影响发牌，只触发预览事件
-        this.emit('skill:activated', { skill, type: 'foresight' });
-      } else if (skill.effect === EFFECT.BLANK) {
-        // 空白因子：清除所有 pendingForces
-        this.pendingForces = [];
-        this.pendingForces.push(this._skillToForce(skill));
-        this.emit('skill:activated', { skill, type: 'blank' });
-      } else {
-        // fortune / curse → 加入 pendingForces
-        this.pendingForces.push(this._skillToForce(skill));
-        this.emit('skill:activated', { skill, type: 'force' });
+      switch (skill.effect) {
+        case EFFECT.SENSE:
+          // 感知是被动的，主动激活增强感知
+          this.emit('skill:activated', { skill, type: 'sense_boost' });
+          break;
+        case EFFECT.PEEK:
+          // 透视不影响发牌，触发预览事件
+          this.emit('skill:activated', { skill, type: 'peek' });
+          break;
+        case EFFECT.REVERSAL:
+          // 真理·因果逆转：拦截 Chaos 系 forces 并转化为己方 fortune
+          this.pendingForces.push(this._skillToForce(skill));
+          this.emit('skill:activated', { skill, type: 'reversal' });
+          break;
+        case EFFECT.PURGE_ALL:
+          // 现实：清除所有非 Void pendingForces，自身加入
+          this.pendingForces = this.pendingForces.filter(f => f.attr === 'void');
+          this.pendingForces.push(this._skillToForce(skill));
+          this.emit('skill:activated', { skill, type: 'purge_all' });
+          break;
+        default:
+          // fortune / curse / null_field / void_shield → 加入 pendingForces
+          this.pendingForces.push(this._skillToForce(skill));
+          this.emit('skill:activated', { skill, type: 'force' });
+          break;
       }
 
       this._log('SKILL_ACTIVATED', {
@@ -427,9 +448,9 @@
         if (skill.activation !== ACTIVATION.ACTIVE) continue;
         if (skill.currentCooldown > 0) continue;
 
-        // river 阶段无牌可发，fortune/curse 无意义
+        // river 阶段无牌可发，fortune/curse/purge_all 无意义
         if (gameContext.phase === 'river' &&
-            (skill.effect === EFFECT.FORTUNE || skill.effect === EFFECT.CURSE)) continue;
+            (skill.effect === EFFECT.FORTUNE || skill.effect === EFFECT.CURSE || skill.effect === EFFECT.PURGE_ALL)) continue;
 
         // 检查 NPC 是否还在游戏中（未弃牌、有筹码）
         const owner = gameContext.players.find(p => p.id === skill.ownerId);
@@ -454,7 +475,7 @@
 
         this._log('NPC_SKILL_USED', {
           owner: skill.ownerName, key: skill.skillKey,
-          effect: skill.effect, level: skill.level
+          effect: skill.effect, tier: skill.tier
         });
 
         // 触发感知事件（让玩家被动技能检测到）
@@ -463,16 +484,15 @@
           ownerName: skill.ownerName,
           skillKey: skill.skillKey,
           effect: skill.effect,
-          level: skill.level,
+          tier: skill.tier,
           timestamp: Date.now()
         });
 
         this.emit('npc:skill_used', {
-          ownerId: skill.ownerId,
           ownerName: skill.ownerName,
           skillKey: skill.skillKey,
           effect: skill.effect,
-          level: skill.level
+          tier: skill.tier
         });
       }
 
@@ -486,26 +506,33 @@
     _npcShouldUseSkill(skill, owner, gameContext) {
       const phase = gameContext.phase;
       const pot = gameContext.pot || 0;
+      const phaseProgression = { preflop: 0.15, flop: 0.35, turn: 0.55, river: 0.75 };
+      const baseWeight = phaseProgression[phase] || 0.2;
+      const tierBonus = skill.tier === 1 ? 0.1 : skill.tier === 2 ? 0.05 : 0;
 
       switch (skill.effect) {
         case EFFECT.FORTUNE: {
-          // 幸运：pot 越大越倾向使用，preflop 概率低，后面越来越高
-          const phaseWeight = { preflop: 0.15, flop: 0.4, turn: 0.6, river: 0.8 };
-          const weight = phaseWeight[phase] || 0.2;
-          // 高等级 NPC 更聪明地使用
-          const levelBonus = skill.level * 0.05;
-          return Math.random() < (weight + levelBonus);
+          return Math.random() < (baseWeight + tierBonus);
         }
         case EFFECT.CURSE: {
-          // 诅咒：pot 大时更倾向使用
-          const potThreshold = 100;
-          const potFactor = Math.min(1, pot / (potThreshold * 3));
-          const phaseWeight2 = { preflop: 0.1, flop: 0.3, turn: 0.5, river: 0.7 };
-          const weight2 = phaseWeight2[phase] || 0.1;
-          return Math.random() < (weight2 * 0.5 + potFactor * 0.5);
+          const potFactor = Math.min(1, pot / 300);
+          return Math.random() < (baseWeight * 0.5 + potFactor * 0.5 + tierBonus);
+        }
+        case EFFECT.REVERSAL: {
+          // 真理：只在检测到敌方有 Chaos 技能时使用
+          const hasChaosEnemy = this.pendingForces.some(f => f.attr === 'chaos' && f.ownerId !== skill.ownerId);
+          return hasChaosEnemy && Math.random() < 0.7;
+        }
+        case EFFECT.PURGE_ALL: {
+          // 现实：只在场上有大量 forces 时使用（核弹级技能）
+          return this.pendingForces.length >= 3 && Math.random() < 0.4;
+        }
+        case EFFECT.PEEK: {
+          // 透视：中后期使用
+          return phase !== 'preflop' && Math.random() < (baseWeight + 0.1);
         }
         default:
-          return Math.random() < 0.3;
+          return Math.random() < 0.25;
       }
     }
 
@@ -517,41 +544,59 @@
     _processSenseSkills(gameContext) {
       if (this.senseEvents.length === 0) return;
 
-      // 找到所有拥有 sense 技能的玩家
+      // 找到所有拥有 sense (洞察) 技能的玩家
       for (const [, skill] of this.skills) {
-        if (skill.effect !== EFFECT.SENSE) continue;
+        if (skill.effect !== 'sense') continue;
         if (!skill.active && skill.activation === ACTIVATION.PASSIVE) continue;
         // passive sense 始终生效
         if (skill.activation !== ACTIVATION.PASSIVE && !skill.active) continue;
 
-        const senseLevel = skill.level;
+        const senseTier = skill.tier; // T3=3, T2=2, T1=1
 
         // 对每个感知事件进行检测
         for (const event of this.senseEvents) {
           // 不感知自己的技能
           if (event.ownerId === skill.ownerId) continue;
 
-          // 感知成功率 = senseLevel / (senseLevel + enemyLevel) × 100%
-          // level 3 sense vs level 3 enemy = 50% 感知率
-          // level 3 sense vs level 1 enemy = 75% 感知率
-          const detectChance = senseLevel / (senseLevel + event.level);
+          // 感知成功率：己方 tier 越低（越强）越容易感知
+          // T3 insight vs T3 enemy = 50%, vs T1 enemy = 75%
+          const enemyTier = event.tier || 3;
+          const isChaosEvent = (event.effect === 'curse' || event.effect === 'catastrophe');
+          let detectChance = enemyTier / (senseTier + enemyTier);
+
+          // ---- Psyche > Chaos 克制：洞察对 Chaos 技能有极高检测率 ----
+          if (isChaosEvent) {
+            detectChance = Math.min(1.0, detectChance + 0.45); // 基本接近 100%
+          }
+
+          // ---- Moirai > Psyche 克制：幸运迷雾 ----
+          // 敌方拥有活跃 fortune forces 时，降低感知成功率
+          const enemyFortunePower = this.pendingForces
+            .filter(f => f.ownerId === event.ownerId && f.type === 'fortune')
+            .reduce((sum, f) => sum + (f.power || 0), 0);
+          if (enemyFortunePower > 0) {
+            // 每 10 点 fortune power 降低 10% 检测率，最多降 50%
+            const fogReduction = Math.min(0.5, enemyFortunePower / 100);
+            detectChance *= (1 - fogReduction);
+          }
+
           const detected = Math.random() < detectChance;
 
           if (detected) {
             // 感知精度：高等级感知能看到更多细节
-            const detail = this._getSenseDetail(senseLevel, event);
+            const detail = this._getSenseDetail(senseTier, event);
 
             this.emit('sense:detected', {
               sensorId: skill.ownerId,
               sensorName: skill.ownerName,
-              senseLevel: senseLevel,
+              senseTier: senseTier,
               event: event,
               detail: detail
             });
 
             this._log('SENSE_DETECTED', {
               sensor: skill.ownerName, target: event.ownerName,
-              effect: detail.effectHint, level: detail.levelHint,
+              effect: detail.effectHint, tier: detail.tierHint,
               accuracy: Math.round(detectChance * 100) + '%'
             });
           } else {
@@ -568,33 +613,48 @@
     }
 
     /**
-     * 根据感知等级返回不同精度的信息
+     * 根据感知 tier 返回不同精度的信息
+     * senseTier: 3=基础(insight), 2=进阶, 1=终极
      */
-    _getSenseDetail(senseLevel, event) {
-      if (senseLevel >= 5) {
-        // 完美感知：知道谁用了什么技能、等级
+    _getSenseDetail(senseTier, event) {
+      const tierLabel = { 1: '终极', 2: '进阶', 3: '基础' };
+      const enemyTierLabel = tierLabel[event.tier] || '未知';
+
+      if (senseTier <= 1) {
+        // T1 感知：完美精度
         return {
           accuracy: 'perfect',
           effectHint: event.effect,
-          levelHint: event.level,
+          tierHint: enemyTierLabel,
           ownerHint: event.ownerName,
-          message: `${event.ownerName} 使用了 ${this._effectName(event.effect)} Lv.${event.level}！`
+          message: `${event.ownerName} 使用了 ${this._effectName(event.effect)}（${enemyTierLabel}）！`
         };
-      } else if (senseLevel >= 3) {
-        // 中等感知：知道技能类型和大致方向
+      } else if (senseTier <= 2) {
+        // T2 感知：知道技能类型
         return {
           accuracy: 'medium',
           effectHint: event.effect,
-          levelHint: event.level > 3 ? '强' : event.level > 1 ? '中' : '弱',
+          tierHint: null,
           ownerHint: null,
-          message: `感知到 ${this._effectName(event.effect)} 的气息...强度: ${event.level > 3 ? '强' : event.level > 1 ? '中' : '弱'}`
+          message: `感知到 ${this._effectName(event.effect)} 的气息...`
         };
       } else {
-        // 低等级感知：只知道有人用了魔力
+        // T3 感知（insight）：通常只知道有人用了魔力
+        // 但 Psyche > Chaos 克制：对 Chaos 技能有更高精度
+        const isChaos = (event.effect === 'curse' || event.effect === 'catastrophe');
+        if (isChaos) {
+          return {
+            accuracy: 'medium',
+            effectHint: event.effect,
+            tierHint: null,
+            ownerHint: event.ownerName,
+            message: `${event.ownerName} 对你施放了${this._effectName(event.effect)}!`
+          };
+        }
         return {
           accuracy: 'low',
           effectHint: null,
-          levelHint: null,
+          tierHint: null,
           ownerHint: null,
           message: '命运场发生了变化...'
         };
@@ -603,11 +663,14 @@
 
     _effectName(effect) {
       const names = {
-        [EFFECT.FORTUNE]: '魔运·幸运',
-        [EFFECT.CURSE]: '魔运·诅咒',
-        [EFFECT.FORESIGHT]: '魔运·先知',
-        [EFFECT.BLANK]: '空白因子',
-        [EFFECT.SENSE]: '魔运·感知'
+        fortune:     '天命·幸运',
+        curse:       '狂厄·凶',
+        sense:       '灵视·洞察',
+        peek:        '灵视·透视',
+        reversal:    '灵视·真理',
+        null_field:  '虚无·屏蔽',
+        void_shield: '虚无·绝缘',
+        purge_all:   '虚无·现实'
       };
       return names[effect] || '未知魔力';
     }
@@ -660,7 +723,7 @@
             ownerName: skill.ownerName,
             skillKey: skill.skillKey,
             effect: skill.effect,
-            level: skill.level,
+            tier: skill.tier,
             timestamp: Date.now()
           });
         } else if (!shouldActivate && skill.active) {
@@ -706,14 +769,29 @@
       }
 
       // 2. 被动技能（passive, active=true）— 弃牌者不生效
-      // 跳过纯信息/动作类技能（不产生命运力量）
       for (const [, skill] of this.skills) {
         if (!skill.active) continue;
         if (skill.activation !== ACTIVATION.PASSIVE && skill.activation !== ACTIVATION.TOGGLE) continue;
-        if (skill.effect === EFFECT.FORESIGHT || skill.effect === EFFECT.SENSE || skill.effect === EFFECT.PEEK || skill.effect === EFFECT.REVERSAL) continue;
         if (foldedIds.has(skill.ownerId)) continue;
 
-        forces.push(this._skillToForce(skill));
+        if (skill.effect === 'sense' || skill.effect === 'peek') {
+          // 信息类技能不产生命运力量，但注入零功率标记
+          // 用于 Psyche > Chaos 属性克制（洞察/透视在场时削弱敌方诅咒）
+          forces.push({
+            ownerId: skill.ownerId,
+            ownerName: skill.ownerName,
+            type: skill.effect,
+            attr: 'psyche',
+            tier: skill.tier,
+            power: 0,
+            effectivePower: 0,
+            activation: skill.activation,
+            skillKey: skill.skillKey,
+            _infoMarker: true
+          });
+        } else {
+          forces.push(this._skillToForce(skill));
+        }
       }
 
       // 3. 本回合 pending forces（主动技能 + NPC 技能 + triggered）
@@ -730,32 +808,28 @@
      * 将技能转为 force 对象（供 MonteOfZero 消费）
      */
     _skillToForce(skill) {
-      // 被动技能基础力量远低于主动技能
-      // passive: level × 3 (微弱底色)    active: level × 10 (决定性力量)
-      // toggle:  level × 8                triggered: level × 8
-      let basePower = 0;
-      if (skill.effect !== EFFECT.BLANK) {
-        switch (skill.activation) {
-          case ACTIVATION.PASSIVE:   basePower = skill.level * 3;  break;
-          case ACTIVATION.ACTIVE:    basePower = skill.level * 10; break;
-          case ACTIVATION.TOGGLE:    basePower = skill.level * 8;  break;
-          case ACTIVATION.TRIGGERED: basePower = skill.level * 8;  break;
-          default:                   basePower = skill.level * 5;  break;
-        }
-      }
-
       const force = {
         ownerId: skill.ownerId,
         ownerName: skill.ownerName,
         type: skill.effect,
-        level: skill.level,
-        power: basePower,
-        activation: skill.activation,  // 传给 MoZ 用于力量对抗计算
-        source: skill.activation
+        power: skill.power || 0,
+        activation: skill.activation,
+        source: skill.activation,
+        // 阶级压制元数据（供 MoZ 使用）
+        tier: skill.tier || 3,
+        attr: skill.attr || null,
+        skillKey: skill.skillKey,
+        suppressTiers: skill.suppressTiers || null,
+        suppressAttr: skill.suppressAttr || null,
+        suppressAll: skill.suppressAll || false,
+        cannotAffect: skill.cannotAffect || null
       };
 
-      if (skill.effect === EFFECT.CURSE && skill.target) {
-        force.targetId = skill.target === 'player' ? 0 : skill.target;
+      if (skill.effect === 'curse' && skill.target) {
+        // target: 'enemy' → 对手 (ownerId=0 时目标是 NPC，NPC 时目标是玩家)
+        force.targetId = skill.target === 'enemy'
+          ? (skill.ownerId === 0 ? -1 : 0)
+          : skill.target;
       }
 
       return force;
@@ -840,7 +914,7 @@
         rinoMana: rinoMana.current,
         rinoManaMax: rinoMana.max,
         pendingForces: this.pendingForces.map(f => ({
-          owner: f.ownerName, type: f.type, level: f.level
+          owner: f.ownerName, type: f.type, tier: f.tier, power: f.power
         })),
         skills: Array.from(this.skills.values()).map(s => ({
           uniqueId: s.uniqueId,
@@ -848,7 +922,7 @@
           ownerId: s.ownerId,
           key: s.skillKey,
           effect: s.effect,
-          level: s.level,
+          tier: s.tier,
           activation: s.activation,
           active: s.active,
           manaCost: s.manaCost,
@@ -864,13 +938,13 @@
     getForcesSummary() {
       const summary = { allies: [], enemies: [], total: { ally: 0, enemy: 0 } };
 
-      // 被动力
+      // 被动力（跳过纯信息类）
       for (const [, skill] of this.skills) {
         if (!skill.active) continue;
-        if (skill.effect === EFFECT.FORESIGHT || skill.effect === EFFECT.SENSE) continue;
+        if (skill.effect === 'sense' || skill.effect === 'peek') continue;
         if (skill.activation !== ACTIVATION.PASSIVE) continue;
 
-        const entry = { name: skill.ownerName, type: skill.effect, level: skill.level, power: skill.level * 3 };
+        const entry = { name: skill.ownerName, type: skill.effect, tier: skill.tier, power: skill.power };
         if (skill.ownerId === 0) {
           summary.allies.push(entry);
           summary.total.ally += entry.power;
@@ -882,8 +956,8 @@
 
       // pending forces
       for (const f of this.pendingForces) {
-        if (f.type === EFFECT.BLANK) continue;
-        const entry = { name: f.ownerName, type: f.type, level: f.level, power: f.power };
+        if (f.type === 'purge_all') continue;
+        const entry = { name: f.ownerName, type: f.type, tier: f.tier, power: f.power };
         if (f.ownerId === 0) {
           summary.allies.push(entry);
           summary.total.ally += entry.power;
@@ -904,10 +978,10 @@
     }
 
     /**
-     * 检查是否有空白因子在 pending
+     * 检查是否有清场技能 (purge_all / reversal) 在 pending
      */
-    hasBlankFactor() {
-      return this.pendingForces.some(f => f.type === EFFECT.BLANK);
+    hasPurgeActive() {
+      return this.pendingForces.some(f => f.type === 'purge_all' || f.type === 'reversal');
     }
 
     // ========== 日志 ==========
@@ -922,8 +996,11 @@
   global.SkillSystem = SkillSystem;
   global.SkillSystem.ACTIVATION = ACTIVATION;
   global.SkillSystem.EFFECT = EFFECT;
-  global.SkillSystem.SKILL_ID = SKILL_ID;
-  global.SkillSystem.SKILL_CATALOG = SKILL_CATALOG;
+  global.SkillSystem.UNIVERSAL_SKILLS = UNIVERSAL_SKILLS;
   global.SkillSystem.MANA_BY_LEVEL = MANA_BY_LEVEL;
+  global.SkillSystem.lookupSkill = lookupSkill;
+  global.SkillSystem.calculateSlots = calculateSlots;
+  global.SkillSystem.canLearnSkill = canLearnSkill;
+  global.SkillSystem.deriveSkillsFromAttrs = deriveSkillsFromAttrs;
 
 })(typeof window !== 'undefined' ? window : global);

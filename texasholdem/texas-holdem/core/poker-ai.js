@@ -3,15 +3,17 @@
 /**
  * Poker AI - 德州扑克AI决策系统
  * 
- * 支持两个维度的个性配置：
+ * 支持三个维度的个性配置：
  * 1. 风险喜好 (Risk Appetite): rock, balanced, aggressive, maniac, passive
  * 2. 难度等级 (Difficulty): noob, regular, pro
+ * 3. 情绪状态 (Emotion): calm, confident, tilt, fearful, desperate, euphoric
  * 
  * AI决策基于：
  * - 当前手牌强度（使用pokersolver评估）
  * - 底池赔率 (Pot Odds)
  * - 个性化阈值和噪音
  * - 价值下注逻辑（强牌必须下注榨取价值）
+ * - 情绪修正（影响噪音、诈唬、下注尺度等）
  */
 
 (function(global) {
@@ -98,6 +100,72 @@
     }
   };
 
+  // ========== 情绪状态配置 ==========
+  // 情绪是叠加在 risk + difficulty 之上的运行时修正层
+  // 所有值都是 delta（加减），应用于基础 profile 之上
+  const EMOTION_PROFILES = {
+    calm: {
+      description: '冷静 — 无修正，标准状态',
+      noiseDelta: 0,
+      entryDelta: 0,
+      raiseDelta: 0,
+      bluffDelta: 0,
+      betSizeDelta: 0,
+      foldResistDelta: 0,     // 负值 = 更不容易弃牌
+      optimismDelta: 0
+    },
+    confident: {
+      description: '自信 — 连赢后膨胀，敢打敢冲但不失理智',
+      noiseDelta: -3,          // 略微更精准
+      entryDelta: -5,          // 入场门槛降低
+      raiseDelta: -8,          // 更愿意加注
+      bluffDelta: 0.05,        // 略增诈唬
+      betSizeDelta: 0.15,      // 下注尺度增大
+      foldResistDelta: -0.10,  // 更不容易弃牌
+      optimismDelta: 5
+    },
+    tilt: {
+      description: '上头 — 被 Bad Beat 后情绪失控，决策混乱',
+      noiseDelta: 15,          // 判断力大幅下降
+      entryDelta: -20,         // 什么牌都想玩
+      raiseDelta: -15,         // 疯狂加注
+      bluffDelta: 0.20,        // 大量诈唬
+      betSizeDelta: 0.4,       // 下注尺度暴涨
+      foldResistDelta: -0.25,  // 极度不愿弃牌
+      optimismDelta: 20
+    },
+    fearful: {
+      description: '恐惧 — 被大额下注吓到，畏手畏脚',
+      noiseDelta: 5,
+      entryDelta: 15,          // 入场门槛大幅提高
+      raiseDelta: 20,          // 几乎不加注
+      bluffDelta: -0.08,       // 不敢诈唬
+      betSizeDelta: -0.2,      // 下注尺度缩小
+      foldResistDelta: 0.15,   // 更容易弃牌
+      optimismDelta: -10
+    },
+    desperate: {
+      description: '绝望 — 筹码见底，孤注一掷',
+      noiseDelta: 10,
+      entryDelta: -15,         // 什么都想搏
+      raiseDelta: -20,         // 频繁 All-in
+      bluffDelta: 0.25,        // 大量诈唬（背水一战）
+      betSizeDelta: 0.6,       // 下注尺度极大
+      foldResistDelta: -0.20,  // 不愿弃牌
+      optimismDelta: 15
+    },
+    euphoric: {
+      description: '狂喜 — 刚赢大锅，飘飘然，容易轻敌',
+      noiseDelta: 8,           // 注意力分散
+      entryDelta: -10,         // 觉得自己无敌
+      raiseDelta: -5,
+      bluffDelta: 0.10,
+      betSizeDelta: 0.2,
+      foldResistDelta: -0.15,  // 不愿放弃好运
+      optimismDelta: 12
+    }
+  };
+
   // ========== 工具函数 ==========
   function cardToString(card) {
     if (!card) return '';
@@ -181,15 +249,57 @@
      * @param {Object} personality - 个性配置
      * @param {string} personality.riskAppetite - 风险喜好: rock/balanced/aggressive/maniac/passive
      * @param {string} personality.difficulty - 难度等级: noob/regular/pro
+     * @param {string} personality.emotion - 情绪状态: calm/confident/tilt/fearful/desperate/euphoric
      */
     constructor(personality = {}) {
       const riskType = personality.riskAppetite || 'balanced';
       const difficultyType = personality.difficulty || 'regular';
+      const emotionType = personality.emotion || 'calm';
       
-      this.risk = RISK_PROFILES[riskType] || RISK_PROFILES.balanced;
-      this.difficulty = DIFFICULTY_PROFILES[difficultyType] || DIFFICULTY_PROFILES.regular;
+      this.riskBase = RISK_PROFILES[riskType] || RISK_PROFILES.balanced;
+      this.difficultyBase = DIFFICULTY_PROFILES[difficultyType] || DIFFICULTY_PROFILES.regular;
+      this.emotion = EMOTION_PROFILES[emotionType] || EMOTION_PROFILES.calm;
       this.riskType = riskType;
       this.difficultyType = difficultyType;
+      this.emotionType = emotionType;
+      
+      // 合并：基础 profile + 情绪 delta
+      this.risk = this._applyEmotion(this.riskBase, this.emotion);
+      this.difficulty = this._applyEmotionDifficulty(this.difficultyBase, this.emotion);
+    }
+
+    /**
+     * 运行时切换情绪（不重建实例）
+     * @param {string} emotionType - 新情绪
+     */
+    setEmotion(emotionType) {
+      this.emotionType = emotionType;
+      this.emotion = EMOTION_PROFILES[emotionType] || EMOTION_PROFILES.calm;
+      this.risk = this._applyEmotion(this.riskBase, this.emotion);
+      this.difficulty = this._applyEmotionDifficulty(this.difficultyBase, this.emotion);
+    }
+
+    _applyEmotion(base, emo) {
+      return {
+        description: base.description,
+        entryThreshold:    Math.max(0, Math.min(100, base.entryThreshold + (emo.entryDelta || 0))),
+        raiseThreshold:    Math.max(0, Math.min(100, base.raiseThreshold + (emo.raiseDelta || 0))),
+        valueBetThreshold: Math.max(0, Math.min(100, base.valueBetThreshold + (emo.raiseDelta || 0) * 0.5)),
+        bluffFrequency:    Math.max(0, Math.min(0.8, base.bluffFrequency + (emo.bluffDelta || 0))),
+        betSizeMultiplier: Math.max(0.2, base.betSizeMultiplier + (emo.betSizeDelta || 0)),
+        callDownThreshold: Math.max(0, Math.min(100, base.callDownThreshold + (emo.entryDelta || 0) * 0.5))
+      };
+    }
+
+    _applyEmotionDifficulty(base, emo) {
+      return {
+        description: base.description,
+        noiseRange:        Math.max(0, base.noiseRange + (emo.noiseDelta || 0)),
+        potOddsAwareness:  Math.max(0, Math.min(1, base.potOddsAwareness - (emo.noiseDelta || 0) * 0.01)),
+        positionAwareness: base.positionAwareness,
+        valueBetAwareness: Math.max(0, Math.min(1, base.valueBetAwareness - (emo.noiseDelta || 0) * 0.02)),
+        optimism:          Math.max(0, base.optimism + (emo.optimismDelta || 0))
+      };
     }
 
     /**
@@ -492,6 +602,12 @@
           foldChance *= 0.25;
         }
         
+        // 情绪修正弃牌率：tilt/confident → 更不容易弃, fearful → 更容易弃
+        const foldResist = this.emotion.foldResistDelta || 0;
+        if (foldResist !== 0) {
+          foldChance = Math.max(0.05, Math.min(0.99, foldChance + foldResist));
+        }
+        
         if (Math.random() < foldChance) {
           return { action: ACTIONS.FOLD, amount: 0 };
         }
@@ -595,6 +711,7 @@
   global.PokerAI.ACTIONS = ACTIONS;
   global.PokerAI.RISK_PROFILES = RISK_PROFILES;
   global.PokerAI.DIFFICULTY_PROFILES = DIFFICULTY_PROFILES;
+  global.PokerAI.EMOTION_PROFILES = EMOTION_PROFILES;
   global.PokerAI.evaluateHandStrength = evaluateHandStrength;
   global.PokerAI.evaluatePreflopStrength = evaluatePreflopStrength;
   global.PokerAI.cardToString = cardToString;

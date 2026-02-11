@@ -1,0 +1,72 @@
+<variable_rule>
+ACE0 ERA 变量指令规则
+调用 <VariableEdit> 标签对 RPG 系统变量进行**增量更新**。
+核心原则：仅输出本轮剧情中发生**变化**的键值对，严禁整段覆写！
+
+ERA 变量结构
+
+{
+  "hero": {
+    "gold": 500,
+    "角色名A": { "level": 3, "mana": 0, "maxMana": 0 },
+    "角色名B": { "level": 5, "mana": 100, "maxMana": 100 }
+  }
+}
+
+说明：
+- hero 下直接存放角色数据，键名 = 角色名（如 "KAZU", "RINO"）。
+- vanguard/rearguard 不在 ERA 中 —— 每局牌在 ACE0_BATTLE 的 hero 字段指定。
+- 角色可以只有一个（无副手），也可以有多个。
+
+1. 金钱变动
+
+写入路径：hero.gold
+- 赢牌收入、购买消费、剧情奖励等。
+- 使用绝对值覆写（不是增量）。
+
+2. 角色成长
+
+写入路径：hero.角色名
+仅列出变化项。
+
+- level: 等级变化时写入新等级 (0~5)。
+- mana: 魔运值变化时写入新值。
+- maxMana: 最大魔运变化时写入新值（通常随等级自动推导，特殊剧情可覆写）。
+
+3. 新增角色
+
+当剧情中主角获得新的搭档/伙伴时：
+写入路径：hero.新角色名
+
+必填字段：
+- level: 初始等级 (Integer, 0~5)
+- mana: 初始魔运值
+- maxMana: 最大魔运值
+
+示例
+
+示例1（牌局结束 — 赢了金币，魔运消耗）：
+<VariableEdit>
+{
+  "hero": {
+    "gold": 650,
+    "RINO": {
+      "mana": 72
+    }
+  }
+}
+</VariableEdit>
+
+示例2（角色升级）：
+<VariableEdit>
+{
+  "hero": {
+    "KAZU": {
+      "level": 4,
+      "maxMana": 90,
+      "mana": 90
+    }
+  }
+}
+</VariableEdit>
+</variable_rule>

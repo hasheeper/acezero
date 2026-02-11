@@ -73,12 +73,13 @@
       var s = seats[SEAT_ORDER[i]];
       if (!s) continue;
       var aiStyle = s.ai || 'balanced';
+      var aiEmotion = s.emotion || 'calm';
       result.push({
         id: result.length,
         name: _charName(s),
         type: 'ai',
         chips: cfg.chips || 1000,
-        personality: { riskAppetite: aiStyle, difficulty: AI_DIFF_MAP[aiStyle] || 'regular' },
+        personality: { riskAppetite: aiStyle, difficulty: AI_DIFF_MAP[aiStyle] || 'regular', emotion: aiEmotion },
         seat: SEAT_ORDER[i]
       });
     }
@@ -149,6 +150,18 @@
   skillSystem.onLog = function (type, data) { logEvent('SKILL_' + type, data); };
   skillUI.onLog = function (type, data) { logEvent(type, data); };
   skillUI.onMessage = function (msg) { updateMsg(msg); };
+
+  // 暴露全局引用，供调试控制台使用
+  window._debug = { skillUI, moz, skillSystem };
+  window.skillUI = skillUI;
+  window.moz = moz;
+  window.skillSystem = skillSystem;
+  // 快捷调试开关
+  window.debugMode = function (on) {
+    moz.debugMode = on !== false;
+    console.log('[DEBUG] debugMode =', moz.debugMode);
+    return moz.debugMode;
+  };
 
   // ========== 游戏状态 ==========
   let deckLib = null;
@@ -933,100 +946,163 @@
     return deckLib.cards.pop();
   }
 
-  // ========== 力量对抗展示 ==========
+  // ========== SVG 图标（替代 emoji） ==========
+  const _svgIcons = {
+    fortune:  '<svg class="fpk-icon" viewBox="0 0 16 16"><path d="M8 1l2.2 4.5L15 6.3l-3.5 3.4.8 4.8L8 12.3 3.7 14.5l.8-4.8L1 6.3l4.8-.8z" fill="#9B59B6"/></svg>',
+    curse:    '<svg class="fpk-icon" viewBox="0 0 16 16"><path d="M8 1C5.2 1 3 3.7 3 7c0 2.2 1 4 2.5 5h5C12 11 13 9.2 13 7c0-3.3-2.2-6-5-6zM6 12v1c0 .6.9 1 2 1s2-.4 2-1v-1H6z" fill="#e74c3c"/></svg>',
+    backlash: '<svg class="fpk-icon" viewBox="0 0 16 16"><path d="M9 1L4 8h3l-2 7 7-8H9l2-6z" fill="#f39c12"/></svg>',
+    reversal: '<svg class="fpk-icon" viewBox="0 0 16 16"><path d="M2 5h9l-3-3h2l4 4-4 4h-2l3-3H2V5zm12 6H5l3 3H6l-4-4 4-4h2L5 9h9v2z" fill="#1abc9c"/></svg>',
+    null_field:'<svg class="fpk-icon" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="#95a5a6" stroke-width="1.5"/><line x1="4" y1="12" x2="12" y2="4" stroke="#95a5a6" stroke-width="1.5"/></svg>',
+    void_shield:'<svg class="fpk-icon" viewBox="0 0 16 16"><path d="M8 1L2 4v4c0 3.3 2.6 6.4 6 7 3.4-.6 6-3.7 6-7V4L8 1z" fill="none" stroke="#7f8c8d" stroke-width="1.5"/></svg>',
+    purge_all:'<svg class="fpk-icon" viewBox="0 0 16 16"><path d="M8 2L3 8l5 6 5-6-5-6z" fill="none" stroke="#bdc3c7" stroke-width="1.5"/></svg>',
+    bolt:     '<svg class="fpk-icon fpk-icon-title" viewBox="0 0 16 16"><path d="M9 1L4 8h3l-2 7 7-8H9l2-6z" fill="currentColor"/></svg>',
+    arrow:    '<svg class="fpk-icon fpk-icon-arrow" viewBox="0 0 16 16"><path d="M2 8h10l-3-3 1.4-1.4L15 8l-4.6 4.4L9 11l3-3H2V8z" fill="currentColor"/></svg>',
+    debug:    '<svg class="fpk-icon fpk-icon-title" viewBox="0 0 16 16"><path d="M11 1l-1 2H6L5 1H3l1.3 2.6C3 4.5 2 6.1 2 8h2v2H2c.2 1.2.7 2.3 1.4 3.1L2 14.5 3.5 16l1.2-1.2c.8.5 1.7.7 2.6.8V9h1.4v6.6c.9-.1 1.8-.3 2.6-.8L12.5 16 14 14.5l-1.4-1.4C13.3 12.3 13.8 11.2 14 10h-2V8h2c0-1.9-1-3.5-2.3-4.4L13 1h-2z" fill="currentColor"/></svg>',
+    eye:      '<svg class="fpk-icon" viewBox="0 0 16 16"><path d="M8 3C4.4 3 1.4 5.4 0 8c1.4 2.6 4.4 5 8 5s6.6-2.4 8-5c-1.4-2.6-4.4-5-8-5zm0 8.3c-1.8 0-3.3-1.5-3.3-3.3S6.2 4.7 8 4.7s3.3 1.5 3.3 3.3S9.8 11.3 8 11.3zM8 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" fill="currentColor"/></svg>'
+  };
+
+  // ========== 命运裁决展示 ==========
   let _fpkTimer = null;
 
   function showForcePK(meta) {
     const overlay = document.getElementById('force-pk-overlay');
-    if (!overlay || !meta || !meta.activeForces || meta.activeForces.length === 0) return;
+    if (!overlay || !meta) return;
 
-    const forces = meta.activeForces;
-    const ICONS = { fortune: '✦', curse: '☠', backlash: '⚡' };
-    const TYPE_LABELS = { fortune: '魔运', curse: '厄运', backlash: '反噬' };
+    const forces = meta.activeForces || [];
+    const candidates = meta.topCandidates || [];
+    const timeline = meta.debugTimeline || [];
+    const isDebug = moz.debugMode;
+    const _s = _svgIcons;
 
-    // 按玩家分组
-    const byOwner = {};
-    for (const f of forces) {
-      const key = f.owner || ('ID_' + f.ownerId);
-      if (!byOwner[key]) byOwner[key] = { name: key, forces: [], total: 0, isPlayer: false, isSystem: false };
-      byOwner[key].forces.push(f);
-      byOwner[key].total += (f.power || 0);
-    }
+    const TYPE_CN = {
+      fortune: '幸运', curse: '凶', backlash: '反噬', reversal: '逆转',
+      null_field: '屏蔽', void_shield: '绝缘', purge_all: '现实'
+    };
 
-    // 标记玩家(ownerId===0)和系统
-    const rinoPlayer = gameState.players.find(p => p.id === 0);
-    const rinoName = rinoPlayer ? rinoPlayer.name : 'RINO';
-    for (const key in byOwner) {
-      const g = byOwner[key];
-      const firstForce = g.forces[0];
-      if (firstForce.ownerId === 0) { g.isPlayer = true; g.name = rinoName; }
-      if (firstForce.ownerId === -1 || key === 'SYSTEM') { g.isSystem = true; g.name = 'SYSTEM'; }
-    }
+    // ---- 构建 HTML ----
+    let html = '';
 
-    const groups = Object.values(byOwner);
-    if (groups.length === 0) return;
-
-    // 构建 HTML
-    let html = '<div class="fpk-title">⚡ 命运对抗 ⚡</div>';
-    html += '<div class="fpk-players">';
-
-    for (const g of groups) {
-      const cssClass = g.isPlayer ? 'fpk-player-ally' : g.isSystem ? 'fpk-player-system' : 'fpk-player-enemy';
-      html += '<div class="fpk-player-card ' + cssClass + '">';
-      html += '<div class="fpk-player-name">' + g.name + '</div>';
-      for (const f of g.forces) {
-        const icon = ICONS[f.type] || '?';
-        const label = TYPE_LABELS[f.type] || f.type;
-        html += '<div class="fpk-force-line">' + icon + ' ' + label + ' <span class="fpk-power">P' + f.power + '</span></div>';
+    // 标题行：活跃力量摘要
+    if (forces.length > 0) {
+      html += '<div class="fpk-forces">';
+      for (const f of forces) {
+        const typeCn = TYPE_CN[f.type] || f.type;
+        const icon = _s[f.type] || '';
+        const cls = f.type === 'fortune' ? 'fpk-tag-good' :
+                    f.type === 'curse' || f.type === 'backlash' ? 'fpk-tag-bad' : 'fpk-tag-neutral';
+        html += '<span class="fpk-tag ' + cls + '">' + icon + ' ' + f.owner + ' ' + typeCn + '</span>';
       }
-      html += '<div class="fpk-player-total">' + g.total + '</div>';
       html += '</div>';
     }
 
-    html += '</div>';
+    // 候选牌排行（核心展示）
+    if (candidates.length > 0) {
+      const maxProb = Math.max(...candidates.map(c => c.prob), 1);
 
-    // 结果行：fortune 类型的净值
-    const playerFortune = groups.filter(g => g.isPlayer).reduce((s, g) => s + g.forces.filter(f => f.type === 'fortune').reduce((a, f) => a + f.power, 0), 0);
-    const enemyFortune = groups.filter(g => !g.isPlayer && !g.isSystem).reduce((s, g) => s + g.forces.filter(f => f.type === 'fortune').reduce((a, f) => a + f.power, 0), 0);
-    const net = playerFortune - enemyFortune;
-    const hasBacklash = groups.some(g => g.isSystem);
+      html += '<div class="fpk-list">';
+      for (let i = 0; i < candidates.length; i++) {
+        const c = candidates[i];
+        const rank = c.rank || (i + 1);
+        const barWidth = Math.max(2, Math.round((c.prob / maxProb) * 100));
+        // 颜色：rinoWins=true 绿色（对你有利），false 红色（对你不利）
+        const winCls = c.rinoWins ? 'fpk-row-win' : 'fpk-row-lose';
+        const selCls = c.selected ? ' fpk-row-selected' : '';
+        const barCls = c.rinoWins ? 'fpk-bar-win' : 'fpk-bar-lose';
 
-    let resultClass, resultText;
-    if (hasBacklash) {
-      resultClass = 'fpk-lose';
-      resultText = '⚠ 反噬中 — 命运惩罚 ' + rinoName;
-    } else if (net > 0) {
-      resultClass = 'fpk-win';
-      resultText = '命运倾斜 → ' + rinoName + ' (+' + net + ')';
-    } else if (net < 0) {
-      resultClass = 'fpk-lose';
-      // 找到最强的敌方
-      const strongest = groups.filter(g => !g.isPlayer && !g.isSystem).sort((a, b) => b.total - a.total)[0];
-      resultText = '命运抵抗 → ' + (strongest ? strongest.name : 'NPC') + ' (+' + Math.abs(net) + ')';
-    } else {
-      resultClass = 'fpk-neutral';
-      resultText = '命运均衡 — 混沌';
+        html += '<div class="fpk-row ' + winCls + selCls + '">';
+        html += '<span class="fpk-rank">#' + rank + '</span>';
+        html += '<span class="fpk-row-card">' + _cardToDisplay(c.card) + '</span>';
+        html += '<span class="fpk-row-score">' + c.score.toFixed(1) + '</span>';
+        html += '<span class="fpk-row-bar"><span class="fpk-bar-fill ' + barCls + '" style="width:' + barWidth + '%"></span></span>';
+        html += '<span class="fpk-row-prob">' + c.prob.toFixed(1) + '%</span>';
+        if (c.selected) {
+          html += '<span class="fpk-row-pick">&larr;</span>';
+        }
+        html += '</div>';
+      }
+      html += '</div>';
     }
-    html += '<div class="fpk-result ' + resultClass + '">' + resultText + '</div>';
 
-    // Style bonus
-    if (meta.styleBonus && meta.styleBonus !== 0) {
-      const sign = meta.styleBonus > 0 ? '+' : '';
-      html += '<div class="fpk-style">时髦命运 ' + sign + meta.styleBonus + '</div>';
+    // Debug 面板（仅 debugMode）
+    if (isDebug && timeline.length > 0) {
+      html += '<div class="fpk-debug">';
+      html += '<div class="fpk-debug-title">' + _s.debug + ' DEBUG</div>';
+      html += '<div class="fpk-debug-step">rank=#' + (meta.selectedRank || '?') + '/' + (meta.totalUniverses || '?') + ' score=' + (meta.destinyScore || 0).toFixed(1) + '</div>';
+      if (forces.length > 0) {
+        html += '<div class="fpk-debug-step"><span class="fpk-debug-stage">FORCES</span> ';
+        for (const f of forces) {
+          html += f.owner + '.' + (TYPE_CN[f.type] || f.type) + ' P' + f.power + ' ';
+        }
+        html += '</div>';
+      }
+      for (const step of timeline) {
+        html += '<div class="fpk-debug-step">';
+        html += '<span class="fpk-debug-stage">' + step.stage + '</span> ';
+        switch (step.stage) {
+          case 'ROUND_START':
+            html += 'deck=' + step.data.deckRemaining + ' forces=' + (step.data.inputForces || []).length;
+            break;
+          case 'TIER_SUPPRESSION':
+            for (const s of (step.data.suppressed || [])) {
+              html += s.owner + '.' + s.type + ' X ' + s.suppressedBy + ' ';
+            }
+            break;
+          case 'REVERSAL_CONVERT':
+            html += step.data.intercepted.owner + '.' + step.data.intercepted.type + '(P' + step.data.intercepted.originalPower + ')>fortune(P' + step.data.converted.power + ')';
+            break;
+          case 'ATTR_COUNTER':
+            for (const c of (step.data.countered || [])) {
+              html += c.owner + '.' + c.type + ' EP=' + c.effectivePower;
+              if (c.counterBonus) html += ' [C>M+10%]';
+              if (c.clarityReduced) html += ' [P>C-clarity]';
+              html += ' ';
+            }
+            break;
+          case 'OPPOSITION_RESULT':
+            for (const r of (step.data.resolved || [])) {
+              const status = r.suppressed ? '[X]' : r.converted ? '[R]' : r.voidReduced ? '[V]' : '';
+              html += '<br>' + r.owner + ' ' + r.type + ' P' + r.power + '>' + r.effectivePower + status;
+            }
+            break;
+          case 'CARD_SELECTED':
+            if (step.data.top3) {
+              html += 'top: ' + step.data.top3.map(u => u.card + '=' + u.score.toFixed(1)).join(', ');
+            }
+            break;
+          default: break;
+        }
+        html += '</div>';
+      }
+      html += '</div>';
     }
 
     overlay.innerHTML = html;
-
-    // 显示
     overlay.classList.remove('fpk-fade-out');
     overlay.style.display = 'block';
 
-    // 自动隐藏
-    if (_fpkTimer) clearTimeout(_fpkTimer);
-    _fpkTimer = setTimeout(() => {
+    // 仅点击关闭，不自动隐藏
+    if (_fpkTimer) { clearTimeout(_fpkTimer); _fpkTimer = null; }
+    overlay.style.pointerEvents = 'auto';
+    overlay.onclick = function () {
       overlay.classList.add('fpk-fade-out');
-      setTimeout(() => { overlay.style.display = 'none'; }, 500);
-    }, 2500);
+      setTimeout(() => {
+        overlay.style.display = 'none';
+        overlay.style.pointerEvents = 'none';
+      }, 400);
+      overlay.onclick = null;
+    };
+  }
+
+  // 牌面字符串 → 可视化显示
+  function _cardToDisplay(cardStr) {
+    if (!cardStr || cardStr.length < 2) return cardStr || '?';
+    const rank = cardStr[0];
+    const suitChar = cardStr[1];
+    const SUIT_SYMBOLS = { h: '♥', d: '♦', c: '♣', s: '♠' };
+    const SUIT_COLORS = { h: '#e74c3c', d: '#3498db', c: '#2ecc71', s: '#ecf0f1' };
+    const suit = SUIT_SYMBOLS[suitChar] || suitChar;
+    const color = SUIT_COLORS[suitChar] || '#fff';
+    return '<span class="fpk-card" style="color:' + color + '">' + rank + suit + '</span>';
   }
 
   function hideForcePK() {

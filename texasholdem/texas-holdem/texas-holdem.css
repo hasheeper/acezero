@@ -1281,32 +1281,56 @@ body {
   opacity: 0.7;
 }
 
-.skill-btn.rino-skill:hover:not(:disabled) {
-  border-color: var(--magic-highlight);
+/* -- Moirai (天命) -- */
+.skill-btn.moirai-skill {
+  border-color: rgba(155, 89, 182, 0.3);
+  background: rgba(155, 89, 182, 0.08);
+}
+.skill-btn.moirai-skill .skill-name { color: #c39bd3; }
+.skill-btn.moirai-skill .skill-icon { color: #9B59B6; }
+.skill-btn.moirai-skill:hover:not(:disabled) {
+  border-color: #9B59B6;
   background: rgba(155, 89, 182, 0.2);
-  box-shadow: 0 0 12px var(--magic-glow);
+  box-shadow: 0 0 12px rgba(155, 89, 182, 0.4);
   transform: translateY(-2px);
 }
 
-.skill-btn.rino-skill:active:not(:disabled) {
-  transform: translateY(0);
-  box-shadow: 0 0 20px var(--magic-glow), inset 0 0 10px rgba(155, 89, 182, 0.3);
+/* -- Chaos (狂厄) -- */
+.skill-btn.chaos-skill {
+  border-color: rgba(231, 76, 60, 0.3);
+  background: rgba(231, 76, 60, 0.08);
+}
+.skill-btn.chaos-skill .skill-name { color: #e88; }
+.skill-btn.chaos-skill .skill-icon { color: #e74c3c; }
+.skill-btn.chaos-skill:hover:not(:disabled) {
+  border-color: #e74c3c;
+  background: rgba(231, 76, 60, 0.2);
+  box-shadow: 0 0 12px rgba(231, 76, 60, 0.4);
+  transform: translateY(-2px);
 }
 
-.skill-btn.kazu-skill {
-  border-color: rgba(200, 200, 200, 0.2);
-  background: rgba(200, 200, 200, 0.05);
+/* -- Psyche (灵视) -- */
+.skill-btn.psyche-skill {
+  border-color: rgba(52, 152, 219, 0.3);
+  background: rgba(52, 152, 219, 0.08);
+}
+.skill-btn.psyche-skill .skill-name { color: #7ec8e3; }
+.skill-btn.psyche-skill .skill-icon { color: #3498db; }
+.skill-btn.psyche-skill:hover:not(:disabled) {
+  border-color: #3498db;
+  background: rgba(52, 152, 219, 0.2);
+  box-shadow: 0 0 12px rgba(52, 152, 219, 0.4);
+  transform: translateY(-2px);
 }
 
-.skill-btn.kazu-skill .skill-name {
-  color: #bbb;
+/* -- Void (虚无) -- */
+.skill-btn.void-skill {
+  border-color: rgba(149, 165, 166, 0.3);
+  background: rgba(149, 165, 166, 0.06);
 }
-
-.skill-btn.kazu-skill .skill-icon {
-  color: #ddd;
-}
-
-.skill-btn.kazu-skill:hover:not(:disabled) {
+.skill-btn.void-skill .skill-name { color: #bbb; }
+.skill-btn.void-skill .skill-icon { color: #bdc3c7; }
+.skill-btn.void-skill:hover:not(:disabled) {
   border-color: rgba(255, 255, 255, 0.4);
   background: rgba(255, 255, 255, 0.1);
   box-shadow: 0 0 12px rgba(255, 255, 255, 0.15);
@@ -1321,13 +1345,24 @@ body {
 }
 
 .skill-btn.skill-active {
-  border-color: var(--magic-highlight) !important;
-  background: rgba(155, 89, 182, 0.25) !important;
-  box-shadow: 0 0 12px var(--magic-glow), inset 0 0 8px rgba(155, 89, 182, 0.2) !important;
   animation: skillActivePulse 1.5s ease-in-out infinite;
 }
-
-.skill-btn.skill-active.kazu-skill {
+.skill-btn.skill-active.moirai-skill {
+  border-color: #9B59B6 !important;
+  background: rgba(155, 89, 182, 0.25) !important;
+  box-shadow: 0 0 12px rgba(155, 89, 182, 0.5), inset 0 0 8px rgba(155, 89, 182, 0.2) !important;
+}
+.skill-btn.skill-active.chaos-skill {
+  border-color: #e74c3c !important;
+  background: rgba(231, 76, 60, 0.25) !important;
+  box-shadow: 0 0 12px rgba(231, 76, 60, 0.5), inset 0 0 8px rgba(231, 76, 60, 0.2) !important;
+}
+.skill-btn.skill-active.psyche-skill {
+  border-color: #3498db !important;
+  background: rgba(52, 152, 219, 0.25) !important;
+  box-shadow: 0 0 12px rgba(52, 152, 219, 0.5), inset 0 0 8px rgba(52, 152, 219, 0.2) !important;
+}
+.skill-btn.skill-active.void-skill {
   border-color: rgba(255, 255, 255, 0.5) !important;
   background: rgba(255, 255, 255, 0.12) !important;
   box-shadow: 0 0 12px rgba(255, 255, 255, 0.2), inset 0 0 8px rgba(255, 255, 255, 0.1) !important;
@@ -1336,6 +1371,25 @@ body {
 @keyframes skillActivePulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.75; }
+}
+
+.skill-tier {
+  position: absolute;
+  top: 2px;
+  left: 3px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+.skill-tier.tier-1 {
+  color: #f1c40f;
+  background: rgba(241, 196, 15, 0.15);
+  border: 1px solid rgba(241, 196, 15, 0.3);
+  text-shadow: 0 0 4px rgba(241, 196, 15, 0.5);
 }
 
 .skill-divider {
@@ -1520,7 +1574,7 @@ body {
 }
 
 /* =========================================================
-   Force PK Overlay — 发牌时力量对抗展示（按玩家分组）
+   命运裁决 Overlay — 候选牌排行展示
 ========================================================= */
 #force-pk-overlay {
   position: fixed;
@@ -1528,21 +1582,20 @@ body {
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 1100;
-  background: radial-gradient(ellipse at center, rgba(15, 12, 30, 0.97) 0%, rgba(5, 5, 10, 0.95) 100%);
-  border: 1px solid rgba(207, 181, 59, 0.25);
-  border-radius: 12px;
-  padding: 14px 20px 12px;
-  min-width: 280px;
-  max-width: 480px;
-  text-align: center;
+  background: rgba(8, 6, 16, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 10px 12px 8px;
+  min-width: 260px;
+  max-width: 340px;
   font-family: 'JetBrains Mono', monospace;
-  box-shadow: 0 0 40px rgba(155, 89, 182, 0.2), 0 0 80px rgba(0, 0, 0, 0.6);
-  animation: fpkAppear 0.4s ease-out;
-  pointer-events: none;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.7);
+  animation: fpkAppear 0.3s ease-out;
+  cursor: pointer;
 }
 
 @keyframes fpkAppear {
-  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.85); }
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.92); }
   100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
@@ -1555,85 +1608,174 @@ body {
   100% { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
 }
 
-.fpk-title {
-  font-family: 'Cinzel', serif;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--gold-main);
-  letter-spacing: 2px;
-  margin-bottom: 8px;
-  text-transform: uppercase;
-}
-
-.fpk-players {
+/* ---- 力量标签 ---- */
+.fpk-forces {
   display: flex;
-  gap: 8px;
-  justify-content: center;
   flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+  justify-content: center;
 }
 
-.fpk-player-card {
-  min-width: 90px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0, 0, 0, 0.3);
+.fpk-tag {
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
 }
 
-.fpk-player-ally  { border-color: rgba(155, 89, 182, 0.35); }
-.fpk-player-enemy { border-color: rgba(231, 76, 60, 0.3); }
-.fpk-player-system { border-color: rgba(241, 196, 15, 0.3); }
+.fpk-tag-good    { color: #9B59B6; background: rgba(155, 89, 182, 0.12); }
+.fpk-tag-bad     { color: #e74c3c; background: rgba(231, 76, 60, 0.12); }
+.fpk-tag-neutral { color: #888;    background: rgba(255, 255, 255, 0.05); }
 
-.fpk-player-name {
+/* ---- 牌面通用 ---- */
+.fpk-card {
+  font-weight: 700;
+}
+
+/* ---- 候选牌排行列表 ---- */
+.fpk-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.fpk-row {
+  display: grid;
+  grid-template-columns: 24px 28px 42px 1fr 36px 16px;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px;
+  border-radius: 3px;
+  font-size: 10px;
+  color: #777;
+}
+
+/* \u80dc\u8d1f\u989c\u8272 */
+.fpk-row-win {
+  border-left: 2px solid rgba(46, 204, 113, 0.4);
+}
+
+.fpk-row-lose {
+  border-left: 2px solid rgba(231, 76, 60, 0.3);
+}
+
+.fpk-row-selected.fpk-row-win {
+  background: rgba(46, 204, 113, 0.1);
+  color: #ddd;
+}
+
+.fpk-row-selected.fpk-row-lose {
+  background: rgba(231, 76, 60, 0.1);
+  color: #ddd;
+}
+
+.fpk-rank {
+  font-size: 9px;
+  color: #555;
+  text-align: right;
+}
+
+.fpk-row-selected.fpk-row-win .fpk-rank { color: #2ecc71; }
+.fpk-row-selected.fpk-row-lose .fpk-rank { color: #e74c3c; }
+
+.fpk-row-card {
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.fpk-row-score {
+  font-size: 9px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: #888;
+}
+
+.fpk-row-selected .fpk-row-score {
+  color: #ccc;
+}
+
+.fpk-row-bar {
+  display: block;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.fpk-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  min-width: 2px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.fpk-bar-win {
+  background: rgba(46, 204, 113, 0.35);
+}
+
+.fpk-bar-lose {
+  background: rgba(231, 76, 60, 0.3);
+}
+
+.fpk-row-selected .fpk-bar-win {
+  background: #2ecc71;
+}
+
+.fpk-row-selected .fpk-bar-lose {
+  background: #e74c3c;
+}
+
+.fpk-row-prob {
+  font-size: 8px;
+  text-align: right;
+  color: #555;
+  font-variant-numeric: tabular-nums;
+}
+
+.fpk-row-selected.fpk-row-win .fpk-row-prob { color: #2ecc71; }
+.fpk-row-selected.fpk-row-lose .fpk-row-prob { color: #e74c3c; }
+
+.fpk-row-pick {
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  margin-bottom: 3px;
 }
 
-.fpk-player-ally .fpk-player-name  { color: #9B59B6; }
-.fpk-player-enemy .fpk-player-name { color: #e74c3c; }
-.fpk-player-system .fpk-player-name { color: #f1c40f; }
+.fpk-row-win .fpk-row-pick { color: #2ecc71; }
+.fpk-row-lose .fpk-row-pick { color: #e74c3c; }
 
-.fpk-force-line {
-  font-size: 9px;
-  color: #999;
-  line-height: 1.6;
-}
-
-.fpk-power {
-  color: #ccc;
-  font-weight: 700;
-}
-
-.fpk-player-total {
-  font-size: 18px;
-  font-weight: 700;
-  margin-top: 2px;
-}
-
-.fpk-player-ally .fpk-player-total  { color: #9B59B6; text-shadow: 0 0 10px rgba(155, 89, 182, 0.4); }
-.fpk-player-enemy .fpk-player-total { color: #e74c3c; text-shadow: 0 0 10px rgba(231, 76, 60, 0.4); }
-.fpk-player-system .fpk-player-total { color: #f1c40f; text-shadow: 0 0 10px rgba(241, 196, 15, 0.4); }
-
-.fpk-result {
-  margin-top: 8px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  padding: 4px 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.fpk-win     { color: #9B59B6; }
-.fpk-lose    { color: #e74c3c; }
-.fpk-neutral { color: #888; }
-
-.fpk-style {
-  font-size: 9px;
+/* ---- Debug 面板 ---- */
+.fpk-debug {
+  margin-top: 6px;
+  padding: 4px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.4);
+  text-align: left;
+  max-height: 160px;
+  overflow-y: auto;
+  font-size: 8px;
+  line-height: 1.5;
   color: #666;
-  margin-top: 2px;
+}
+
+.fpk-debug-title {
+  font-size: 9px;
+  font-weight: 700;
+  color: #f39c12;
+  margin-bottom: 2px;
+}
+
+.fpk-debug-step {
+  padding: 1px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.02);
+}
+
+.fpk-debug-stage {
+  color: #3498db;
+  font-weight: 700;
 }
 
 /* =========================================================
@@ -1755,37 +1897,152 @@ body {
   margin-top: 4px;
 }
 
-/* 透视结果浮层 */
+/* =========================================================
+   SVG 图标通用尺寸
+========================================================= */
+.fpk-icon {
+  width: 14px;
+  height: 14px;
+  vertical-align: middle;
+  display: inline-block;
+}
+
+.fpk-icon-title {
+  width: 12px;
+  height: 12px;
+  color: var(--gold-main, #cfb53b);
+}
+
+.fpk-icon-arrow {
+  width: 16px;
+  height: 16px;
+}
+
+.skill-svg-icon {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+/* =========================================================
+   Peek — 透视卡牌展示（使用 deck-of-cards 样式）
+========================================================= */
 .peek-result-overlay {
   position: fixed;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 1250;
-  background: rgba(10, 8, 5, 0.95);
+  background: rgba(10, 8, 5, 0.96);
   border: 1px solid rgba(230, 126, 34, 0.4);
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 16px 24px;
   text-align: center;
   font-family: 'JetBrains Mono', monospace;
   animation: fpkAppear 0.3s ease-out;
-  pointer-events: none;
-  min-width: 240px;
+  pointer-events: auto;
+  cursor: pointer;
+  min-width: 200px;
+  box-shadow: 0 0 40px rgba(230, 126, 34, 0.15), 0 0 80px rgba(0, 0, 0, 0.6);
+}
+
+.peek-result-header {
+  margin-bottom: 12px;
 }
 
 .peek-result-title {
-  font-size: 11px;
+  font-size: 12px;
   color: #e67e22;
   font-weight: 700;
-  margin-bottom: 8px;
 }
 
-.peek-result-content {
-  font-size: 13px;
-  color: #fff;
-  line-height: 1.8;
+.peek-result-mode {
+  font-size: 9px;
+  color: #888;
+  margin-top: 2px;
+  letter-spacing: 1px;
 }
 
-.peek-confidence-high { color: #e74c3c; font-weight: 700; }
-.peek-confidence-mid { color: #e67e22; }
-.peek-confidence-low { color: #888; }
+.peek-cards-row {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.peek-card-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+/* deck-of-cards 卡牌在透视面板中的覆盖样式 */
+.peek-deck-card {
+  position: relative !important;
+  left: 0 !important;
+  top: 0 !important;
+  transform: none !important;
+  display: inline-block !important;
+  width: 4.6rem !important;
+  height: 6.6rem !important;
+  transition: transform 0.2s, box-shadow 0.2s;
+  cursor: default;
+}
+
+.peek-deck-card:hover {
+  transform: translateY(-3px) !important;
+  box-shadow: 0 4px 20px rgba(230, 126, 34, 0.4), 0 4px 12px rgba(0,0,0,0.6) !important;
+}
+
+.peek-card-range-label {
+  font-size: 10px;
+  color: #a29bfe;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.peek-card-conf {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.peek-conf-high { color: #2ecc71; }
+.peek-conf-mid  { color: #e67e22; }
+.peek-conf-low  { color: #e74c3c; }
+.peek-conf-vague { color: #a29bfe; }
+
+/* =========================================================
+   Peek Targeting — 座位高亮（选择透视目标时）
+========================================================= */
+.seat.peek-targetable {
+  cursor: pointer !important;
+  animation: peekTargetPulse 1.2s ease-in-out infinite;
+  z-index: 100;
+}
+
+.seat.peek-targetable::after {
+  content: '[透视]';
+  position: absolute;
+  bottom: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  color: #e67e22;
+  font-family: 'JetBrains Mono', monospace;
+  white-space: nowrap;
+  text-shadow: 0 0 6px rgba(230, 126, 34, 0.5);
+  pointer-events: none;
+}
+
+@keyframes peekTargetPulse {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(230, 126, 34, 0.3), inset 0 0 4px rgba(230, 126, 34, 0.1);
+    border-color: rgba(230, 126, 34, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(230, 126, 34, 0.5), inset 0 0 8px rgba(230, 126, 34, 0.15);
+    border-color: rgba(230, 126, 34, 0.7);
+  }
+}

@@ -17,7 +17,7 @@
  * 时髦命运(Style Bias): 不改变谁赢，改变怎么赢
  *   顺子/同花 >> 对子，听牌状态额外加分，连续同牌型惩罚
  *
- * 空白因子(blank) → 绝对优先，打碎一切命运回归纯随机
+ * 现实(purge_all) → 绝对优先，打碎一切命运回归纯随机
  */
 
 (function (global) {
@@ -60,6 +60,10 @@
       // 是否启用
       this.enabled = true;
 
+      // 调试模式
+      this.debugMode = false;
+      this.debugTimeline = [];  // 每次 selectCard 的完整时间线
+
       // 时髦命运 (Style Bias)
       this.styleBias = true;           // 总开关
       this.styleIntensity = 1.0;       // 强度倍率 (0~2)
@@ -80,22 +84,38 @@
      * @param {Array} currentBoard - 当前公共牌
      * @param {Array} players - 玩家数组 [{ id, cards, folded }]
      * @param {Array} forces - 当前生效的力列表（由 SkillSystem 提供）
-     * @param {object} options - { mode: 'best'|'weighted', rinoPlayerId: 0 }
+     * @param {object} options - { rinoPlayerId: 0 }
      * @returns {object} { card, meta }
      */
     selectCard(deckCards, currentBoard, players, forces, options) {
       options = options || {};
-      const mode = options.mode || 'best';
       const rinoPlayerId = options.rinoPlayerId != null ? options.rinoPlayerId : 0;
 
+      // ---- 调试时间线 ----
+      if (this.debugMode) {
+        this.debugTimeline = [];
+        this._debugPush('ROUND_START', {
+          phase: options.phase || '?',
+          deckRemaining: deckCards.length,
+          boardCards: currentBoard.length,
+          inputForces: forces.map(f => ({
+            owner: f.ownerName || f.ownerId,
+            type: f.type, attr: f.attr, tier: f.tier,
+            power: f.power, activation: f.activation, skillKey: f.skillKey
+          }))
+        });
+      }
+
       if (!this.enabled) {
+        if (this.debugMode) this._debugPush('ENGINE_DISABLED', { result: 'random' });
         return this._randomSelect(deckCards);
       }
 
-      // ---- 空白因子检查（绝对优先） ----
-      const hasBlank = forces.some(f => f.type === 'blank');
-      if (hasBlank) {
-        this._log('BLANK_FACTOR_OVERRIDE', { message: 'Destiny shattered back to chaos' });
+      // ---- purge_all 检查（现实：绝对优先，打碎一切命运） ----
+      const hasPurge = forces.some(f => f.type === 'purge_all');
+      if (hasPurge) {
+        this._log('PURGE_ALL_OVERRIDE', { message: 'Reality override — destiny shattered back to chaos' });
+        if (this.debugMode) this._debugPush('PURGE_ALL', { message: '现实发动 → 全场归零，纯随机' });
         return this._randomSelect(deckCards);
       }
 
@@ -115,12 +135,12 @@
         });
       }
 
-      // 过滤掉非发牌力（sense, foresight 等），但保留 meta 力（anchor, null_field）
+      // 过滤掉非发牌力（sense, peek 等），保留 meta 力（null_field, void_shield, reversal）
       const dealForces = enhancedForces.filter(f =>
         f.type === 'fortune' || f.type === 'curse' || f.type === 'backlash'
       );
       const metaForces = enhancedForces.filter(f =>
-        f.type === 'fortune_anchor' || f.type === 'null_field'
+        f.type === 'null_field' || f.type === 'void_shield' || f.type === 'reversal'
       );
 
       // 如果没有任何力在生效，纯随机
@@ -139,16 +159,72 @@
         return this._randomSelect(deckCards);
       }
 
+      if (this.debugMode) {
+        this._debugPush('UNIVERSES', { count: universes.length });
+      }
+
       // ---- 权重叠加：为每个宇宙计算命运分 ----
       // 传入 dealForces + metaForces，opposition 需要看到 meta 力
       this._calculateDestinyScores(universes, dealForces.concat(metaForces));
 
-      // ---- 选牌策略 ----
-      let selectedUniverse;
-      if (mode === 'weighted') {
-        selectedUniverse = this._selectByWeightedRandom(universes);
-      } else {
-        selectedUniverse = this._selectByHighestDestiny(universes);
+      // ---- 选牌策略：始终使用加权概率 ----
+      const sorted = [...universes].sort((a, b) => b.destinyScore - a.destinyScore);
+
+      // 计算每张牌的概率（softmax）
+      const temperature = 1.0;
+      const scores = universes.map(u => u.destinyScore);
+      const maxScore = Math.max(...scores);
+      const weights = universes.map(u => Math.exp((u.destinyScore - maxScore) / temperature));
+      const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+      // 为 sorted 数组计算概率
+      const sortedProbs = sorted.map(u => {
+        const idx = universes.indexOf(u);
+        return weights[idx] / totalWeight;
+      });
+
+      let selectedUniverse = this._selectByWeightedRandom(universes);
+
+      // 找出选中牌在排序中的位置
+      const selectedRank = sorted.findIndex(u => u.card === selectedUniverse.card);
+
+      // 构建 top candidates 列表（前5名 + 选中的牌如果不在前5）
+      const topN = 5;
+      const topCandidates = sorted.slice(0, topN).map((u, i) => ({
+        card: cardToSolverString(u.card),
+        score: u.destinyScore,
+        prob: Math.round(sortedProbs[i] * 1000) / 10,
+        selected: u.card === selectedUniverse.card,
+        rinoWins: u.winnerIds.includes(rinoPlayerId)
+      }));
+      // 如果选中的牌不在 top5，追加到末尾
+      if (selectedRank >= topN) {
+        const selIdx = universes.indexOf(selectedUniverse);
+        topCandidates.push({
+          card: cardToSolverString(selectedUniverse.card),
+          score: selectedUniverse.destinyScore,
+          prob: Math.round((weights[selIdx] / totalWeight) * 1000) / 10,
+          selected: true,
+          rank: selectedRank + 1,
+          rinoWins: selectedUniverse.winnerIds.includes(rinoPlayerId)
+        });
+      }
+
+      if (this.debugMode) {
+        this._debugPush('CARD_SELECTED', {
+          card: cardToSolverString(selectedUniverse.card),
+          destinyScore: selectedUniverse.destinyScore,
+          styleBonus: selectedUniverse.styleBonus || 0,
+          breakdown: selectedUniverse.forceBreakdown,
+          rank: selectedRank + 1,
+          totalCandidates: universes.length,
+          top3: sorted.slice(0, 3).map(u => ({
+            card: cardToSolverString(u.card), score: u.destinyScore,
+            style: u.styleBonus || 0, breakdown: u.forceBreakdown
+          })),
+          bottom3: sorted.slice(-3).map(u => ({
+            card: cardToSolverString(u.card), score: u.destinyScore
+          }))
+        });
       }
 
       // ---- 记录赢家牌型（反单调系统） ----
@@ -162,18 +238,22 @@
           ownerId: f.ownerId,
           owner: f.ownerName || f.ownerId,
           type: f.type,
-          level: f.level,
+          attr: f.attr,
+          tier: f.tier,
           power: f.power
         })),
         totalUniverses: universes.length,
         selectedCard: cardToSolverString(selectedUniverse.card),
+        selectedRank: selectedRank + 1,
         destinyScore: selectedUniverse.destinyScore,
         styleBonus: selectedUniverse.styleBonus || 0,
         forceBreakdown: selectedUniverse.forceBreakdown,
+        topCandidates: topCandidates,
         winnerIds: selectedUniverse.winnerIds,
         scores: selectedUniverse.scores,
         handDescriptions: selectedUniverse.handDescriptions,
-        dramaticShift: this._calculateDramaticShift(universes, selectedUniverse, rinoPlayerId)
+        dramaticShift: this._calculateDramaticShift(universes, selectedUniverse, rinoPlayerId),
+        debugTimeline: this.debugMode ? [...this.debugTimeline] : null
       };
 
       this._log('DESTINY_SELECT', {
@@ -314,9 +394,37 @@
         effectivePower: f.power
       }));
 
+      if (this.debugMode) {
+        this._debugPush('OPPOSITION_START', {
+          forces: resolved.map(f => ({
+            owner: f.ownerName || f.ownerId, type: f.type,
+            attr: f.attr, tier: f.tier, power: f.power, activation: f.activation
+          }))
+        });
+      }
+
+      // ======== 阶级压制阶段（T1 优先结算） ========
+      this._applyTierSuppression(resolved);
+
+      if (this.debugMode) {
+        const suppressed = resolved.filter(f => f._suppressed);
+        if (suppressed.length > 0) {
+          this._debugPush('TIER_SUPPRESSION', {
+            suppressed: suppressed.map(f => ({
+              owner: f.ownerName || f.ownerId, type: f.type,
+              suppressedBy: f._suppressedBy
+            }))
+          });
+        }
+      }
+
+      // ======== 绝缘 (void_shield) 阶段 ========
+      // Void T2 被动：敌方 Moirai/Chaos 效果减半
+      this._applyInsulation(resolved);
+
       // 按类型分组（只处理 fortune 和 curse 的对抗）
-      const fortuneForces = resolved.filter(f => f.type === 'fortune');
-      const curseForces = resolved.filter(f => f.type === 'curse');
+      const fortuneForces = resolved.filter(f => f.type === 'fortune' && !f._suppressed);
+      const curseForces = resolved.filter(f => f.type === 'curse' && !f._suppressed);
 
       // ---- Fortune 对抗 ----
       // 分为玩家方(ownerId===0)和NPC方
@@ -325,59 +433,128 @@
       // ---- Curse 对抗（如果有多方诅咒） ----
       this._resolveTypeOpposition(curseForces);
 
-      // ---- 主动fortune vs 敌方被动fortune 的额外压制 ----
-      // 玩家的主动fortune可以削弱NPC的被动fortune
+      // ======== T2/T3 属性克制加成 ========
+      // Chaos > Moirai: curse 对抗 fortune 时获得 10% 克制加成
+      const COUNTER_BONUS = 0.10;
+      for (const cf of curseForces) {
+        if (cf._suppressed) continue;
+        // 只在存在对立 fortune 时生效（拔河场景）
+        const hasOpposingFortune = fortuneForces.some(ff => !ff._suppressed && ff.ownerId !== cf.ownerId);
+        if (hasOpposingFortune) {
+          cf.effectivePower = Math.round(cf.effectivePower * (1 + COUNTER_BONUS) * 10) / 10;
+          cf._counterBonus = true;
+        }
+      }
+
+      // Psyche > Chaos: 拥有 psyche 信息技能的一方，削弱敌方 curse
+      // 洞察(sense)被动 → -15%，透视(peek)主动 → -25%
+      const psycheInfoForces = resolved.filter(f => !f._suppressed && (f.type === 'sense' || f.type === 'peek' || f.effect === 'sense' || f.effect === 'peek'));
+      if (psycheInfoForces.length > 0) {
+        const psycheOwnerIds = new Set(psycheInfoForces.map(f => f.ownerId));
+        const hasActivePeek = psycheInfoForces.some(f => f.type === 'peek' || f.effect === 'peek');
+        const clarityReduction = hasActivePeek ? 0.25 : 0.15;
+        for (const cf of curseForces) {
+          if (cf._suppressed) continue;
+          // 只削弱敌方的 curse（不削弱自己的）
+          if (psycheOwnerIds.has(cf.ownerId)) continue;
+          cf.effectivePower = Math.round(cf.effectivePower * (1 - clarityReduction) * 10) / 10;
+          cf._clarityReduced = true;
+        }
+      }
+
+      if (this.debugMode) {
+        const countered = resolved.filter(f => f._counterBonus || f._clarityReduced);
+        if (countered.length > 0) {
+          this._debugPush('ATTR_COUNTER', {
+            countered: countered.map(f => ({
+              owner: f.ownerName || f.ownerId, type: f.type,
+              effectivePower: f.effectivePower,
+              counterBonus: !!f._counterBonus,
+              clarityReduced: !!f._clarityReduced
+            }))
+          });
+        }
+      }
+
+      // ---- 主动 vs 被动压制：主动技能削弱敌方被动技能 ----
       const playerActiveF = fortuneForces.filter(f => f.ownerId === 0 && f.activation === 'active');
       const npcPassiveF = fortuneForces.filter(f => f.ownerId !== 0 && f.activation === 'passive');
       if (playerActiveF.length > 0 && npcPassiveF.length > 0) {
-        const playerMaxLevel = Math.max(...playerActiveF.map(f => f.level));
+        // 主动技能 tier 越低（越强），压制越大
+        const bestTier = Math.min(...playerActiveF.map(f => f.tier));
         for (const nf of npcPassiveF) {
-          // 主动技能等级 > 被动技能等级 → 被动效果被进一步削弱
-          if (playerMaxLevel > nf.level) {
-            const suppressRatio = Math.max(0.1, 1 - (playerMaxLevel - nf.level) * 0.25);
+          if (bestTier < nf.tier) {
+            const suppressRatio = Math.max(0.1, 1 - (nf.tier - bestTier) * 0.3);
             nf.effectivePower = Math.round(nf.effectivePower * suppressRatio * 10) / 10;
           }
         }
       }
 
-      // NPC的主动fortune也可以削弱玩家的被动fortune（如果有的话）
+      // NPC的主动fortune也可以削弱玩家的被动fortune
       const npcActiveF = fortuneForces.filter(f => f.ownerId !== 0 && f.activation === 'active');
       const playerPassiveF = fortuneForces.filter(f => f.ownerId === 0 && f.activation === 'passive');
       if (npcActiveF.length > 0 && playerPassiveF.length > 0) {
-        const npcMaxLevel = Math.max(...npcActiveF.map(f => f.level));
+        const bestTier = Math.min(...npcActiveF.map(f => f.tier));
         for (const pf of playerPassiveF) {
-          if (npcMaxLevel > pf.level) {
-            const suppressRatio = Math.max(0.1, 1 - (npcMaxLevel - pf.level) * 0.25);
+          if (bestTier < pf.tier) {
+            const suppressRatio = Math.max(0.1, 1 - (pf.tier - bestTier) * 0.3);
             pf.effectivePower = Math.round(pf.effectivePower * suppressRatio * 10) / 10;
           }
         }
       }
 
-      // ---- 命运之锚 (fortune_anchor): 削弱敌方被动 fortune ----
-      const anchorForces = resolved.filter(f => f.type === 'fortune_anchor');
-      if (anchorForces.length > 0) {
-        const anchorLevel = Math.max(...anchorForces.map(f => f.level));
-        // 每级削弱敌方被动fortune 15%
-        const anchorReduction = Math.min(0.8, anchorLevel * 0.15);
-        for (const nf of npcPassiveF) {
-          nf.effectivePower = Math.round(nf.effectivePower * (1 - anchorReduction) * 10) / 10;
-        }
-        // 同样削弱敌方被动 curse
-        const npcPassiveCurse = curseForces.filter(f => f.ownerId !== 0 && f.activation === 'passive');
-        for (const nc of npcPassiveCurse) {
-          nc.effectivePower = Math.round(nc.effectivePower * (1 - anchorReduction) * 10) / 10;
+      // ---- 屏蔽 (null_field): Void T3 被动，削弱所有被动力量 ----
+      const nullFieldForces = resolved.filter(f => f.type === 'null_field' && !f._suppressed);
+      if (nullFieldForces.length > 0) {
+        // 屏蔽力量固定为 power=8，削弱所有被动力量 30%
+        const nullReduction = 0.3;
+        for (const f of resolved) {
+          if (f._suppressed) continue;
+          if (f.activation === 'passive' && (f.type === 'fortune' || f.type === 'curse')) {
+            f.effectivePower = Math.round(f.effectivePower * (1 - nullReduction) * 10) / 10;
+          }
         }
       }
 
-      // ---- 概率死角 (null_field): Kazu 被动，削弱所有被动力量 ----
-      const nullFieldForces = resolved.filter(f => f.type === 'null_field');
-      if (nullFieldForces.length > 0) {
-        const nullLevel = Math.max(...nullFieldForces.map(f => f.level));
-        // 每级削弱所有被动力量 20%（包括己方）
-        const nullReduction = Math.min(0.6, nullLevel * 0.2);
+      // ---- 真理 (reversal): Psyche T1，拦截 Chaos 系效果并逆转为己方 fortune ----
+      const reversalForces = resolved.filter(f => f.type === 'reversal' && !f._suppressed);
+      if (reversalForces.length > 0) {
+        const reversalOwner = reversalForces[0]; // 取第一个 reversal 持有者
+        const CONVERSION_RATIO = 0.7; // 转化率：70% 的 curse power 变为 fortune
+
         for (const f of resolved) {
-          if (f.activation === 'passive' && (f.type === 'fortune' || f.type === 'curse')) {
-            f.effectivePower = Math.round(f.effectivePower * (1 - nullReduction) * 10) / 10;
+          if (f._suppressed) continue;
+          if (f.attr === 'chaos' && f.ownerId !== reversalOwner.ownerId) {
+            // 拦截：记录原始 curse power，然后压制
+            const stolenPower = Math.round(f.effectivePower * CONVERSION_RATIO * 10) / 10;
+            f.effectivePower = 0;
+            f._suppressed = true;
+            f._suppressedBy = 'reversal';
+            f._reversedPower = stolenPower;
+
+            // 逆转：创建一个新的 fortune force 归属于 reversal 持有者
+            resolved.push({
+              ownerId: reversalOwner.ownerId,
+              ownerName: reversalOwner.ownerName,
+              type: 'fortune',
+              power: stolenPower,
+              effectivePower: stolenPower,
+              activation: 'active',
+              source: 'reversal',
+              tier: 1,
+              attr: 'psyche',
+              skillKey: 'axiom_converted',
+              _converted: true,
+              _convertedFrom: f.skillKey || f.type
+            });
+
+            if (this.debugMode) {
+              this._debugPush('REVERSAL_CONVERT', {
+                intercepted: { owner: f.ownerName || f.ownerId, type: f.type, originalPower: f.power },
+                converted: { owner: reversalOwner.ownerName, type: 'fortune', power: stolenPower },
+                ratio: CONVERSION_RATIO
+              });
+            }
           }
         }
       }
@@ -388,7 +565,148 @@
         this.combatFormula.applyVoidReduction(resolved);
       }
 
+      if (this.debugMode) {
+        this._debugPush('OPPOSITION_RESULT', {
+          resolved: resolved.map(f => ({
+            owner: f.ownerName || f.ownerId, type: f.type, attr: f.attr,
+            power: f.power, effectivePower: f.effectivePower,
+            suppressed: !!f._suppressed, suppressedBy: f._suppressedBy || null,
+            converted: !!f._converted, convertedFrom: f._convertedFrom || null,
+            voidReduced: !!f._voidReduced
+          }))
+        });
+      }
+
       return resolved;
+    }
+
+    /**
+     * 阶级压制：T1 终极技优先结算
+     * 规则：
+     *   1. suppressTiers: 无效化同属性的低阶技能 (天命 → 无效化小吉/大吉)
+     *   2. suppressAttr: 无效化特定属性的所有技能 (真理 → 净化 Chaos)
+     *   3. suppressAll: 清除所有非 Void 技能 (现实 → 物理回滚)
+     *   4. T1 vs T1 巅峰对决：power 碰撞，属性克制给 1.5x 优势
+     *   5. cannotAffect: 某些属性免疫压制 (真理无法干涉天命)
+     */
+    _applyTierSuppression(resolved) {
+      const t1Forces = resolved.filter(f => f.tier === 1 && !f._suppressed);
+      if (t1Forces.length === 0) return;
+
+      // 属性克制环 (用于 T1 vs T1)
+      const COUNTER = { chaos: 'moirai', moirai: 'psyche', psyche: 'chaos' };
+      const ADV_MULT = 1.5;
+
+      // 先处理 T1 vs T1 碰撞（不同阵营的 T1 互相对抗）
+      const playerT1 = t1Forces.filter(f => f.ownerId === 0);
+      const npcT1 = t1Forces.filter(f => f.ownerId !== 0);
+
+      if (playerT1.length > 0 && npcT1.length > 0) {
+        for (const pt1 of playerT1) {
+          for (const nt1 of npcT1) {
+            if (pt1._suppressed || nt1._suppressed) continue;
+
+            let pPower = pt1.effectivePower;
+            let nPower = nt1.effectivePower;
+
+            // 属性克制加成
+            if (pt1.attr && nt1.attr && COUNTER[pt1.attr] === nt1.attr) {
+              pPower = Math.round(pPower * ADV_MULT);
+            }
+            if (nt1.attr && pt1.attr && COUNTER[nt1.attr] === pt1.attr) {
+              nPower = Math.round(nPower * ADV_MULT);
+            }
+
+            // 碰撞：败者被压制
+            if (pPower > nPower) {
+              nt1.effectivePower = 0;
+              nt1._suppressed = true;
+              nt1._suppressedBy = pt1.skillKey;
+              // 胜者保留差值比例
+              pt1.effectivePower = Math.round(pt1.effectivePower * ((pPower - nPower) / pPower) * 10) / 10;
+            } else if (nPower > pPower) {
+              pt1.effectivePower = 0;
+              pt1._suppressed = true;
+              pt1._suppressedBy = nt1.skillKey;
+              nt1.effectivePower = Math.round(nt1.effectivePower * ((nPower - pPower) / nPower) * 10) / 10;
+            } else {
+              // 完全抵消
+              pt1.effectivePower = 0;
+              nt1.effectivePower = 0;
+              pt1._suppressed = true;
+              nt1._suppressed = true;
+            }
+          }
+        }
+      }
+
+      // 存活的 T1 执行压制效果
+      for (const t1 of t1Forces) {
+        if (t1._suppressed) continue;
+
+        // 1. suppressTiers: 无效化同属性的低阶技能
+        if (t1.suppressTiers) {
+          for (const f of resolved) {
+            if (f === t1 || f._suppressed) continue;
+            if (f.tier && t1.suppressTiers.indexOf(f.tier) >= 0) {
+              // 同属性才压制（天命只压制 Moirai 系的小吉/大吉）
+              if (f.attr === t1.attr) {
+                f.effectivePower = 0;
+                f._suppressed = true;
+                f._suppressedBy = t1.skillKey;
+              }
+            }
+          }
+        }
+
+        // 2. suppressAttr: 无效化特定属性的所有技能 (真理 vs Chaos)
+        if (t1.suppressAttr) {
+          for (const f of resolved) {
+            if (f === t1 || f._suppressed) continue;
+            if (f.attr === t1.suppressAttr) {
+              f.effectivePower = 0;
+              f._suppressed = true;
+              f._suppressedBy = t1.skillKey;
+            }
+          }
+        }
+
+        // 3. suppressAll: 清除所有非 Void 技能 (现实)
+        if (t1.suppressAll) {
+          for (const f of resolved) {
+            if (f === t1 || f._suppressed) continue;
+            if (f.attr !== 'void') {
+              f.effectivePower = 0;
+              f._suppressed = true;
+              f._suppressedBy = t1.skillKey;
+            }
+          }
+        }
+      }
+    }
+
+    /**
+     * 绝缘 (void_shield): Void T2 被动效果
+     * 敌方的 Moirai/Chaos 效果对绝缘持有者减半
+     */
+    _applyInsulation(resolved) {
+      const shieldForces = resolved.filter(f => f.type === 'void_shield' && !f._suppressed);
+      if (shieldForces.length === 0) return;
+
+      for (const shield of shieldForces) {
+        const shieldOwnerId = shield.ownerId;
+        // 找到针对此持有者的敌方 Moirai/Chaos forces
+        for (const f of resolved) {
+          if (f._suppressed) continue;
+          if (f.ownerId === shieldOwnerId) continue; // 己方不受影响
+          // 只减半 fortune (Moirai) 和 curse (Chaos) 效果
+          if (f.attr === 'moirai' || f.attr === 'chaos' ||
+              f.type === 'fortune' || f.type === 'curse') {
+            f.effectivePower = Math.round(f.effectivePower * 0.5 * 10) / 10;
+            f._insulationReduced = true;
+          }
+        }
+      }
     }
 
     /**
@@ -574,31 +892,25 @@
 
     // ========== 选牌策略 ==========
 
-    _selectByHighestDestiny(universes) {
-      let best = universes[0];
-      let bestScore = -Infinity;
-      for (const u of universes) {
-        if (u.destinyScore > bestScore) {
-          bestScore = u.destinyScore;
-          best = u;
-        }
-      }
-      return best;
-    }
-
     _selectByWeightedRandom(universes) {
-      const minScore = Math.min(...universes.map(u => u.destinyScore));
-      const shifted = universes.map(u => ({
-        universe: u,
-        weight: u.destinyScore - minScore + 1
-      }));
-      const totalWeight = shifted.reduce((sum, s) => sum + s.weight, 0);
+      // 使用指数加权（softmax）：分数差距越大，高分牌概率越高
+      // temperature=1.0：高分牌被强烈偏好，但仍有小概率抽到低分牌
+      // 例：分差10 → 高分牌概率约 e^10 ≈ 22000 倍
+      const temperature = 1.0;
+      const scores = universes.map(u => u.destinyScore);
+      const maxScore = Math.max(...scores);
+      // 指数加权（softmax-like），减去 maxScore 防止溢出
+      const weights = universes.map(u => {
+        const diff = (u.destinyScore - maxScore) / temperature;
+        return Math.exp(diff);
+      });
+      const totalWeight = weights.reduce((sum, w) => sum + w, 0);
       let roll = Math.random() * totalWeight;
-      for (const s of shifted) {
-        roll -= s.weight;
-        if (roll <= 0) return s.universe;
+      for (let i = 0; i < weights.length; i++) {
+        roll -= weights[i];
+        if (roll <= 0) return universes[i];
       }
-      return shifted[shifted.length - 1].universe;
+      return universes[universes.length - 1];
     }
 
     // ========== 内部方法 ==========
@@ -683,6 +995,15 @@
     _log(type, data) {
       if (this.onLog) this.onLog(type, data);
       console.log(`[MonteOfZero] ${type}`, data);
+    }
+
+    _debugPush(stage, data) {
+      if (!this.debugMode) return;
+      this.debugTimeline.push({
+        stage: stage,
+        timestamp: Date.now(),
+        data: data
+      });
     }
 
     // ========== 状态查询 ==========

@@ -1,15 +1,15 @@
 {
   "hero": {
     "gold": 500,
-    "vanguard": "KAZU",
-    "rearguard": "RINO"
-  },
-  "KAZU": {
-    "role": "vanguard",
-    "level": 3
-  },
-  "RINO": {
-    "role": "rearguard",
-    "level": 5
+    "KAZU": {
+      "level": 3,
+      "mana": 0,
+      "maxMana": 0
+    },
+    "RINO": {
+      "level": 5,
+      "mana": 100,
+      "maxMana": 100
+    }
   }
 }

@@ -49,18 +49,31 @@
   function classifyEntry(entry) {
     const type = entry.type || '';
 
-    // DELETE: 引擎内部噪音
+    // 优先保留有叙事价值的技能事件（必须在 SKILL_ 前缀删除规则之前）
+    // 玩家主动技能 = 命运干涉，叙事高光 (T0)
+    if (type === 'SKILL_USE') {
+      return { tier: 0, score: TIER_SCORES[0], action: 'keep' };
+    }
+    // NPC 技能 (T1)
+    if (type === 'NPC_SKILL') {
+      return { tier: 1, score: TIER_SCORES[1], action: 'keep' };
+    }
+    // 感知提示 (T1)
+    if (type === 'SENSE') {
+      return { tier: 1, score: TIER_SCORES[1], action: 'keep' };
+    }
+
+    // DELETE: 引擎内部噪音（具名列表）
     if (DELETE_TYPES.has(type)) {
       return { tier: -1, score: 0, action: 'delete' };
     }
-    // DELETE: 所有 MOZ_ 和 SKILL_ 前缀事件
+    // DELETE: 所有 MOZ_ 和 SKILL_ 前缀的引擎内部事件
     if (type.startsWith('MOZ_') || type.startsWith('SKILL_')) {
       return { tier: -1, score: 0, action: 'delete' };
     }
 
     // T0: 史诗级节点
     if (type === 'RESULT') {
-      // 摊牌结算 = 史诗
       return { tier: 0, score: TIER_SCORES[0], action: 'keep' };
     }
     if (type === 'SHOWDOWN') {
@@ -69,18 +82,6 @@
     // All-in 行为
     if (entry.isAllIn) {
       return { tier: 0, score: TIER_SCORES[0], action: 'keep' };
-    }
-    // 技能使用 (玩家主动技能 = 命运干涉，叙事高光)
-    if (type === 'SKILL_USE') {
-      return { tier: 0, score: TIER_SCORES[0], action: 'keep' };
-    }
-    // NPC 技能
-    if (type === 'NPC_SKILL') {
-      return { tier: 1, score: TIER_SCORES[1], action: 'keep' };
-    }
-    // 感知提示
-    if (type === 'SENSE') {
-      return { tier: 1, score: TIER_SCORES[1], action: 'keep' };
     }
 
     // T1: 关键交互
