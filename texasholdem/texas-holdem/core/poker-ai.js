@@ -320,9 +320,9 @@
       let adjustedStrength = Math.max(0, Math.min(100, rawStrength + noise));
       
       // 2.5 魔运自信加成：有魔运的AI感知到命运偏向自己，更不容易弃牌
-      // magicLevel 1~5 → +3~+15 的心理加成
+      // magicLevel 1~5 → +5~+25 的心理加成
       if (magicLevel > 0) {
-        adjustedStrength += magicLevel * 3;
+        adjustedStrength += magicLevel * 5;
         adjustedStrength = Math.min(100, adjustedStrength);
       }
       
@@ -563,8 +563,8 @@
       // magicLevel 1~5 → 阈值降低 5~25
       const magicReduction = (magicLevel || 0) * 5;
       // 翻牌前生存阈值大幅降低：便宜的跟注不应触发恐惧
-      const preflopDiscount = phase === 'preflop' ? 20 : 0;
-      const survivalThreshold = Math.max(10, 30 + pressureLevel * 15 - magicReduction - preflopDiscount);
+      const preflopDiscount = phase === 'preflop' ? 30 : 0;
+      const survivalThreshold = Math.max(5, 30 + pressureLevel * 15 - magicReduction - preflopDiscount);
       
       if (rawStrength < survivalThreshold && pressureLevel >= 1) {
         // 生存本能触发！
@@ -587,9 +587,9 @@
         }
         
         // 魔运降低弃牌率：有魔运的高手感知到命运偏向自己
-        // magicLevel 1~5 → foldChance × 0.85~0.45
+        // magicLevel 1~5 → foldChance × 0.75~0.25
         if (magicLevel > 0) {
-          foldChance *= Math.max(0.4, 1 - magicLevel * 0.11);
+          foldChance *= Math.max(0.2, 1 - magicLevel * 0.15);
         }
         
         // 如果正在诈唬，降低弃牌率（但诈唬面对巨注也应该放弃）
@@ -599,7 +599,9 @@
         
         // 翻牌前面对小注时大幅降低弃牌率（便宜的跟注应该看翻牌）
         if (phase === 'preflop' && pressureLevel <= 1) {
-          foldChance *= 0.25;
+          foldChance *= 0.12;
+        } else if (phase === 'preflop' && pressureLevel <= 2) {
+          foldChance *= 0.4;
         }
         
         // 情绪修正弃牌率：tilt/confident → 更不容易弃, fearful → 更容易弃
@@ -674,8 +676,9 @@
         return { action: ACTIONS.CALL, amount: toCall };
       }
       
-      // 弱牌：弃牌
-      if (adjustedStrength < this.risk.entryThreshold && !isBluffing) {
+      // 弱牌：弃牌（翻牌前门槛降低，鼓励看翻牌）
+      const effectiveEntry = phase === 'preflop' ? Math.max(10, this.risk.entryThreshold - 15) : this.risk.entryThreshold;
+      if (adjustedStrength < effectiveEntry && !isBluffing) {
         return { action: ACTIONS.FOLD, amount: 0 };
       }
       

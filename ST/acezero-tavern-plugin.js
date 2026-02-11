@@ -22,7 +22,7 @@
  *
  * ERA 变量结构（扁平，无外层包装）:
  * {
- *   "hero": { "gold": 500, "vanguard": "KAZU", "rearguard": "RINO" },
+ *   "hero": { "funds": 500, "vanguard": "KAZU", "rearguard": "RINO" },
  *   "KAZU": { "role": "vanguard", "level": 3 },
  *   "RINO": { "role": "rearguard", "level": 5 }
  * }
@@ -373,7 +373,8 @@
    * 从 ERA 变量中提取 hero 数据，按等级展开技能/特质/属性，
    * 与 AI 提供的战局 JSON 合并，输出完整 game-config
    *
-   * ERA 结构: { hero: { gold, KAZU: {level,mana,maxMana}, RINO: {...} } }
+   * ERA 结构: { hero: { funds, KAZU: {level,mana,maxMana}, RINO: {...} } }
+   * funds 单位 = 银弗 (1金弗 = 100银弗)
    * 战局 JSON 中 hero 字段指定本局的 vanguard/rearguard:
    *   { "hero": { "vanguard": "KAZU", "rearguard": "RINO" }, "seats": {...} }
    *   rearguard 可省略（无副手模式）
@@ -444,7 +445,7 @@
    * 从 hero 对象中提取角色名列表（排除 gold, attrs 等非角色键）
    */
   function _getHeroCharNames(hero) {
-    const reserved = new Set(['gold', 'attrs', '$meta', '$template']);
+    const reserved = new Set(['funds', 'gold', 'attrs', '$meta', '$template']);
     const names = [];
     for (const key in hero) {
       if (hero.hasOwnProperty(key) && !reserved.has(key) && typeof hero[key] === 'object' && hero[key] !== null) {
@@ -466,7 +467,7 @@
     if (!eraVars) return null;
 
     const hero = eraVars.hero || {};
-    const gold = hero.gold || 0;
+    const funds = hero.funds || 0;
     const charNames = _getHeroCharNames(hero);
 
     if (charNames.length === 0) return null;
@@ -479,7 +480,7 @@
 
     return `<ace0_hero_state>
 [主角状态]
-  金钱: ${gold}
+  资金: ${funds} 银弗
 [角色]
 ${charLines}
 </ace0_hero_state>`;

@@ -732,6 +732,23 @@
           icon: visual.icon, name: name, cost: skill.manaCost || null
         });
       }
+
+      // 无技能时隐藏 Grimoire 入口，防止打开空抽屉
+      this._updateGrimoireVisibility();
+    }
+
+    /**
+     * 根据是否有可用技能按钮，显示/隐藏 Grimoire 入口
+     */
+    _updateGrimoireVisibility() {
+      var magicKey = document.getElementById('magic-key');
+      var grimoire = document.getElementById('grimoire-player');
+      var hasSkills = this._buttons.size > 0;
+
+      if (magicKey) magicKey.style.display = hasSkills ? '' : 'none';
+      if (!hasSkills && grimoire) {
+        grimoire.classList.remove('active');
+      }
     }
 
     /**
