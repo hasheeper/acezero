@@ -845,57 +845,138 @@ body {
 }
 
 /* =========================================================
-   6. 底部统一仪表盘 (Game Dashboard)
+   6. Grimoire 技能抽屉 (Slide-up Drawer)
+========================================================= */
+#grimoire-player {
+  position: fixed;
+  bottom: 100px;
+  right: 0;
+  width: 100%;
+  height: 0;
+  background: rgba(12, 12, 14, 0.98);
+  border-top: 1px solid rgba(212, 175, 55, 0.2);
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
+  z-index: 850;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: height 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+#grimoire-player.active {
+  height: 260px;
+  box-shadow: 0 -20px 80px rgba(0,0,0,0.8);
+}
+
+.deck-header {
+  width: 100%;
+  padding: 0 40px;
+  height: 40px;
+  position: absolute;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+
+.deck-header span {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: #555;
+}
+
+.deck-container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-top: 30px;
+}
+
+/* Force balance bar inside grimoire */
+#grimoire-player #force-balance {
+  width: 80%;
+  max-width: 500px;
+}
+
+/* =========================================================
+   6b. 底部操作仪表盘 (Dashboard)
 ========================================================= */
 #game-dashboard {
   position: fixed;
   bottom: 0;
   left: 0;
   width: 100%;
-  background: linear-gradient(to top, #000 0%, rgba(8,10,14,0.98) 60%, rgba(8,10,14,0.85) 100%);
+  height: 100px;
+  background: linear-gradient(180deg, #121013 0%, #050406 100%);
+  border-top: 1px solid rgba(191, 149, 63, 0.4);
+  box-shadow: 0 -10px 50px rgba(0,0,0,0.8);
   display: grid;
-  grid-template-columns: 200px 1fr 300px;
-  align-items: end;
-  gap: 12px;
-  padding: 8px 30px 12px;
+  grid-template-columns: 260px 1fr 260px;
+  gap: 20px;
+  padding: 0 40px;
+  align-items: center;
   z-index: 900;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 #game-dashboard::before {
   content: '';
   position: absolute;
-  top: 12px;
+  top: -1px;
   left: 0;
-  width: 100%;
   height: 1px;
-  background: linear-gradient(90deg, transparent 0%, var(--gold-dim) 20%, var(--gold-dim) 80%, transparent 100%);
-  opacity: 0.25;
+  width: 100%;
+  background: linear-gradient(90deg, transparent 0%, var(--gold-dim) 40%, white 50%, var(--gold-dim) 60%, transparent 100%);
+  opacity: 0.5;
 }
 
-/* --- 左侧：局势区 --- */
-.dash-section.monitor {
+/* --- LEFT: Pylon / Info --- */
+.pylon {
+  border-left: 2px solid #555;
+  padding-left: 15px;
+}
+
+.pylon-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: #666;
+}
+
+.pylon-val {
+  font-family: 'Cinzel', serif;
+  font-weight: 800;
+  font-size: 36px;
+  color: #E74C3C;
+  display: block;
+  line-height: 1.1;
+  text-shadow: 0 0 15px rgba(231, 76, 60, 0.4);
+}
+
+.pylon-currency {
+  font-size: 20px;
+  color: var(--gold-main);
+  margin-right: 4px;
+}
+
+/* --- CENTER: Command Deck --- */
+.command-deck {
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: center;
   gap: 6px;
 }
 
-.hud-info-box {
-  font-family: 'JetBrains Mono', monospace;
-  color: #666;
-  font-size: 10px;
-  background: rgba(0,0,0,0.5);
-  padding: 4px 8px;
-  border-left: 2px solid #555;
-}
-
-.to-call-display {
-  font-size: 20px;
-  color: var(--alert-red);
-  font-weight: 700;
-  text-shadow: 0 0 8px rgba(139, 37, 37, 0.3);
+.action-row {
+  display: flex;
+  gap: 12px;
 }
 
 .log-controls {
@@ -903,13 +984,84 @@ body {
   gap: 6px;
 }
 
-/* --- 中间：核心操作区 --- */
-.dash-section.actions {
+/* --- Command Buttons (clip-path style) --- */
+.btn-cmd {
+  height: 52px;
+  width: 135px;
+  border: none;
+  background: #18191b;
+  color: #888;
+  clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+  letter-spacing: 1px;
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s;
+}
+
+.btn-cmd::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
+  pointer-events: none;
+  clip-path: inherit;
+}
+
+.btn-cmd:hover:not(:disabled) {
+  background: #333;
+  color: white;
+  transform: translateY(-2px);
+}
+
+.btn-cmd:disabled {
+  opacity: 0.3;
+  filter: grayscale(1);
+  cursor: not-allowed;
+}
+
+.btn-cmd.btn-gold {
+  background: linear-gradient(135deg, #3d351b 0%, #1e190d 100%);
+  color: var(--gold-main);
+}
+
+.btn-cmd.btn-gold:hover:not(:disabled) {
+  background: #5e4e24;
+  box-shadow: 0 0 20px rgba(212, 175, 55, 0.15);
+}
+
+/* Mini buttons (LOG / CPY / NEW HAND) */
+.btn-cmd.btn-mini {
+  height: 26px;
+  width: auto;
+  min-width: 50px;
+  padding: 0 10px;
+  font-size: 10px;
+  clip-path: none;
+  border-radius: 3px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.btn-cmd.btn-mini::before { display: none; }
+
+/* Raise confirm button */
+.btn-cmd.btn-confirm-raise {
+  height: 26px;
+  width: 50px;
+  clip-path: none;
+  border-radius: 4px;
+  background: var(--gold-main);
+  color: #000;
+  font-size: 11px;
+}
+
+/* --- Raise Controls --- */
+#raise-controls {
+  width: 100%;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
+  justify-content: center;
 }
 
 .raise-inner {
@@ -922,94 +1074,113 @@ body {
   gap: 8px;
 }
 
-.action-row {
-  display: flex;
-  gap: 10px;
+.raise-label {
+  color: #aaa;
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
 }
 
-/* 主操作按钮（FOLD / CHECK / RAISE） */
-.action-main-btn {
-  width: 100px;
-  height: 40px;
-  border: 1px solid rgba(255,255,255,0.1);
-  background: linear-gradient(180deg, #252525 0%, #1a1a1a 100%);
-  color: #ccc;
-  font-family: 'Cinzel', serif;
-  font-weight: 700;
+#raise-slider {
+  width: 120px;
+  accent-color: var(--gold-main);
+}
+
+#raise-amount-display {
+  min-width: 50px;
+  text-align: center;
+  font-weight: bold;
+  color: var(--gold-main);
+  font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
-  letter-spacing: 1px;
-  cursor: pointer;
-  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
-  transition: all 0.2s;
 }
 
-.action-main-btn:hover:not(:disabled) {
-  background: #333;
-  border-color: #888;
-  color: #fff;
-}
-
-.action-main-btn:disabled {
-  opacity: 0.3;
-  filter: grayscale(1);
-  cursor: not-allowed;
-}
-
-.action-main-btn.btn-confirm {
-  background: var(--gold-main);
-  color: #000;
-  height: 26px;
-  width: 50px;
-  clip-path: none;
-  border-radius: 4px;
-  border: none;
-  font-size: 11px;
-}
-
-.action-main-btn.prime {
-  background: linear-gradient(180deg, #E6CFA5 0%, #CFB53B 100%);
-  color: #000;
-  border-color: #EFD53B;
-  box-shadow: 0 0 12px rgba(207, 181, 59, 0.2);
-}
-
-.action-main-btn.prime:hover:not(:disabled) {
-  box-shadow: 0 0 20px rgba(207, 181, 59, 0.4);
-}
-
-/* --- 右侧：魔法技能区 --- */
-.dash-section.skills {
+/* --- RIGHT: Magic Dock / Grimoire Key --- */
+.magic-dock {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  justify-content: flex-end;
-  gap: 6px;
+  gap: 4px;
 }
 
-#new-mana-wrapper {
+#magic-key {
   width: 100%;
-  max-width: 260px;
+  height: 52px;
+  background: linear-gradient(90deg, #0e0e0e 0%, #161616 100%);
+  border: 1px solid rgba(139, 116, 61, 0.3);
+  border-right: 3px solid var(--gold-main);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 15px 100%, 0 calc(100% - 15px));
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  padding: 0 20px;
+  cursor: pointer;
+  transition: all 0.3s;
 }
 
-.mana-label-mini {
-  font-size: 9px;
-  color: var(--magic-highlight);
+#magic-key:hover {
+  box-shadow: 0 0 25px rgba(212, 175, 55, 0.1);
+  border-color: var(--gold-dim);
+}
+
+#magic-key.engaged {
+  background: linear-gradient(90deg, #2b2311 0%, #443818 100%);
+  border-color: var(--gold-main);
+}
+
+.key-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.key-icon {
+  color: var(--gold-main);
+}
+
+.key-lbl {
   font-family: 'Cinzel', serif;
+  font-size: 13px;
+  font-weight: 800;
+  color: #ccc;
+  letter-spacing: 1px;
 }
 
-#mana-bar-track {
-  flex: 1;
-  height: 5px;
-  background: #000;
-  border: 1px solid #444;
-  border-radius: 3px;
+.mp-module {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+
+.mp-nums {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #dcdcdc;
+  white-space: nowrap;
+}
+
+.mp-slot {
+  width: 80px;
+  height: 3px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 2px;
   overflow: hidden;
 }
 
-/* --- 小按钮（LOG / CPY / NEW HAND） --- */
+.mp-fluid {
+  width: 100%;
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.5s ease, background 0.5s ease;
+}
+
+/* Mana bar (shared between old and new) */
+#mana-bar {
+  width: 100%;
+  height: 100%;
+}
+
+/* Legacy compat: action-btn for peek cancel etc */
 .action-btn {
   border: none;
   outline: none;
@@ -1049,58 +1220,12 @@ body {
   filter: grayscale(1);
 }
 
-/* --- 加注控制 --- */
-#raise-controls {
-  width: 100%;
-  display: flex;
-  justify-content: center;
-}
-
-.raise-label {
-  color: #aaa;
-  font-size: 10px;
-  font-family: 'JetBrains Mono', monospace;
-}
-
-#raise-slider {
-  width: 120px;
-  accent-color: var(--gold-main);
-}
-
-#raise-amount-display {
-  min-width: 50px;
-  text-align: center;
-  font-weight: bold;
-  color: var(--gold-main);
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
-}
-
-/* --- Mana 文字 --- */
-#mana-text {
-  font-family: 'JetBrains Mono', monospace;
-  color: #dcdcdc;
-  font-size: 10px;
-  white-space: nowrap;
-}
-
-/* --- Mana 条默认填满 --- */
-#mana-bar {
-  width: 100%;
-  height: 100%;
-}
-
-/* --- 状态文字 (Dashboard 内) --- */
-#game-dashboard .moz-status {
-  margin: 0;
-}
-
 /* =========================================================
    7. 悬浮层 & 日志面板
 ========================================================= */
 #floating-layers {
   position: fixed;
-  bottom: 130px;
+  bottom: 110px;
   left: 0;
   width: 100%;
   pointer-events: none;
@@ -1118,7 +1243,7 @@ body {
 /* 游戏日志面板 */
 #game-log-panel {
   position: fixed;
-  bottom: 130px;
+  bottom: 110px;
   left: 20px;
   width: 500px;
   max-width: 40vw;
@@ -1192,7 +1317,7 @@ body {
 }
 
 /* =========================================================
-   9. 技能面板样式 (Dashboard 内)
+   9. 技能面板样式 — Tilt Icon Hero Cards
 ========================================================= */
 
 .mana-fill {
@@ -1222,181 +1347,250 @@ body {
   50% { opacity: 0.6; }
 }
 
-.mana-value {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  color: var(--magic-highlight);
-  white-space: nowrap;
-  min-width: 60px;
-  text-align: right;
-}
-
-/* --- 技能按钮组 (Dashboard 内水平排列) --- */
+/* --- Skill Card Deck (horizontal layout inside grimoire) --- */
 #skill-panel {
   display: flex;
+  justify-content: center;
   align-items: center;
-  gap: 6px;
+  gap: 24px;
   padding: 0;
   background: transparent;
   border: none;
 }
 
-.skill-btn {
+/* --- Hero Card (Tilt Icon Style) --- */
+.hero-card {
+  width: 100px;
+  height: 160px;
   position: relative;
+  background: #0f0f10;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 52px;
-  height: 52px;
-  border: 1px solid rgba(155, 89, 182, 0.3);
-  border-radius: 6px;
-  background: rgba(155, 89, 182, 0.08);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  padding: 2px;
+  justify-content: space-between;
+  transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.5);
 }
 
-.skill-btn .skill-icon {
-  font-size: 18px;
-  line-height: 1;
-}
-
-.skill-btn .skill-name {
-  font-family: 'Cinzel', serif;
-  font-size: 9px;
-  font-weight: 600;
-  color: #c39bd3;
-  letter-spacing: 1px;
-  margin-top: 2px;
-}
-
-.skill-btn .skill-cost {
+/* Background tilted icon */
+.hero-card .bg-icon-layer {
   position: absolute;
-  top: 2px;
-  right: 3px;
+  top: 10px;
+  right: -30px;
+  width: 140px;
+  height: 140px;
+  transform: rotate(20deg);
+  opacity: 0.2;
+  transition: all 0.5s ease-out;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Hover: icon straightens, enlarges, glows */
+.hero-card:hover:not(:disabled) .bg-icon-layer {
+  top: 0;
+  right: -20px;
+  transform: rotate(0deg) scale(1.1);
+  opacity: 0.4;
+  filter: drop-shadow(0 0 15px currentColor);
+}
+
+/* Bottom gradient mask for text readability */
+.hero-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.8) 85%, #000 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Top: cost badge */
+.hero-card .card-top {
+  position: relative;
+  z-index: 2;
+  padding: 6px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.hero-card .cost-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 800;
+  font-size: 10px;
+  background: #000;
+  border: 1px solid rgba(255,255,255,0.2);
+  padding: 2px 6px;
+  border-radius: 2px;
+  color: #777;
+  transition: all 0.3s;
+}
+
+/* Bottom: name + tier */
+.hero-card .card-bot {
+  position: relative;
+  z-index: 2;
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  transform: translateY(0);
+  transition: transform 0.3s;
+}
+
+.hero-card:hover:not(:disabled) .card-bot {
+  transform: translateY(-4px);
+}
+
+.hero-card .meta-tier {
   font-family: 'JetBrains Mono', monospace;
   font-size: 8px;
-  color: var(--magic-highlight);
-  opacity: 0.7;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
-/* -- Moirai (天命) -- */
-.skill-btn.moirai-skill {
-  border-color: rgba(155, 89, 182, 0.3);
-  background: rgba(155, 89, 182, 0.08);
-}
-.skill-btn.moirai-skill .skill-name { color: #c39bd3; }
-.skill-btn.moirai-skill .skill-icon { color: #9B59B6; }
-.skill-btn.moirai-skill:hover:not(:disabled) {
-  border-color: #9B59B6;
-  background: rgba(155, 89, 182, 0.2);
-  box-shadow: 0 0 12px rgba(155, 89, 182, 0.4);
-  transform: translateY(-2px);
+.hero-card .meta-name {
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  font-weight: 800;
+  color: #eee;
+  letter-spacing: 1px;
+  text-shadow: 0 2px 5px #000;
 }
 
-/* -- Chaos (狂厄) -- */
-.skill-btn.chaos-skill {
-  border-color: rgba(231, 76, 60, 0.3);
-  background: rgba(231, 76, 60, 0.08);
-}
-.skill-btn.chaos-skill .skill-name { color: #e88; }
-.skill-btn.chaos-skill .skill-icon { color: #e74c3c; }
-.skill-btn.chaos-skill:hover:not(:disabled) {
-  border-color: #e74c3c;
-  background: rgba(231, 76, 60, 0.2);
-  box-shadow: 0 0 12px rgba(231, 76, 60, 0.4);
-  transform: translateY(-2px);
+/* Hover: card lifts */
+.hero-card:hover:not(:disabled) {
+  border-color: rgba(255,255,255,0.3);
+  transform: translateY(-12px) scale(1.02);
+  box-shadow: 0 15px 40px rgba(0,0,0,0.7);
 }
 
-/* -- Psyche (灵视) -- */
-.skill-btn.psyche-skill {
-  border-color: rgba(52, 152, 219, 0.3);
-  background: rgba(52, 152, 219, 0.08);
-}
-.skill-btn.psyche-skill .skill-name { color: #7ec8e3; }
-.skill-btn.psyche-skill .skill-icon { color: #3498db; }
-.skill-btn.psyche-skill:hover:not(:disabled) {
-  border-color: #3498db;
-  background: rgba(52, 152, 219, 0.2);
-  box-shadow: 0 0 12px rgba(52, 152, 219, 0.4);
-  transform: translateY(-2px);
-}
-
-/* -- Void (虚无) -- */
-.skill-btn.void-skill {
-  border-color: rgba(149, 165, 166, 0.3);
-  background: rgba(149, 165, 166, 0.06);
-}
-.skill-btn.void-skill .skill-name { color: #bbb; }
-.skill-btn.void-skill .skill-icon { color: #bdc3c7; }
-.skill-btn.void-skill:hover:not(:disabled) {
-  border-color: rgba(255, 255, 255, 0.4);
-  background: rgba(255, 255, 255, 0.1);
-  box-shadow: 0 0 12px rgba(255, 255, 255, 0.15);
-  transform: translateY(-2px);
-}
-
-.skill-btn:disabled {
-  opacity: 0.3;
+/* Disabled state */
+.hero-card:disabled,
+.hero-card[disabled] {
+  opacity: 0.35;
   cursor: not-allowed;
   transform: none !important;
-  box-shadow: none !important;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.5) !important;
+  border-color: #333 !important;
 }
 
-.skill-btn.skill-active {
-  animation: skillActivePulse 1.5s ease-in-out infinite;
-}
-.skill-btn.skill-active.moirai-skill {
-  border-color: #9B59B6 !important;
-  background: rgba(155, 89, 182, 0.25) !important;
-  box-shadow: 0 0 12px rgba(155, 89, 182, 0.5), inset 0 0 8px rgba(155, 89, 182, 0.2) !important;
-}
-.skill-btn.skill-active.chaos-skill {
-  border-color: #e74c3c !important;
-  background: rgba(231, 76, 60, 0.25) !important;
-  box-shadow: 0 0 12px rgba(231, 76, 60, 0.5), inset 0 0 8px rgba(231, 76, 60, 0.2) !important;
-}
-.skill-btn.skill-active.psyche-skill {
-  border-color: #3498db !important;
-  background: rgba(52, 152, 219, 0.25) !important;
-  box-shadow: 0 0 12px rgba(52, 152, 219, 0.5), inset 0 0 8px rgba(52, 152, 219, 0.2) !important;
-}
-.skill-btn.skill-active.void-skill {
-  border-color: rgba(255, 255, 255, 0.5) !important;
-  background: rgba(255, 255, 255, 0.12) !important;
-  box-shadow: 0 0 12px rgba(255, 255, 255, 0.2), inset 0 0 8px rgba(255, 255, 255, 0.1) !important;
+.hero-card:disabled .bg-icon-layer,
+.hero-card[disabled] .bg-icon-layer {
+  opacity: 0.1 !important;
+  filter: none !important;
 }
 
-@keyframes skillActivePulse {
+/* === SKIN VARIANTS (by attribute) === */
+
+/* Moirai / Divine (Purple) */
+.hero-card.skin-moirai {
+  border-bottom: 2px solid var(--magic-highlight);
+}
+.hero-card.skin-moirai .bg-icon-layer { color: var(--magic-highlight); }
+.hero-card.skin-moirai:hover:not(:disabled) {
+  box-shadow: 0 15px 40px rgba(155, 89, 182, 0.2);
+}
+.hero-card.skin-moirai:hover:not(:disabled) .cost-badge {
+  color: var(--magic-highlight);
+  border-color: var(--magic-highlight);
+}
+.hero-card.skin-moirai .meta-tier { color: rgba(155, 89, 182, 0.7); }
+
+/* Chaos (Red) */
+.hero-card.skin-chaos {
+  border-bottom: 2px solid #C0392B;
+}
+.hero-card.skin-chaos .bg-icon-layer { color: #C0392B; }
+.hero-card.skin-chaos:hover:not(:disabled) {
+  box-shadow: 0 15px 40px rgba(192, 57, 43, 0.2);
+}
+.hero-card.skin-chaos:hover:not(:disabled) .cost-badge {
+  color: #C0392B;
+  border-color: #C0392B;
+}
+.hero-card.skin-chaos .meta-tier { color: rgba(192, 57, 43, 0.7); }
+
+/* Psyche / Truth (Blue) */
+.hero-card.skin-psyche {
+  border-bottom: 2px solid #2980B9;
+}
+.hero-card.skin-psyche .bg-icon-layer { color: #2980B9; }
+.hero-card.skin-psyche:hover:not(:disabled) {
+  box-shadow: 0 15px 40px rgba(41, 128, 185, 0.2);
+}
+.hero-card.skin-psyche:hover:not(:disabled) .cost-badge {
+  color: #2980B9;
+  border-color: #2980B9;
+}
+.hero-card.skin-psyche .meta-tier { color: rgba(41, 128, 185, 0.7); }
+
+/* Void / Gold (Ultimate — black-gold) */
+.hero-card.skin-void {
+  background: radial-gradient(circle at 100% 0%, #3e3314 0%, #050505 80%);
+  border: 1px solid #735F2D;
+  border-bottom: 3px solid #F1C40F;
+}
+.hero-card.skin-void .bg-icon-layer {
+  color: #F1C40F;
+  opacity: 0.15;
+}
+.hero-card.skin-void:hover:not(:disabled) .bg-icon-layer {
+  opacity: 0.5;
+  filter: drop-shadow(0 0 20px #F1C40F);
+}
+.hero-card.skin-void:hover:not(:disabled) .cost-badge {
+  background: var(--gold-main);
+  color: #000;
+  font-weight: 900;
+  box-shadow: 0 0 10px var(--gold-main);
+}
+.hero-card.skin-void .meta-tier { color: #aa771c; }
+.hero-card.skin-void .meta-name {
+  background: linear-gradient(135deg, #CFB53B, #F1C40F, #CFB53B);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* === Active state (skill queued) === */
+.hero-card.skill-active {
+  animation: heroCardActivePulse 1.5s ease-in-out infinite;
+}
+
+.hero-card.skill-active.skin-moirai {
+  border-color: var(--magic-highlight) !important;
+  box-shadow: 0 0 20px rgba(155, 89, 182, 0.4), inset 0 0 15px rgba(155, 89, 182, 0.15) !important;
+}
+.hero-card.skill-active.skin-chaos {
+  border-color: #C0392B !important;
+  box-shadow: 0 0 20px rgba(192, 57, 43, 0.4), inset 0 0 15px rgba(192, 57, 43, 0.15) !important;
+}
+.hero-card.skill-active.skin-psyche {
+  border-color: #2980B9 !important;
+  box-shadow: 0 0 20px rgba(41, 128, 185, 0.4), inset 0 0 15px rgba(41, 128, 185, 0.15) !important;
+}
+.hero-card.skill-active.skin-void {
+  border-color: #F1C40F !important;
+  box-shadow: 0 0 20px rgba(241, 196, 15, 0.4), inset 0 0 15px rgba(241, 196, 15, 0.15) !important;
+}
+
+@keyframes heroCardActivePulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.75; }
 }
 
-.skill-tier {
-  position: absolute;
-  top: 2px;
-  left: 3px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 7px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  padding: 0 2px;
-  border-radius: 2px;
-}
-
-.skill-tier.tier-1 {
-  color: #f1c40f;
-  background: rgba(241, 196, 15, 0.15);
-  border: 1px solid rgba(241, 196, 15, 0.3);
-  text-shadow: 0 0 4px rgba(241, 196, 15, 0.5);
-}
-
+/* Skill divider between attribute groups */
 .skill-divider {
   width: 1px;
-  height: 36px;
-  background: rgba(207, 181, 59, 0.2);
-  margin: 0 4px;
+  height: 120px;
+  background: rgba(207, 181, 59, 0.15);
+  margin: 0 8px;
 }
 
 /* --- 状态指示 --- */
@@ -2045,4 +2239,170 @@ body {
     box-shadow: 0 0 20px rgba(230, 126, 34, 0.5), inset 0 0 8px rgba(230, 126, 34, 0.15);
     border-color: rgba(230, 126, 34, 0.7);
   }
+}
+
+/* =========================================================
+   10. Idle / Action Row Toggle
+========================================================= */
+#action-row { display: none; }
+#idle-row   { display: flex; }
+
+.game-active #action-row { display: flex; }
+.game-active #idle-row   { display: none; }
+
+/* =========================================================
+   11. Splash Overlay (Game Start)
+========================================================= */
+#splash-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: radial-gradient(ellipse at 50% 60%, rgba(18, 16, 10, 0.97) 0%, rgba(0,0,0,0.99) 70%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: splashFadeIn 0.6s ease-out;
+}
+
+#splash-overlay.hidden {
+  animation: splashFadeOut 0.5s ease-in forwards;
+  pointer-events: none;
+}
+
+.splash-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.splash-title {
+  font-family: 'Cinzel', serif;
+  font-size: 42px;
+  font-weight: 900;
+  letter-spacing: 6px;
+  background: linear-gradient(135deg, #CFB53B 0%, #F1C40F 40%, #fff 50%, #F1C40F 60%, #CFB53B 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: splashShimmer 3s ease-in-out infinite;
+  text-shadow: none;
+}
+
+@keyframes splashShimmer {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.splash-sub {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 4px;
+  color: rgba(255,255,255,0.15);
+}
+
+.splash-btn {
+  width: 220px;
+  height: 64px;
+  font-size: 18px;
+  letter-spacing: 3px;
+  margin-top: 20px;
+  animation: splashBtnPulse 2s ease-in-out infinite;
+}
+
+@keyframes splashBtnPulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(207, 181, 59, 0.1); }
+  50% { box-shadow: 0 0 40px rgba(207, 181, 59, 0.25), 0 0 80px rgba(207, 181, 59, 0.08); }
+}
+
+@keyframes splashFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes splashFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* =========================================================
+   12. End-of-Hand Modal
+========================================================= */
+#endhand-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: endhandFadeIn 0.4s ease-out;
+}
+
+#endhand-modal.fade-out {
+  animation: endhandFadeOut 0.3s ease-in forwards;
+  pointer-events: none;
+}
+
+.endhand-inner {
+  background: linear-gradient(180deg, #161418 0%, #0a090c 100%);
+  border: 1px solid rgba(207, 181, 59, 0.3);
+  border-radius: 8px;
+  padding: 32px 48px;
+  min-width: 360px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 0 60px rgba(0,0,0,0.8), 0 0 30px rgba(207, 181, 59, 0.05);
+  animation: endhandSlideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.endhand-title {
+  font-family: 'Cinzel', serif;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 3px;
+  color: var(--gold-main);
+  text-shadow: 0 0 10px rgba(207, 181, 59, 0.3);
+}
+
+.endhand-result {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: #aaa;
+  text-align: center;
+  line-height: 1.6;
+  max-width: 300px;
+  white-space: pre-line;
+}
+
+.endhand-actions {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.endhand-actions .btn-cmd {
+  width: 150px;
+  height: 52px;
+  font-size: 13px;
+}
+
+@keyframes endhandFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes endhandFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes endhandSlideUp {
+  from { opacity: 0; transform: translateY(30px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }

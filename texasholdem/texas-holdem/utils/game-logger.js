@@ -168,7 +168,7 @@
       case 'SENSE':
         return '[感知] ' + (entry.message || '');
       case 'NPC_SKILL':
-        return '[NPC技能] ' + entry.owner + ' 使用 ' + entry.skill + ' (' + entry.effect + ' Lv.' + entry.level + ')';
+        return '[NPC技能] ' + entry.owner + ' 使用 ' + entry.skill + ' (' + entry.effect + (entry.tier != null ? ' T' + entry.tier : '') + ')';
       default:
         return '[' + entry.type + '] ' + (entry.playerName || '');
     }

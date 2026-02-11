@@ -43,6 +43,25 @@
     purge_all:'<path d="M8 2L3 8l5 6 5-6-5-6z"/>'
   };
 
+  // attr → hero-card skin class
+  var ATTR_TO_SKIN = {
+    moirai: 'skin-moirai',
+    chaos:  'skin-chaos',
+    psyche: 'skin-psyche',
+    void:   'skin-void'
+  };
+
+  // Large SVG paths for hero-card background icon (24x24 viewBox)
+  var BG_SVG_PATHS = {
+    fortune:    '<path d="M12 2l2.4 7.2h7.6l-6 4.8 2.4 7.2-6-4.8-6 4.8 2.4-7.2-6-4.8h7.6z"/>',
+    curse:      '<path d="M12 2C8.1 2 5 6 5 10.5c0 3 1.5 5.5 3.5 7h7c2-1.5 3.5-4 3.5-7C19 6 15.9 2 12 2zM9 19v1.5c0 .8 1.3 1.5 3 1.5s3-.7 3-1.5V19H9z"/>',
+    peek:       '<path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>',
+    reversal:   '<path d="M3 7h13l-4-4h3l5 5.5-5 5.5h-3l4-4H3V7zm18 10H8l4 4H9l-5-5.5L9 10h3l-4 4h13v3z"/>',
+    purge_all:  '<path d="M12 2L2 12l10 10 10-10L12 2z"/>',
+    null_field:  '<circle cx="12" cy="12" r="9"/><line x1="6" y1="18" x2="18" y2="6"/>',
+    void_shield: '<path d="M12 1L3 5v6c0 5.5 3.8 10.7 9 12 5.2-1.3 9-6.5 9-12V5L12 1z"/>'
+  };
+
   var EFFECT_VISUALS = {
     fortune:     { icon: _svg(SVG_PATHS.fortune, '#9B59B6'),   cssClass: 'moirai-skill', color: '#9B59B6', attr: 'moirai' },
     curse:       { icon: _svg(SVG_PATHS.curse, '#e74c3c'),     cssClass: 'chaos-skill',  color: '#e74c3c', attr: 'chaos' },
@@ -240,17 +259,21 @@
       if (this.containers.manaBar) {
         const pct = mana.max > 0 ? (mana.current / mana.max) * 100 : 0;
         this.containers.manaBar.style.width = pct + '%';
+        if (!this._manaBarBase) {
+          this._manaBarBase = this.containers.manaBar.classList.contains('mp-fluid') ? 'mp-fluid mana-fill' : 'mana-fill';
+        }
+        var baseClass = this._manaBarBase;
         if (pct > 50) {
-          this.containers.manaBar.className = 'mana-fill high';
+          this.containers.manaBar.className = baseClass + ' high';
         } else if (pct > 20) {
-          this.containers.manaBar.className = 'mana-fill medium';
+          this.containers.manaBar.className = baseClass + ' medium';
         } else {
-          this.containers.manaBar.className = 'mana-fill low';
+          this.containers.manaBar.className = baseClass + ' low';
         }
       }
 
       if (this.containers.manaText) {
-        this.containers.manaText.textContent = mana.current + ' / ' + mana.max;
+        this.containers.manaText.textContent = 'MP ' + mana.current + '/' + mana.max;
       }
 
       // 反噬指示器
@@ -712,12 +735,13 @@
     }
 
     /**
-     * 创建单个技能按钮
+     * 创建单个技能按钮 — hero-card Tilt Icon 风格
      */
     _createButton(skill, behavior, visual) {
       var btn = document.createElement('button');
-      var cssClass = (EFFECT_VISUALS[skill.effect] || EFFECT_VISUALS.fortune).cssClass;
-      btn.className = 'skill-btn ' + cssClass;
+      var ev = EFFECT_VISUALS[skill.effect] || EFFECT_VISUALS.fortune;
+      var skinClass = ATTR_TO_SKIN[ev.attr] || 'skin-moirai';
+      btn.className = 'hero-card ' + skinClass;
       btn.disabled = true;
 
       var title = (visual.name || skill.skillKey);
@@ -725,14 +749,29 @@
       if (skill.description) title += '\n' + skill.description;
       btn.title = title;
 
-      // T1 技能加特殊标记
-      var tierBadge = skill.tier === 1 ? '<span class="skill-tier tier-1">T1</span>' : '';
+      // Tier label
+      var tierText = skill.tier ? 'Tier ' + skill.tier : '';
+      if (skill.tier === 1) tierText = 'ULTIMATE';
+
+      // Background tilted SVG icon (24x24 viewBox)
+      var bgPath = BG_SVG_PATHS[skill.effect] || BG_SVG_PATHS.fortune || '';
+      var bgFillOrStroke = (skill.effect === 'null_field' || skill.effect === 'void_shield' || skill.effect === 'purge_all')
+        ? 'fill="none" stroke="currentColor" stroke-width="1.5"'
+        : 'fill="currentColor"';
+      var bgSvg = '<svg class="bg-icon-layer" viewBox="0 0 24 24" ' + bgFillOrStroke + '>' + bgPath + '</svg>';
+
+      // Cost badge
+      var costHtml = visual.cost
+        ? '<div class="cost-badge">' + visual.cost + ' MP</div>'
+        : '<div class="cost-badge">--</div>';
 
       btn.innerHTML =
-        '<span class="skill-icon">' + visual.icon + '</span>' +
-        '<span class="skill-name">' + (visual.name || skill.skillKey) + '</span>' +
-        tierBadge +
-        (visual.cost ? '<span class="skill-cost">' + visual.cost + '</span>' : '');
+        bgSvg +
+        '<div class="card-top">' + costHtml + '</div>' +
+        '<div class="card-bot">' +
+          '<span class="meta-tier">' + tierText + '</span>' +
+          '<span class="meta-name">' + (visual.name || skill.skillKey) + '</span>' +
+        '</div>';
 
       var self = this;
       btn.addEventListener('click', function () {

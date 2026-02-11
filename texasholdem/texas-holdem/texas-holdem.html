@@ -48,8 +48,6 @@
     <div id="foresight-panel" style="display:none;"></div>
     <!-- 感知/系统报警 -->
     <div id="sense-alert" style="display:none;"></div>
-    <!-- 技能反噬等提示 -->
-    <div id="backlash-indicator" style="display:none;"></div>
     <!-- 透视目标选择面板 -->
     <div id="peek-panel" style="display:none;">
       <div class="peek-title">🃏 选择透视目标</div>
@@ -62,73 +60,78 @@
   </div>
 
 
-  <!-- 3. 全新底部操作仪表盘 (Unified Controller) -->
-  <div id="game-dashboard">
-
-    <!-- = [ SECTION 1: Monitor / Info ] ======================== -->
-    <div class="dash-section monitor">
-      <!-- 局势数据 -->
-      <div class="hud-info-box">
-        <div>CHIPS TO CALL</div>
-        <div class="to-call-display" id="to-call-amount">$0</div>
-      </div>
-
-      <!-- 系统/日志控制 -->
-      <div class="log-controls">
-        <button id="btn-toggle-log" class="action-btn small">LOG</button>
-        <button id="btn-copy-log" class="action-btn small" style="display:none;">CPY</button>
-        <button id="btn-deal" class="action-btn primary small">NEW HAND</button>
-      </div>
-
-      <!-- 状态文字容器 -->
-      <div id="moz-status" class="moz-status ready">魔运就绪</div>
+  <!-- 3. Grimoire 技能抽屉 (Slide-up Drawer) -->
+  <div id="grimoire-player">
+    <div class="deck-header">
+      <span>/// TACTICAL INVENTORY</span>
+      <span id="moz-status" class="moz-status ready">魔运就绪</span>
     </div>
 
+    <div class="deck-container">
+      <!-- Force Balance Bar (可选显示) -->
+      <div id="force-balance" style="display:none;">
+        <div class="force-ally"></div>
+        <div class="force-enemy"></div>
+      </div>
 
-    <!-- = [ SECTION 2: Action Center ] ======================== -->
-    <div class="dash-section actions">
+      <!-- 技能卡牌面板 (由 skill-ui.js 动态填充) -->
+      <div id="skill-panel"></div>
+    </div>
+  </div>
 
+
+  <!-- 4. 底部操作仪表盘 (Dashboard) -->
+  <div id="game-dashboard">
+
+    <!-- = [ LEFT: Pylon / Info ] ======================== -->
+    <div class="pylon">
+      <div class="pylon-label">CHIPS TO CALL</div>
+      <div class="pylon-val"><span class="pylon-currency">$</span><span id="to-call-amount">0</span></div>
+    </div>
+
+    <!-- = [ CENTER: Command Deck ] ======================== -->
+    <div class="command-deck">
       <!-- 加注滑块栏 (平时隐藏) -->
       <div id="raise-controls" style="display:none;">
         <div class="raise-inner">
            <span class="raise-label">AMOUNT:</span>
            <span id="raise-amount-display">$100</span>
            <input type="range" id="raise-slider" min="0" max="1000" step="10">
-           <button id="btn-confirm-raise" class="action-main-btn btn-confirm">OK</button>
+           <button id="btn-confirm-raise" class="btn-cmd btn-confirm-raise">OK</button>
         </div>
       </div>
 
-      <!-- 主按钮栏 -->
-      <div class="action-row">
-        <button id="btn-fold" class="action-main-btn warning" disabled>FOLD</button>
-        <button id="btn-check-call" class="action-main-btn" disabled>CHECK</button>
-        <button id="btn-raise" class="action-main-btn prime" disabled>RAISE</button>
+      <!-- 主按钮栏 (游戏中显示) -->
+      <div id="action-row" class="action-row">
+        <button id="btn-fold" class="btn-cmd" disabled>FOLD</button>
+        <button id="btn-check-call" class="btn-cmd" disabled>CHECK</button>
+        <button id="btn-raise" class="btn-cmd btn-gold" disabled>RAISE</button>
       </div>
 
+      <!-- 系统控制栏 (idle 时显示) -->
+      <div id="idle-row" class="action-row">
+        <button id="btn-toggle-log" class="btn-cmd">LOG</button>
+        <button id="btn-deal" class="btn-cmd btn-gold">NEW HAND</button>
+      </div>
+      <button id="btn-copy-log" class="btn-cmd btn-mini" style="display:none;">CPY</button>
     </div>
 
-
-    <!-- = [ SECTION 3: Magic / Skills ] ======================== -->
-    <div class="dash-section skills">
-
-        <!-- Force Balance Bar (可选显示) -->
-        <div id="force-balance" style="display:none;">
-           <div class="force-ally"></div>
-           <div class="force-enemy"></div>
+    <!-- = [ RIGHT: Grimoire Key + Mana ] ======================== -->
+    <div class="magic-dock">
+      <div id="magic-key">
+        <div class="key-content">
+          <svg class="key-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l10 6-10 14L2 8z"/></svg>
+          <div class="key-lbl">GRIMOIRE</div>
         </div>
-
-        <!-- 技能按钮面板 (由 skill-ui.js 动态填充) -->
-        <div id="skill-panel"></div>
-
-        <!-- Mana Bar & Status -->
-        <div id="new-mana-wrapper">
-             <div class="mana-label-mini">MP</div>
-             <div id="mana-bar-track">
-                <div id="mana-bar" class="mana-fill high"></div>
-             </div>
-             <div id="mana-text">100/100</div>
+        <div class="mp-module">
+          <div id="mana-text" class="mp-nums">MP 100/100</div>
+          <div class="mp-slot">
+            <div id="mana-bar" class="mp-fluid mana-fill high"></div>
+          </div>
         </div>
-
+      </div>
+      <!-- 反噬指示器 -->
+      <div id="backlash-indicator" style="display:none;"></div>
     </div>
 
   </div>
@@ -138,6 +141,27 @@
   <div id="game-log-panel" style="display:none;">
       <div class="log-header">BATTLE LOG</div>
       <pre id="game-log-content"></pre>
+  </div>
+
+  <!-- 5. 开局 Splash (首次加载 / idle 时居中大按钮) -->
+  <div id="splash-overlay">
+    <div class="splash-inner">
+      <div class="splash-title">THE GILDED ORACLE</div>
+      <div class="splash-sub">/// TERMINAL V.3.2</div>
+      <button id="splash-deal" class="btn-cmd btn-gold splash-btn">NEW HAND</button>
+    </div>
+  </div>
+
+  <!-- 6. 结算弹窗 (手牌结束后弹出) -->
+  <div id="endhand-modal" style="display:none;">
+    <div class="endhand-inner">
+      <div class="endhand-title" id="endhand-title">HAND COMPLETE</div>
+      <div class="endhand-result" id="endhand-result"></div>
+      <div class="endhand-actions">
+        <button id="endhand-log" class="btn-cmd">COPY LOG</button>
+        <button id="endhand-deal" class="btn-cmd btn-gold">NEW HAND</button>
+      </div>
+    </div>
   </div>
 
   <!-- Debug 按钮 (隐藏) -->

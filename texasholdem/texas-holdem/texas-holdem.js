@@ -127,8 +127,85 @@
     btnToggleLog: document.getElementById('btn-toggle-log'),
     gameLogPanel: document.getElementById('game-log-panel'),
     gameLogContent: document.getElementById('game-log-content'),
+    // Grimoire 抽屉
+    grimoirePlayer: document.getElementById('grimoire-player'),
+    magicKey: document.getElementById('magic-key'),
     // (玩家数量由外部 JSON 配置决定)
   };
+
+  // Grimoire 抽屉开关
+  if (UI.magicKey) {
+    UI.magicKey.addEventListener('click', function () {
+      if (UI.grimoirePlayer) UI.grimoirePlayer.classList.toggle('active');
+      UI.magicKey.classList.toggle('engaged');
+    });
+  }
+
+  // ========== Splash / End-hand Modal / Row Toggle ==========
+  const splashOverlay  = document.getElementById('splash-overlay');
+  const splashDeal     = document.getElementById('splash-deal');
+  const endhandModal   = document.getElementById('endhand-modal');
+  const endhandTitle   = document.getElementById('endhand-title');
+  const endhandResult  = document.getElementById('endhand-result');
+  const endhandDeal    = document.getElementById('endhand-deal');
+  const endhandLog     = document.getElementById('endhand-log');
+
+  function dismissSplash() {
+    if (!splashOverlay) return;
+    splashOverlay.classList.add('hidden');
+    setTimeout(function () { splashOverlay.style.display = 'none'; }, 500);
+  }
+
+  function setGameActive(active) {
+    if (active) {
+      document.body.classList.add('game-active');
+    } else {
+      document.body.classList.remove('game-active');
+    }
+  }
+
+  function showEndhandModal(title, resultText) {
+    if (!endhandModal) return;
+    if (endhandTitle) endhandTitle.textContent = title || 'HAND COMPLETE';
+    if (endhandResult) endhandResult.textContent = resultText || '';
+    endhandModal.classList.remove('fade-out');
+    endhandModal.style.display = 'flex';
+  }
+
+  function dismissEndhandModal() {
+    if (!endhandModal) return;
+    endhandModal.classList.add('fade-out');
+    setTimeout(function () { endhandModal.style.display = 'none'; }, 300);
+  }
+
+  // Splash "NEW HAND" → start game + dismiss splash
+  if (splashDeal) {
+    splashDeal.addEventListener('click', function () {
+      dismissSplash();
+      startNewGame();
+    });
+  }
+
+  // End-hand modal "NEW HAND" → dismiss + start
+  if (endhandDeal) {
+    endhandDeal.addEventListener('click', function () {
+      dismissEndhandModal();
+      startNewGame();
+    });
+  }
+
+  // End-hand modal "COPY LOG" → copy AI prompt with full context
+  if (endhandLog) {
+    endhandLog.addEventListener('click', function () {
+      if (typeof gameLogger !== 'undefined' && gameLogger.copyAIPrompt) {
+        gameLogger.copyAIPrompt(buildLogContext());
+      } else if (UI.gameLogContent) {
+        navigator.clipboard.writeText(UI.gameLogContent.textContent).catch(function () {});
+      }
+      endhandLog.textContent = 'COPIED!';
+      setTimeout(function () { endhandLog.textContent = 'COPY LOG'; }, 1500);
+    });
+  }
 
   // ========== 技能系统 (通过 SkillUI 统一管理) ==========
   const moz = new MonteOfZero();
@@ -178,6 +255,9 @@
     lastRaiserIndex: -1,  // 最后加注者
     actionCount: 0        // 本轮行动计数
   };
+
+  // 保存最近一手的结果文字（供 endGame modal 使用）
+  let _lastResultMsg = '';
 
   // ========== 工具函数 ==========
   function cardToSolverString(card) {
@@ -538,7 +618,7 @@
     
     // 更新toCall显示
     const toCall = gameState.currentBet - currentPlayer.currentBet;
-    UI.toCallAmount.textContent = '$' + toCall;
+    UI.toCallAmount.textContent = toCall;
     
     if (currentPlayer.type === 'human') {
       updateMsg(`Your turn - ${gameState.phase.toUpperCase()}`);
@@ -1247,6 +1327,9 @@
     }, 300);
     
     UI.btnDeal.disabled = true;
+    setGameActive(true);
+    dismissSplash();
+    dismissEndhandModal();
     updatePotDisplay();
     skillUI.update({ phase: gameState.phase, isPlayerTurn: false });
   }
@@ -1484,7 +1567,8 @@
       reason: 'All others folded'
     });
     
-    updateMsg(`${winner.name} wins $${potWon}!`);
+    _lastResultMsg = `${winner.name} wins $${potWon}`;
+    updateMsg(_lastResultMsg + '!');
     winner.seatElement.classList.add('winner');
     
     updateSeatDisplay(winner);
@@ -1538,9 +1622,12 @@
       handDescr: winnerPlayers[0].seatElement.querySelector('.seat-status').textContent
     });
     
+    const handDescr = winnerPlayers[0].seatElement.querySelector('.seat-status').textContent;
     if (winnerPlayers.length === 1) {
+      _lastResultMsg = `${winnerNames} wins $${potWon}\n${handDescr}`;
       updateMsg(`${winnerNames} wins $${potWon}!`);
     } else {
+      _lastResultMsg = `Split pot: ${winnerNames}\n$${sharePerWinner} each — ${handDescr}`;
       updateMsg(`Split pot: ${winnerNames} ($${sharePerWinner} each)`);
     }
     
@@ -1551,6 +1638,7 @@
   function endGame() {
     gameState.phase = 'idle';
     setTurnIndicator(-1);
+    setGameActive(false);
     
     // 移除winner类
     gameState.players.forEach(p => {
@@ -1558,9 +1646,6 @@
         p.seatElement.classList.remove('winner');
       }
     });
-    
-    // 显示日志
-    showGameLog();
     
     // 标记淘汰玩家（chips === 0）
     gameState.players.forEach(p => {
@@ -1578,9 +1663,9 @@
     const alivePlayers = gameState.players.filter(p => p.chips > 0);
     if (alivePlayers.length <= 1) {
       const champion = alivePlayers[0];
-      if (champion) {
-        updateMsg(`${champion.name} wins the game!`);
-      }
+      const champMsg = champion ? `${champion.name} wins the game!` : 'Game Over';
+      if (champion) updateMsg(champMsg);
+      showEndhandModal('GAME OVER', champMsg);
       UI.btnDeal.disabled = false;
       return;
     }
@@ -1595,6 +1680,7 @@
     gameState.dealerIndex = nextDealer;
     
     UI.btnDeal.disabled = false;
+    showEndhandModal('HAND COMPLETE', _lastResultMsg);
   }
 
   // ========== 日志系统（委托给 GameLogger） ==========
@@ -1603,8 +1689,18 @@
     panel: UI.gameLogPanel,
     content: UI.gameLogContent,
     btnCopy: UI.btnCopyLog,
-    btnToggle: UI.btnToggleLog
+    btnToggle: null  // 手动绑定 toggle，以便刷新内容
   });
+  // LOG 按钮：打开时刷新内容 + context
+  if (UI.btnToggleLog) {
+    UI.btnToggleLog.addEventListener('click', function () {
+      if (UI.gameLogPanel.style.display === 'none' || !UI.gameLogPanel.style.display) {
+        showGameLog();
+      } else {
+        UI.gameLogPanel.style.display = 'none';
+      }
+    });
+  }
   gameLogger.getGameSnapshot = function () {
     return {
       phase: gameState.phase,
@@ -1619,14 +1715,12 @@
     gameLogger.log(type, data);
   }
 
-  function showGameLog() {
-    // 计算本局最大底池（从日志条目中取最大 pot 值）
+  function buildLogContext() {
     var maxPot = 0;
     gameLogger.entries.forEach(function (e) {
       if (e.pot > maxPot) maxPot = e.pot;
     });
-
-    gameLogger.show({
+    return {
       playerCount: gameState.players.length,
       playerNames: gameState.players.map(function (p) { return p.name; }),
       players: gameState.players.map(function (p) {
@@ -1641,7 +1735,11 @@
       smallBlind: getSmallBlind(),
       bigBlind: getBigBlind(),
       maxPot: maxPot
-    });
+    };
+  }
+
+  function showGameLog() {
+    gameLogger.show(buildLogContext());
   }
 
   function fitTableToScreen() {
