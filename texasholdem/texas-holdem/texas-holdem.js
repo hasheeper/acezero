@@ -270,14 +270,14 @@
   }
 
   function updateMsg(text) {
-    UI.txtBoard.textContent = text;
+    UI.txtBoard.innerHTML = text;
   }
 
   function updatePotDisplay() {
     const activeBets = gameState.players.reduce((sum, p) => sum + p.currentBet, 0);
     const totalPot = gameState.pot + activeBets;
     if (UI.potAmount) {
-      UI.potAmount.textContent = totalPot.toLocaleString();
+      UI.potAmount.innerHTML = Currency.html(totalPot);
     }
     updateCenterChipsVisual(gameState.pot);
   }
@@ -288,24 +288,11 @@
     container.innerHTML = '';
     if (amount <= 0) return;
 
-    // 决定显示的筹码数量
-    let visualCount = 2;
-    if (amount > 100) visualCount = 3;
-    if (amount > 500) visualCount = 4;
-    if (amount > 2000) visualCount = 5;
-    if (amount > 5000) visualCount = 6;
+    const vis = Currency.chipVisual(amount);
 
-    // 根据底池大小选择颜色
-    let chipType = 'white';
-    if (amount > 50) chipType = 'green';
-    if (amount > 200) chipType = 'blue';
-    if (amount > 1000) chipType = 'red';
-    if (amount > 5000) chipType = 'purple';
-    if (amount > 20000) chipType = 'black';
-
-    for (let i = 0; i < visualCount; i++) {
+    for (let i = 0; i < vis.count; i++) {
       const chip = document.createElement('div');
-      chip.className = `chip-stack ${chipType}`;
+      chip.className = `chip-stack ${vis.color}`;
       const offset = i * -6;
       chip.style.top = `${offset}px`;
       chip.style.zIndex = i + 1;
@@ -343,7 +330,7 @@
       <!-- 座位信息 -->
       <div class="seat-header">
         <div class="player-name">${player.name}</div>
-        <div class="chip-count"><span>$</span>${player.chips.toLocaleString()}</div>
+        <div class="chip-count">${Currency.html(player.chips)}</div>
       </div>
       
       <!-- 卡牌区域 -->
@@ -355,7 +342,7 @@
           <div class="chip-ring"></div>
           <div class="chip-inlay"></div>
         </div>
-        <div class="chip-amount">$0</div>
+        <div class="chip-amount"></div>
       </div>
       
       <!-- 状态文字 -->
@@ -377,40 +364,26 @@
     });
   }
 
-  // 根据金额获取筹码类型
+  // 根据银弗数值获取筹码颜色 (委托给 Currency 模块)
   function getChipType(amount) {
-    // 货币换算: 1铜 = $1, 1银 = 100铜, 1金 = 100银 = 10000铜
-    // 调整阈值使其更适合德州扑克游戏（初始筹码1000）
-    // 白色: < 50 (小盲注级别)
-    // 绿色: 50-199 (大盲注到小额加注)
-    // 蓝色: 200-499 (中等下注)
-    // 红色: 500-999 (大额下注)
-    // 紫色: 1000-4999 (全押级别)
-    // 黑色: 5000+ (超大额)
-    
-    if (amount >= 100000) return 'black';
-    if (amount >= 10000) return 'purple';
-    if (amount >= 1000) return 'red';
-    if (amount >= 100) return 'blue';
-    if (amount >= 11) return 'green';
-    return 'white';
+    return Currency.chipColor(amount);
   }
 
   function updateSeatDisplay(player) {
     if (!player.seatElement) return;
     
     const chipCount = player.seatElement.querySelector('.chip-count');
-    chipCount.innerHTML = `<span>$</span>${player.chips.toLocaleString()}`;
+    chipCount.innerHTML = Currency.html(player.chips);
     
     const betChips = player.seatElement.querySelector('.bet-chips');
     if (player.currentBet > 0 && player.isActive) {
       betChips.style.display = 'flex';
-      betChips.querySelector('.chip-amount').textContent = '$' + player.currentBet;
+      betChips.querySelector('.chip-amount').innerHTML = Currency.htmlAmount(player.currentBet);
       
       // 根据下注金额设置筹码类型
       const chipStack = betChips.querySelector('.chip-stack');
       const chipType = getChipType(player.currentBet);
-      console.log(`[Chip Debug] Player: ${player.name}, Bet: $${player.currentBet}, Chip Type: ${chipType}`);
+      console.log(`[Chip Debug] Player: ${player.name}, Bet: ${Currency.amount(player.currentBet)}, Chip Type: ${chipType}`);
       chipStack.className = 'chip-stack ' + chipType;
     } else {
       betChips.style.display = 'none';
@@ -618,7 +591,7 @@
     
     // 更新toCall显示
     const toCall = gameState.currentBet - currentPlayer.currentBet;
-    UI.toCallAmount.textContent = toCall;
+    UI.toCallAmount.innerHTML = Currency.htmlAmount(toCall);
     
     if (currentPlayer.type === 'human') {
       updateMsg(`Your turn - ${gameState.phase.toUpperCase()}`);
@@ -646,7 +619,7 @@
     if (toCall === 0) {
       UI.btnCheckCall.textContent = 'CHECK';
     } else {
-      UI.btnCheckCall.textContent = `CALL $${toCall}`;
+      UI.btnCheckCall.innerHTML = `CALL ${Currency.htmlAmount(toCall)}`;
     }
     
     // 更新加注滑块
@@ -657,7 +630,7 @@
     UI.raiseSlider.min = minRaise;
     UI.raiseSlider.max = Math.max(minRaise, maxRaise);
     UI.raiseSlider.value = minRaise;
-    UI.raiseAmountDisplay.textContent = '$' + minRaise;
+    UI.raiseAmountDisplay.innerHTML = Currency.htmlAmount(minRaise);
   }
 
   function playerFold() {
@@ -692,7 +665,7 @@
       player.currentBet += callAmount;
       player.totalBet += callAmount;
       logEvent('PLAYER_CALL', { playerId: player.id, playerName: player.name, amount: callAmount });
-      updateMsg(`You call $${callAmount}`);
+      updateMsg(`You call ${Currency.htmlAmount(callAmount)}`);
     } else {
       logEvent('PLAYER_CHECK', { playerId: player.id, playerName: player.name });
       updateMsg('You check');
@@ -743,7 +716,7 @@
     
     player.hasActedThisRound = true;
     UI.raiseControls.style.display = 'none';
-    updateMsg(isBet ? `You bet $${actualRaise}` : `You raise $${actualRaise}`);
+    updateMsg(isBet ? `You bet ${Currency.htmlAmount(actualRaise)}` : `You raise ${Currency.htmlAmount(actualRaise)}`);
     updateSeatDisplay(player);
     updatePotDisplay();
     gameState.actionCount++;
@@ -845,7 +818,7 @@
     logEvent('AI_CALL', { playerId: player.id, playerName: player.name, amount: callAmount });
     
     const status = player.seatElement.querySelector('.seat-status');
-    status.textContent = `CALL $${callAmount}`;
+    status.innerHTML = `CALL ${Currency.htmlAmount(callAmount)}`;
     
     updateSeatDisplay(player);
     updatePotDisplay();
@@ -869,7 +842,7 @@
     // 再加注
     const raiseAmount = Math.min(amount, player.chips);
     
-    // 🛡️ 修复 RAISE $0 问题：如果加注金额 <= 0，说明是 All-in 跟注
+    // 🛡️ 修复 RAISE 0 问题：如果加注金额 <= 0，说明是 All-in 跟注
     if (raiseAmount <= 0) {
       // 这其实是一个 CALL (All-in)，不是 RAISE
       player.hasActedThisRound = true;
@@ -882,7 +855,7 @@
       });
       
       const status = player.seatElement.querySelector('.seat-status');
-      status.textContent = `CALL $${actualCallAmount} (All-in)`;
+      status.innerHTML = `CALL ${Currency.htmlAmount(actualCallAmount)} (All-in)`;
       
       updateSeatDisplay(player);
       updatePotDisplay();
@@ -915,7 +888,7 @@
     
     const status = player.seatElement.querySelector('.seat-status');
     const allInSuffix = isAllIn ? ' (All-in)' : '';
-    status.textContent = isBet ? `BET $${raiseAmount}${allInSuffix}` : `RAISE $${raiseAmount}${allInSuffix}`;
+    status.innerHTML = isBet ? `BET ${Currency.htmlAmount(raiseAmount)}${allInSuffix}` : `RAISE ${Currency.htmlAmount(raiseAmount)}${allInSuffix}`;
     
     updateSeatDisplay(player);
     updatePotDisplay();
@@ -1369,7 +1342,7 @@
     updatePotDisplay();
     
     logEvent('BLINDS', { sb: sbPlayer.name, bb: bbPlayer.name, sbAmount: getSmallBlind(), bbAmount: getBigBlind() });
-    updateMsg(`Blinds posted: SB $${getSmallBlind()} / BB $${getBigBlind()}`);
+    updateMsg(`Blinds: SB ${Currency.htmlAmount(getSmallBlind())} / BB ${Currency.htmlAmount(getBigBlind())}`);
   }
 
   async function dealHoleCards() {
@@ -1567,8 +1540,8 @@
       reason: 'All others folded'
     });
     
-    _lastResultMsg = `${winner.name} wins $${potWon}`;
-    updateMsg(_lastResultMsg + '!');
+    _lastResultMsg = `${winner.name} wins ${Currency.compact(potWon)}`;
+    updateMsg(`${winner.name} wins ${Currency.html(potWon)}!`);
     winner.seatElement.classList.add('winner');
     
     updateSeatDisplay(winner);
@@ -1624,11 +1597,11 @@
     
     const handDescr = winnerPlayers[0].seatElement.querySelector('.seat-status').textContent;
     if (winnerPlayers.length === 1) {
-      _lastResultMsg = `${winnerNames} wins $${potWon}\n${handDescr}`;
-      updateMsg(`${winnerNames} wins $${potWon}!`);
+      _lastResultMsg = `${winnerNames} wins ${Currency.compact(potWon)}\n${handDescr}`;
+      updateMsg(`${winnerNames} wins ${Currency.html(potWon)}!`);
     } else {
-      _lastResultMsg = `Split pot: ${winnerNames}\n$${sharePerWinner} each — ${handDescr}`;
-      updateMsg(`Split pot: ${winnerNames} ($${sharePerWinner} each)`);
+      _lastResultMsg = `Split pot: ${winnerNames}\n${Currency.compact(sharePerWinner)} each — ${handDescr}`;
+      updateMsg(`Split pot: ${winnerNames} (${Currency.html(sharePerWinner)} each)`);
     }
     
     updatePotDisplay();
@@ -1777,7 +1750,7 @@
   // 技能按钮由 skillUI._buildSkillButtons 自动生成和绑定
   
   UI.raiseSlider.addEventListener('input', function() {
-    UI.raiseAmountDisplay.textContent = '$' + this.value;
+    UI.raiseAmountDisplay.innerHTML = Currency.htmlAmount(parseInt(this.value));
   });
 
 

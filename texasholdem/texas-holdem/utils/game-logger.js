@@ -130,7 +130,7 @@
       case 'DEAL':
         return '[发牌] ' + entry.playerCount + ' 名玩家入局';
       case 'BLINDS':
-        return '[盲注] ' + entry.sb + ' 小盲 $' + (entry.sbAmount || 10) + ', ' + entry.bb + ' 大盲 $' + (entry.bbAmount || 20);
+        return '[盲注] ' + entry.sb + ' 小盲 ' + Currency.amount(entry.sbAmount || 10) + ', ' + entry.bb + ' 大盲 ' + Currency.amount(entry.bbAmount || 20);
       case 'PLAYER_FOLD':
       case 'AI_FOLD':
         return '[' + entry.playerName + '] 弃牌';
@@ -139,13 +139,13 @@
         return '[' + entry.playerName + '] 过牌';
       case 'PLAYER_CALL':
       case 'AI_CALL':
-        return '[' + entry.playerName + '] 跟注 $' + entry.amount + (entry.isAllIn ? ' (ALL-IN)' : '');
+        return '[' + entry.playerName + '] 跟注 ' + Currency.amount(entry.amount) + (entry.isAllIn ? ' (ALL-IN)' : '');
       case 'PLAYER_BET':
       case 'AI_BET':
-        return '[' + entry.playerName + '] 下注 $' + entry.amount + (entry.isAllIn ? ' (ALL-IN)' : '');
+        return '[' + entry.playerName + '] 下注 ' + Currency.amount(entry.amount) + (entry.isAllIn ? ' (ALL-IN)' : '');
       case 'PLAYER_RAISE':
       case 'AI_RAISE':
-        return '[' + entry.playerName + '] 加注 $' + entry.amount + ' (总注 $' + entry.totalBet + ')' + (entry.isAllIn ? ' (ALL-IN)' : '');
+        return '[' + entry.playerName + '] 加注 ' + Currency.amount(entry.amount) + ' (总注 ' + Currency.amount(entry.totalBet) + ')' + (entry.isAllIn ? ' (ALL-IN)' : '');
       case 'FLOP':
         return '[翻牌] ' + entry.cards;
       case 'TURN':
@@ -158,7 +158,7 @@
         const parts = ['[结算]'];
         if (entry.winners) parts.push('赢家: ' + entry.winners);
         else if (entry.winner) parts.push('赢家: ' + entry.winner);
-        parts.push('赢得 $' + entry.potWon);
+        parts.push('赢得 ' + Currency.compact(entry.potWon));
         if (entry.reason) parts.push('(' + entry.reason + ')');
         if (entry.handDescr) parts.push('牌型: ' + entry.handDescr);
         return parts.join(' ');
@@ -428,8 +428,8 @@
 
       // 游戏设置
       lines.push('【设置】');
-      lines.push('  筹码: $' + (context.initialChips || 1000));
-      lines.push('  盲注: SB $' + (context.smallBlind || 10) + ' / BB $' + (context.bigBlind || 20));
+      lines.push('  筹码: ' + Currency.compact(context.initialChips || 1000));
+      lines.push('  盲注: SB ' + Currency.amount(context.smallBlind || 10) + ' / BB ' + Currency.amount(context.bigBlind || 20));
       if (context.playerNames) {
         lines.push('  玩家: ' + context.playerNames.join(', '));
       }
@@ -503,12 +503,12 @@
       if (context.players) {
         var summaryParts = [];
         summaryParts.push('玩家: ' + (context.playerNames || []).join(', '));
-        summaryParts.push('筹码: $' + (context.initialChips || 1000));
-        summaryParts.push('盲注: $' + (context.smallBlind || 10) + '/$' + (context.bigBlind || 20));
+        summaryParts.push('筹码: ' + Currency.compact(context.initialChips || 1000));
+        summaryParts.push('盲注: ' + Currency.amount(context.smallBlind || 10) + '/' + Currency.amount(context.bigBlind || 20));
         if (context.boardStr) summaryParts.push('公共牌: ' + context.boardStr);
         for (var p = 0; p < context.players.length; p++) {
           var pl = context.players[p];
-          summaryParts.push(pl.name + ': ' + (pl.cardsStr || '[未知]') + ' | 剩余 $' + (pl.chips || 0));
+          summaryParts.push(pl.name + ': ' + (pl.cardsStr || '[未知]') + ' | 剩余 ' + Currency.compact(pl.chips || 0));
         }
         resultSummary = summaryParts.join('\n');
       }
@@ -525,7 +525,7 @@
         '【字数要求】' + wordRequirement,
         '',
         '【核心原则】',
-        '1. 去数据化: 严禁使用"底池$XX"、"跟注$XX"等原始数据。通过筹码推动声、表情变化、手指动作来体现下注。',
+        '1. 去数据化: 严禁使用"底池XX金"、"跟注XX银"等原始数据。通过筹码推动声、表情变化、手指动作来体现下注。',
         '2. 心理博弈: 每次加注/弃牌背后都有心理活动。描写眼神交锋、微表情、犹豫与决断。',
         '3. 命运系统: 技能使用是超自然力量介入。大吉=命运偏转、先知=预见未来、空白=虚无侵蚀。用视觉特效描写。',
         '4. 节奏控制: 翻牌前=序幕铺垫，翻牌=剧情展开，转牌=高潮前奏，河牌=最终对决。',

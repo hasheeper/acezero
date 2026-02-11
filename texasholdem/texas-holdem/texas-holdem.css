@@ -342,7 +342,7 @@ body {
   box-shadow: 0 2px 5px rgba(0,0,0,0.5);
 }
 
-.chip-count span { color: var(--gold-main); margin-right: 2px; }
+/* 货币颜色由 Currency.html() 内联样式控制 */
 
 .seat.human-player .chip-count { border-left-color: var(--magic-highlight); }
 
@@ -953,16 +953,9 @@ body {
   font-family: 'Cinzel', serif;
   font-weight: 800;
   font-size: 36px;
-  color: #E74C3C;
+  color: #ccc;
   display: block;
   line-height: 1.1;
-  text-shadow: 0 0 15px rgba(231, 76, 60, 0.4);
-}
-
-.pylon-currency {
-  font-size: 20px;
-  color: var(--gold-main);
-  margin-right: 4px;
 }
 
 /* --- CENTER: Command Deck --- */

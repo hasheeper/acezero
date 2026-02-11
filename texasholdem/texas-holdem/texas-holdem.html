@@ -25,7 +25,7 @@
         <div id="pot-clusters"></div>
         <div class="pot-info-hover">
           <div class="pot-label">TOTAL POT</div>
-          <div class="pot-val-hover">$<span id="pot-amount">0</span></div>
+          <div class="pot-val-hover"><span id="pot-amount">0</span></div>
         </div>
       </div>
       <!-- 公共牌 -->
@@ -86,7 +86,7 @@
     <!-- = [ LEFT: Pylon / Info ] ======================== -->
     <div class="pylon">
       <div class="pylon-label">CHIPS TO CALL</div>
-      <div class="pylon-val"><span class="pylon-currency">$</span><span id="to-call-amount">0</span></div>
+      <div class="pylon-val"><span id="to-call-amount">0</span></div>
     </div>
 
     <!-- = [ CENTER: Command Deck ] ======================== -->
@@ -95,7 +95,7 @@
       <div id="raise-controls" style="display:none;">
         <div class="raise-inner">
            <span class="raise-label">AMOUNT:</span>
-           <span id="raise-amount-display">$100</span>
+           <span id="raise-amount-display">1金</span>
            <input type="range" id="raise-slider" min="0" max="1000" step="10">
            <button id="btn-confirm-raise" class="btn-cmd btn-confirm-raise">OK</button>
         </div>
@@ -175,6 +175,7 @@
   <script src="../pokersolver/pokersolver.js"></script>
 
   <!-- 核心引擎（IIFE，逐步迁移） -->
+  <script src="utils/currency.js"></script>
   <script src="core/poker-ai.js"></script>
   <script src="utils/game-logger.js"></script>
   <script src="core/skill-system.js"></script>
