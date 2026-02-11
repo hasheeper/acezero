@@ -340,7 +340,7 @@
         effectiveBluffFreq *= 0.6; // 降到 60%
       }
       
-      const isBluffing = Math.random() < effectiveBluffFreq && adjustedStrength < 40;
+      const isBluffing = Math.random() < effectiveBluffFreq && rawStrength <= 20;
       
       // 5. 决策逻辑
       return this.makeDecision(context, adjustedStrength, rawStrength, potOdds, isBluffing, opponents, magicLevel);
@@ -520,10 +520,16 @@
         return { action: ACTIONS.RAISE, amount: raiseAmount };
       }
       
-      // 诈唬下注
+      // 诈唬下注（不能超过 40% 筹码，防止意外全押诈唬）
       if (isBluffing && phase !== 'preflop') {
-        const bluffAmount = this.calculateRaiseAmount(50, pot, aiStack, minRaise); // 诈唬用中等尺度
-        return { action: ACTIONS.RAISE, amount: bluffAmount };
+        const bluffAmount = Math.min(
+          this.calculateRaiseAmount(50, pot, aiStack, minRaise),
+          Math.floor(aiStack * 0.4)
+        );
+        if (bluffAmount >= minRaise) {
+          return { action: ACTIONS.RAISE, amount: bluffAmount };
+        }
+        return { action: ACTIONS.CHECK, amount: 0 };
       }
       
       // 中等牌力：根据风险喜好决定
@@ -665,10 +671,15 @@
         }
       }
       
-      // 诈唬加注 - 只在小注时才考虑
+      // 诈唬加注 - 只在小注时才考虑，且不超过 40% 筹码
       if (isBluffing && pressureLevel === 0 && Math.random() < 0.4) {
-        const bluffAmount = this.calculateRaiseAmount(55, pot, aiStack, minRaise);
-        return { action: ACTIONS.RAISE, amount: bluffAmount };
+        const bluffAmount = Math.min(
+          this.calculateRaiseAmount(55, pot, aiStack, minRaise),
+          Math.floor(aiStack * 0.4)
+        );
+        if (bluffAmount >= minRaise) {
+          return { action: ACTIONS.RAISE, amount: bluffAmount };
+        }
       }
       
       // 弱牌但赔率合适：跟注站会跟
