@@ -80,15 +80,35 @@
     5: { max: 100, regen: 5 }
   };
 
-  // 默认属性面板（按 max(vLv, rLv) 推导）
-  const HERO_ATTRS_BY_LEVEL = {
-    0: { moirai: 10, chaos: 10, psyche: 10, void: 10 },
-    1: { moirai: 20, chaos: 15, psyche: 20, void: 20 },
-    2: { moirai: 40, chaos: 15, psyche: 30, void: 40 },
-    3: { moirai: 60, chaos: 20, psyche: 40, void: 60 },
-    4: { moirai: 70, chaos: 20, psyche: 45, void: 80 },
-    5: { moirai: 80, chaos: 20, psyche: 50, void: 100 }
+  // 主手属性面板（KAZU = Void 特化）
+  const VANGUARD_ATTRS_BY_LEVEL = {
+    0: { moirai: 0,  chaos: 0,  psyche: 0,  void: 0 },
+    1: { moirai: 0,  chaos: 0,  psyche: 10, void: 20 },
+    2: { moirai: 0,  chaos: 0,  psyche: 20, void: 40 },
+    3: { moirai: 0,  chaos: 0,  psyche: 30, void: 60 },
+    4: { moirai: 0,  chaos: 0,  psyche: 35, void: 80 },
+    5: { moirai: 0,  chaos: 0,  psyche: 40, void: 100 }
   };
+
+  // 副手属性面板（RINO = Moirai 特化）
+  const REARGUARD_ATTRS_BY_LEVEL = {
+    0: { moirai: 0,  chaos: 0,  psyche: 0,  void: 0 },
+    1: { moirai: 20, chaos: 10, psyche: 10, void: 0 },
+    2: { moirai: 40, chaos: 15, psyche: 15, void: 0 },
+    3: { moirai: 60, chaos: 20, psyche: 20, void: 0 },
+    4: { moirai: 70, chaos: 20, psyche: 25, void: 0 },
+    5: { moirai: 80, chaos: 20, psyche: 30, void: 0 }
+  };
+
+  // 合并属性面板（取两者各维度最大值，用于战斗/防御）
+  function mergeAttrs(vAttrs, rAttrs) {
+    return {
+      moirai: Math.max(vAttrs.moirai || 0, rAttrs.moirai || 0),
+      chaos:  Math.max(vAttrs.chaos  || 0, rAttrs.chaos  || 0),
+      psyche: Math.max(vAttrs.psyche || 0, rAttrs.psyche || 0),
+      void:   Math.max(vAttrs.void   || 0, rAttrs.void   || 0)
+    };
+  }
 
   /**
    * 从属性面板推导可用技能（与 skill-system.js deriveSkillsFromAttrs 同构）
@@ -400,12 +420,17 @@
     const rLv = rName ? Math.min(5, Math.max(0, rData.level || 0)) : 0;
     const maxLv = Math.max(vLv, rLv);
 
-    // 属性：优先从 ERA 读取，否则按等级推导
-    const eraAttrs = hero.attrs || null;
-    const attrs = eraAttrs || HERO_ATTRS_BY_LEVEL[maxLv] || HERO_ATTRS_BY_LEVEL[0];
+    // 各角色独立属性面板（按等级推导）
+    const vAttrs = VANGUARD_ATTRS_BY_LEVEL[vLv] || VANGUARD_ATTRS_BY_LEVEL[0];
+    const rAttrs = rName ? (REARGUARD_ATTRS_BY_LEVEL[rLv] || REARGUARD_ATTRS_BY_LEVEL[0]) : { moirai: 0, chaos: 0, psyche: 0, void: 0 };
 
-    // 技能：从属性面板推导（通用系统）
-    const mergedSkills = deriveSkillsFromAttrs(attrs);
+    // 合并属性（取各维度最大值，用于战斗/防御）
+    const eraAttrs = hero.attrs || null;
+    const attrs = eraAttrs || mergeAttrs(vAttrs, rAttrs);
+
+    // 技能：各角色独立推导
+    const vanguardSkills = deriveSkillsFromAttrs(vAttrs);
+    const rearguardSkills = rName ? deriveSkillsFromAttrs(rAttrs) : [];
 
     // 特质
     const vTrait = VANGUARD_TRAIT_UNLOCK[vLv] || null;
@@ -417,11 +442,17 @@
     const maxMana = (manaSource.maxMana != null) ? manaSource.maxMana : (MANA_BY_LEVEL[manaLevel] || { max: 0 }).max;
     const mana = (manaSource.mana != null) ? manaSource.mana : maxMana;
 
-    // 构建 hero 配置（game-config v4 格式）
+    // 赌局筹码：NPC 使用 table chips，hero 使用 ERA funds（上限为 table chips）
+    const tableChips = battle.chips || 1000;
+    const heroFunds = hero.funds || 0;
+    const heroChips = heroFunds > 0 ? Math.min(heroFunds, tableChips) : tableChips;
+
+    // 构建 hero 配置（game-config v5 格式：区分主手/副手技能）
     const heroConfig = {
       vanguard: { name: vName, level: vLv },
       attrs: { ...attrs },
-      skills: mergedSkills,
+      vanguardSkills: vanguardSkills,
+      rearguardSkills: rearguardSkills,
       mana: mana,
       maxMana: maxMana
     };
@@ -435,7 +466,8 @@
 
     return {
       blinds: battle.blinds || [10, 20],
-      chips: battle.chips || 1000,
+      chips: tableChips,
+      heroChips: heroChips,
       hero: heroConfig,
       seats: battle.seats || {}
     };
@@ -742,7 +774,8 @@ ${charLines}
       UNIVERSAL_SKILLS,
       VANGUARD_TRAIT: VANGUARD_TRAIT_UNLOCK,
       REARGUARD_TRAIT: REARGUARD_TRAIT_UNLOCK,
-      HERO_ATTRS: HERO_ATTRS_BY_LEVEL,
+      VANGUARD_ATTRS: VANGUARD_ATTRS_BY_LEVEL,
+      REARGUARD_ATTRS: REARGUARD_ATTRS_BY_LEVEL,
       MANA: MANA_BY_LEVEL
     },
 

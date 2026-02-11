@@ -6,7 +6,8 @@
     "vanguard": { "name": "KAZU", "level": 3, "trait": "blank_body" },
     "rearguard": { "name": "RINO", "level": 5, "trait": "fate_weaver" },
     "attrs": { "moirai": 80, "chaos": 20, "psyche": 50, "void": 100 },
-    "skills": ["grand_wish", "minor_wish", "vision", "insight", "axiom", "static_field", "insulation", "reality"]
+    "vanguardSkills": ["reality", "insulation", "static_field"],
+    "rearguardSkills": ["divine_order", "grand_wish", "minor_wish"]
   },
 
   "seats": {

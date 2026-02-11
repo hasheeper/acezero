@@ -18,7 +18,8 @@
     hero: {
       vanguard: { name: 'KAZU', level: 3 },
       rearguard: { name: 'RINO', level: 5 },
-      skills: {}
+      vanguardSkills: [],
+      rearguardSkills: []
     },
     seats: {
       BTN: { vanguard: { name: 'ALPHA', level: 0 }, ai: 'balanced' },
@@ -57,17 +58,20 @@
   function getPlayerConfigs() {
     var cfg = _cfg();
     var result = [];
+    var tableChips = cfg.chips || 1000;
 
     // index 0: hero（显示名用 vanguard.name）
+    // heroChips: 来自 ERA funds（上限为 table chips），未设置则用 table chips
+    var heroChips = cfg.heroChips || tableChips;
     result.push({
       id: 0,
       name: cfg.hero ? _charName(cfg.hero) : 'RINO',
       type: 'human',
-      chips: cfg.chips || 1000,
+      chips: heroChips,
       personality: null
     });
 
-    // index 1+: NPC 按 SEAT_ORDER
+    // index 1+: NPC 按 SEAT_ORDER，使用 table chips
     var seats = cfg.seats || {};
     for (var i = 0; i < SEAT_ORDER.length; i++) {
       var s = seats[SEAT_ORDER[i]];
@@ -78,7 +82,7 @@
         id: result.length,
         name: _charName(s),
         type: 'ai',
-        chips: cfg.chips || 1000,
+        chips: tableChips,
         personality: { riskAppetite: aiStyle, difficulty: AI_DIFF_MAP[aiStyle] || 'regular', emotion: aiEmotion },
         seat: SEAT_ORDER[i]
       });
@@ -1693,6 +1697,8 @@
     gameLogger.entries.forEach(function (e) {
       if (e.pot > maxPot) maxPot = e.pot;
     });
+    // 收集 mana 信息
+    var heroMana = skillSystem.getMana(0);
     return {
       playerCount: gameState.players.length,
       playerNames: gameState.players.map(function (p) { return p.name; }),
@@ -1707,7 +1713,8 @@
       initialChips: getInitialChips(),
       smallBlind: getSmallBlind(),
       bigBlind: getBigBlind(),
-      maxPot: maxPot
+      maxPot: maxPot,
+      heroMana: heroMana
     };
   }
 

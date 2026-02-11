@@ -7,7 +7,7 @@ ERA 变量结构
 
 {
   "hero": {
-    "gold": 500,
+    "funds": 500,
     "角色名A": { "level": 3, "mana": 0, "maxMana": 0 },
     "角色名B": { "level": 5, "mana": 100, "maxMana": 100 }
   }
@@ -20,7 +20,8 @@ ERA 变量结构
 
 1. 金钱变动
 
-写入路径：hero.gold
+写入路径：hero.funds
+- 1funds = 1银弗 
 - 赢牌收入、购买消费、剧情奖励等。
 - 使用绝对值覆写（不是增量）。
 
@@ -49,7 +50,7 @@ ERA 变量结构
 <VariableEdit>
 {
   "hero": {
-    "gold": 650,
+    "funds": 650,
     "RINO": {
       "mana": 72
     }

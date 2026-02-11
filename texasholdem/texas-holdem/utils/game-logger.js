@@ -163,8 +163,10 @@
         if (entry.handDescr) parts.push('牌型: ' + entry.handDescr);
         return parts.join(' ');
       }
-      case 'SKILL_USE':
-        return '[技能] ' + (entry.skill || '未知') + (entry.manaRemaining != null ? ' (剩余魔力: ' + entry.manaRemaining + ')' : '');
+      case 'SKILL_USE': {
+        var casterTag = entry.caster ? entry.caster + ': ' : '';
+        return '[技能] ' + casterTag + (entry.skill || '未知') + (entry.manaRemaining != null ? ' (剩余魔力: ' + entry.manaRemaining + ')' : '');
+      }
       case 'SENSE':
         return '[感知] ' + (entry.message || '');
       case 'NPC_SKILL':
@@ -509,6 +511,9 @@
         for (var p = 0; p < context.players.length; p++) {
           var pl = context.players[p];
           summaryParts.push(pl.name + ': ' + (pl.cardsStr || '[未知]') + ' | 剩余 ' + Currency.compact(pl.chips || 0));
+        }
+        if (context.heroMana && context.heroMana.max > 0) {
+          summaryParts.push('魔运: ' + context.heroMana.current + '/' + context.heroMana.max);
         }
         resultSummary = summaryParts.join('\n');
       }

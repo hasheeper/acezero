@@ -414,10 +414,13 @@
       }
 
       var name = SKILL_NAMES[skill.skillKey] || skill.skillKey;
-      if (this.onMessage) this.onMessage('[' + name + '] ' + (skill.description || '已激活'));
+      var caster = skill.casterName || '';
+      var casterPrefix = caster ? caster + ': ' : '';
+      if (this.onMessage) this.onMessage('[' + casterPrefix + name + '] ' + (skill.description || '已激活'));
       if (this.onLog) this.onLog('SKILL_USE', {
         skill: name,
         skillKey: skill.skillKey,
+        caster: caster,
         tier: skill.tier,
         manaRemaining: this.skillSystem.getMana(this.humanPlayerId).current
       });
@@ -782,10 +785,13 @@
         ? '<div class="cost-badge">' + visual.cost + ' MP</div>'
         : '<div class="cost-badge">--</div>';
 
+      var casterTag = skill.casterName ? '<span class="meta-caster">' + skill.casterName + '</span>' : '';
+
       btn.innerHTML =
         bgSvg +
         '<div class="card-top">' + costHtml + '</div>' +
         '<div class="card-bot">' +
+          casterTag +
           '<span class="meta-tier">' + tierText + '</span>' +
           '<span class="meta-name">' + (visual.name || skill.skillKey) + '</span>' +
         '</div>';

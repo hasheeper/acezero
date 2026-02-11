@@ -228,7 +228,26 @@
         };
         // current: 优先用 ERA 的 mana，否则满值
         manaConfig.current = (h.mana != null) ? Math.min(h.mana, manaConfig.max) : manaConfig.max;
-        this._registerEntity(0, name, 'human', h.skills || {}, manaConfig);
+
+        // v5 格式：区分主手/副手技能
+        const vName = (h.vanguard && h.vanguard.name) || 'KAZU';
+        const rName = (h.rearguard && h.rearguard.name) || null;
+
+        if (h.vanguardSkills || h.rearguardSkills) {
+          // 注册 mana 池（共享一个池）
+          this._registerManaPool(0, manaConfig);
+          // 主手技能
+          if (h.vanguardSkills) {
+            this._registerSkillList(0, name, 'human', h.vanguardSkills, vName);
+          }
+          // 副手技能
+          if (h.rearguardSkills && rName) {
+            this._registerSkillList(0, name, 'human', h.rearguardSkills, rName);
+          }
+        } else {
+          // 兼容旧格式：单一 skills 数组
+          this._registerEntity(0, name, 'human', h.skills || {}, manaConfig);
+        }
       }
 
       // --- Seats (NPC) ---
@@ -271,11 +290,10 @@
     }
 
     /**
-     * 注册单个实体的所有技能
+     * 注册 Mana 池（不注册技能）
      * @private
      */
-    _registerEntity(ownerId, ownerName, ownerType, skillList, manaConfig) {
-      // Mana 池
+    _registerManaPool(ownerId, manaConfig) {
       if (manaConfig) {
         this.manaPools.set(ownerId, {
           current: (manaConfig.current != null) ? manaConfig.current : manaConfig.max,
@@ -283,6 +301,29 @@
           regen: manaConfig.regen || 5
         });
       }
+    }
+
+    /**
+     * 注册一组技能（带 casterName）
+     * @private
+     */
+    _registerSkillList(ownerId, ownerName, ownerType, skillList, casterName) {
+      const keys = Array.isArray(skillList)
+        ? skillList
+        : Object.keys(skillList || {});
+
+      for (const skillKey of keys) {
+        this._registerSingleSkill(ownerId, ownerName, ownerType, skillKey, casterName);
+      }
+    }
+
+    /**
+     * 注册单个实体的所有技能（兼容旧格式）
+     * @private
+     */
+    _registerEntity(ownerId, ownerName, ownerType, skillList, manaConfig) {
+      // Mana 池
+      this._registerManaPool(ownerId, manaConfig);
 
       // 展开技能（skillList 是 key 数组，如 ["grand_wish", "vision"]）
       // 兼容旧格式 { key: level } → 忽略 level 值，只取 key
@@ -291,46 +332,55 @@
         : Object.keys(skillList || {});
 
       for (const skillKey of keys) {
-        const catalog = lookupSkill(skillKey);
-        if (!catalog) {
-          console.warn('[SkillSystem] 未知技能 key:', skillKey, '(owner:', ownerName, ')');
-          continue;
-        }
-
-        const activation = catalog.activation || ACTIVATION.PASSIVE;
-        const initialActive = (activation === ACTIVATION.PASSIVE);
-
-        const skill = {
-          uniqueId: ownerId + '_' + skillKey,
-          ownerId: ownerId,
-          ownerName: ownerName,
-          ownerType: ownerType,
-          skillKey: skillKey,
-          effect: catalog.effect,
-          activation: activation,
-          manaCost: catalog.manaCost || 0,
-          power: catalog.power || 0,
-          active: initialActive,
-          description: catalog.description || '',
-          target: catalog.target || null,
-          trigger: null,
-          cooldown: catalog.cooldown || 0,
-          currentCooldown: 0,
-          // 阶级压制元数据
-          tier: catalog.tier || 3,
-          attr: catalog.attr || null,
-          suppressTiers: catalog.suppressTiers || null,
-          suppressAttr: catalog.suppressAttr || null,
-          suppressAll: catalog.suppressAll || false,
-          cannotAffect: catalog.cannotAffect || null
-        };
-
-        this.skills.set(skill.uniqueId, skill);
-        this._log('SKILL_REGISTERED', {
-          owner: ownerName, key: skillKey, effect: skill.effect,
-          activation: activation, tier: skill.tier, power: skill.power
-        });
+        this._registerSingleSkill(ownerId, ownerName, ownerType, skillKey, ownerName);
       }
+    }
+
+    /**
+     * 注册单个技能
+     * @private
+     */
+    _registerSingleSkill(ownerId, ownerName, ownerType, skillKey, casterName) {
+      const catalog = lookupSkill(skillKey);
+      if (!catalog) {
+        console.warn('[SkillSystem] 未知技能 key:', skillKey, '(owner:', ownerName, ')');
+        return;
+      }
+
+      const activation = catalog.activation || ACTIVATION.PASSIVE;
+      const initialActive = (activation === ACTIVATION.PASSIVE);
+
+      const skill = {
+        uniqueId: ownerId + '_' + skillKey,
+        ownerId: ownerId,
+        ownerName: ownerName,
+        ownerType: ownerType,
+        casterName: casterName || ownerName,
+        skillKey: skillKey,
+        effect: catalog.effect,
+        activation: activation,
+        manaCost: catalog.manaCost || 0,
+        power: catalog.power || 0,
+        active: initialActive,
+        description: catalog.description || '',
+        target: catalog.target || null,
+        trigger: null,
+        cooldown: catalog.cooldown || 0,
+        currentCooldown: 0,
+        // 阶级压制元数据
+        tier: catalog.tier || 3,
+        attr: catalog.attr || null,
+        suppressTiers: catalog.suppressTiers || null,
+        suppressAttr: catalog.suppressAttr || null,
+        suppressAll: catalog.suppressAll || false,
+        cannotAffect: catalog.cannotAffect || null
+      };
+
+      this.skills.set(skill.uniqueId, skill);
+      this._log('SKILL_REGISTERED', {
+        owner: ownerName, caster: casterName, key: skillKey, effect: skill.effect,
+        activation: activation, tier: skill.tier, power: skill.power
+      });
     }
 
     // ========== Mana 管理 ==========
