@@ -358,6 +358,12 @@
     }
 
     seat.innerHTML = `
+      <!-- 浮动名牌（独立于座位容器外） -->
+      <div class="player-name-float">
+        <span class="position-badge" style="display:none;"></span>
+        <span class="player-name">${player.name}</span>
+      </div>
+
       <!-- HUD 角标 -->
       <div class="hud-corner hud-tl"></div>
       <div class="hud-corner hud-tr"></div>
@@ -369,12 +375,8 @@
         <span>D</span>
       </div>
       
-      <!-- 座位信息 -->
+      <!-- 座位信息（仅筹码） -->
       <div class="seat-header">
-        <div class="player-name-row">
-          <span class="position-badge" style="display:none;"></span>
-          <span class="player-name">${player.name}</span>
-        </div>
         <div class="chip-count">${Currency.html(player.chips)}</div>
       </div>
       
@@ -478,46 +480,12 @@
     });
   }
 
-  // 动态位置标签：根据 dealerIndex 和活跃玩家数计算每人的位置
-  // 标准德州顺序：BTN → SB → BB → UTG → HJ → CO
+  // 位置标签：直接使用配置中的 seat 字段（BTN/SB/BB/UTG/HJ/CO）
+  // seat 字段在 getPlayerConfigs() 中已从 heroSeat + NPC 座位键正确赋值
   function assignPositions() {
     var players = gameState.players;
-    var n = players.length;
-    var active = [];
-    // 从 dealerIndex 开始顺时针收集活跃玩家
-    for (var step = 0; step < n; step++) {
-      var idx = (gameState.dealerIndex + step) % n;
-      if (players[idx].isActive) active.push(idx);
-    }
-    var count = active.length;
-    if (count === 0) return;
-
-    // 位置名称表（按活跃人数）
-    // 2人: BTN(=SB), BB
-    // 3人: BTN, SB, BB
-    // 4人: BTN, SB, BB, UTG
-    // 5人: BTN, SB, BB, UTG, CO
-    // 6人: BTN, SB, BB, UTG, HJ, CO
-    var labels;
-    if (count === 2) {
-      labels = ['BTN', 'BB'];
-    } else if (count === 3) {
-      labels = ['BTN', 'SB', 'BB'];
-    } else if (count === 4) {
-      labels = ['BTN', 'SB', 'BB', 'UTG'];
-    } else if (count === 5) {
-      labels = ['BTN', 'SB', 'BB', 'UTG', 'CO'];
-    } else {
-      labels = ['BTN', 'SB', 'BB', 'UTG', 'HJ', 'CO'];
-    }
-
-    // 先清除所有玩家的位置
-    for (var i = 0; i < n; i++) {
-      players[i].position = '';
-    }
-    // 分配位置
-    for (var j = 0; j < count && j < labels.length; j++) {
-      players[active[j]].position = labels[j];
+    for (var i = 0; i < players.length; i++) {
+      players[i].position = players[i].seat || '';
     }
   }
 
