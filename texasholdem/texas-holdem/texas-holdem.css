@@ -314,18 +314,61 @@ body {
   gap: 10px;
 }
 
+.player-name-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  justify-content: center;
+}
+
 .player-name {
   font-size: 9px;
   color: var(--gold-dim);
   letter-spacing: 1.5px;
   text-transform: uppercase;
-  flex: 1;
   text-align: center;
 }
 
 .seat.human-player .player-name {
   color: var(--magic-highlight);
   font-weight: 700;
+}
+
+/* 位置标签 (BTN/SB/BB/UTG/CO/HJ) */
+.position-badge {
+  font-size: 8px;
+  font-family: 'Rajdhani', 'JetBrains Mono', sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 1px 4px;
+  border-radius: 2px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.position-badge.pos-btn {
+  color: #fff;
+  background: rgba(207, 181, 59, 0.25);
+  border: 1px solid rgba(207, 181, 59, 0.5);
+}
+
+.position-badge.pos-sb {
+  color: #74b9ff;
+  background: rgba(116, 185, 255, 0.15);
+  border: 1px solid rgba(116, 185, 255, 0.3);
+}
+
+.position-badge.pos-bb {
+  color: #e74c3c;
+  background: rgba(231, 76, 60, 0.15);
+  border: 1px solid rgba(231, 76, 60, 0.3);
+}
+
+.position-badge.pos-other {
+  color: #95a5a6;
+  background: rgba(149, 165, 166, 0.1);
+  border: 1px solid rgba(149, 165, 166, 0.2);
 }
 
 .chip-count {

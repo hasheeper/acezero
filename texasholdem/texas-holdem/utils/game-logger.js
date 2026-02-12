@@ -22,10 +22,10 @@
   // ============================================
 
   const TIER_SCORES = {
-    0: 15,   // T0: 史诗级 (All-in 对决、大逆转、技能爆发)
-    1: 5,    // T1: 关键交互 (大额加注、关键弃牌、摊牌)
-    2: 2,    // T2: 常规行动 (跟注、过牌、发牌)
-    3: 0.2   // T3: 噪音 (引擎内部、技能系统细节)
+    0: 30,   // T0: 史诗级 (All-in 对决、大逆转、技能爆发)
+    1: 12,   // T1: 关键交互 (大额加注、关键弃牌、摊牌)
+    2: 5,    // T2: 常规行动 (跟注、过牌、发牌)
+    3: 0.5   // T3: 噪音 (引擎内部、技能系统细节)
   };
 
   /**
@@ -322,11 +322,11 @@
 
     // 1. 参战规模
     var playerCount = context.playerCount || 2;
-    var participantScore = playerCount * 60;
+    var participantScore = playerCount * 100;
     breakdown.participants = participantScore;
 
     // 2. 有效事件权值
-    var eventScore = Math.round((stats.narrativeScore || 0) * 5);
+    var eventScore = Math.round((stats.narrativeScore || 0) * 8);
     breakdown.events = eventScore;
 
     // 3. 底池规模系数 (大底池 = 更紧张 = 更多描写)
@@ -341,10 +341,15 @@
     breakdown.decayFactor = decayFactor;
 
     // 最终计算
-    var rawWords = (participantScore + eventScore) * potModifier * decayFactor;
-    var recommended = Math.min(3000, Math.max(300, Math.round(rawWords)));
-    var min = Math.max(300, recommended - 150);
-    var max = Math.min(3000, recommended + 150);
+    // 5. 资金波动加成（大输大赢 = 更多叙事空间）
+    var fundsDelta = Math.abs(context.fundsDelta || 0);
+    var fundsBonus = fundsDelta > 0 ? Math.min(200, Math.round(fundsDelta / 5)) : 0;
+    breakdown.fundsBonus = fundsBonus;
+
+    var rawWords = (participantScore + eventScore + fundsBonus) * potModifier * decayFactor;
+    var recommended = Math.min(4000, Math.max(500, Math.round(rawWords)));
+    var min = Math.max(500, recommended - 200);
+    var max = Math.min(4000, recommended + 200);
 
     breakdown.rawWords = Math.round(rawWords);
 
@@ -520,6 +525,15 @@
         resultSummary = summaryParts.join('\n');
       }
 
+      // 资金变化信息（只展示赢或亏，不同时出现）
+      var fundsUp = context.fundsUp || 0;
+      var fundsDown = context.fundsDown || 0;
+      if (fundsUp > 0) {
+        resultSummary += '\n本局净赢: +' + Currency.amount(fundsUp);
+      } else if (fundsDown > 0) {
+        resultSummary += '\n本局净亏: -' + Currency.amount(fundsDown);
+      }
+
       var wordRequirement = '本次牌局共 ' + stats.total + ' 条原始日志，清洗后 ' + stats.kept + ' 条有效事件 (T0:' + stats.t0 + ' T1:' + stats.t1 + ' T2:' + stats.t2 + ' T3:' + stats.t3 + ')，推荐正文字数: ' + wordCount.min + '~' + wordCount.max + ' 字 (不少于 ' + wordCount.min + ' 字)';
 
       console.log('[GameLogger] 日志清洗完成: ' + stats.total + ' → ' + stats.kept + ' (删除 ' + stats.deleted + '), 叙事分: ' + stats.narrativeScore.toFixed(1) + ', 推荐字数: ' + wordCount.min + '~' + wordCount.max);
@@ -546,6 +560,14 @@
         '<POKER_RESULT>',
         resultSummary,
         '</POKER_RESULT>',
+        '',
+        '<FUNDS_UPDATE>',
+        (context.fundsUp > 0
+          ? '主角本局赢了 ' + Currency.amount(context.fundsUp) + '，请写入 VariableEdit:\n<VariableEdit>\n{"hero": {"funds_up": ' + context.fundsUp + '}}\n</VariableEdit>'
+          : context.fundsDown > 0
+            ? '主角本局亏了 ' + Currency.amount(context.fundsDown) + '，请写入 VariableEdit:\n<VariableEdit>\n{"hero": {"funds_down": ' + context.fundsDown + '}}\n</VariableEdit>'
+            : '主角本局不赚不亏，无需写入 funds 相关 VariableEdit'),
+        '</FUNDS_UPDATE>',
         '',
         '<WRITING_INSTRUCTION>',
         '请立即生成 ' + wordCount.min + '~' + wordCount.max + ' 字的牌局实况文案 (最低不少于 ' + wordCount.min + ' 字)',

@@ -1,6 +1,8 @@
 {
   "hero": {
     "funds": 500,
+    "funds_up": 0,
+    "funds_down": 0,
     "KAZU": {
       "level": 3,
       "mana": 0,

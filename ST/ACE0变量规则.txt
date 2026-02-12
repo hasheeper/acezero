@@ -7,7 +7,9 @@ ERA 变量结构
 
 {
   "hero": {
-    "funds": 500,
+    "funds": 0,
+    "funds_up": 0,
+    "funds_down": 0,
     "角色名A": { "level": 3, "mana": 0, "maxMana": 0 },
     "角色名B": { "level": 5, "mana": 100, "maxMana": 100 }
   }
@@ -17,15 +19,25 @@ ERA 变量结构
 - hero 下直接存放角色数据，键名 = 角色名（如 "KAZU", "RINO"）。
 - vanguard/rearguard 不在 ERA 中 —— 每局牌在 ACE0_BATTLE 的 hero 字段指定。
 - 角色可以只有一个（无副手），也可以有多个。
+- funds_up / funds_down 是牌局资金结算专用字段，插件会自动处理。
 
-1. 金钱变动
+1. 牌局资金结算（funds_up / funds_down）
+
+⚠️在除了剧情大金额调整，严禁在直接修改 hero.funds！大部分盈亏必须通过 funds_up / funds_down 写入。
+
+规则：
+- 资金提升 → 只写 hero.funds_up（净赢金额）
+- 资金下降 → 只写 hero.funds_down（净亏金额）
+- 不赚不亏 → 都不写
+- 1 funds = 1 银弗，100 银弗 = 1 金弗
+
+2. 剧情金钱变动（非牌局）
 
 写入路径：hero.funds
-- 1funds = 1银弗 
-- 赢牌收入、购买消费、剧情奖励等。
+- 整个funds调整（剧情大变动）
 - 使用绝对值覆写（不是增量）。
 
-2. 角色成长
+3. 角色成长
 
 写入路径：hero.角色名
 仅列出变化项。
@@ -34,7 +46,7 @@ ERA 变量结构
 - mana: 魔运值变化时写入新值。
 - maxMana: 最大魔运变化时写入新值（通常随等级自动推导，特殊剧情可覆写）。
 
-3. 新增角色
+4. 新增角色
 
 当剧情中主角获得新的搭档/伙伴时：
 写入路径：hero.新角色名
@@ -46,11 +58,11 @@ ERA 变量结构
 
 示例
 
-示例1（牌局结束 — 赢了金币，魔运消耗）：
+示例1（牌局赢了 150 银弗，魔运消耗）：
 <VariableEdit>
 {
   "hero": {
-    "funds": 650,
+    "funds_up": 150,
     "RINO": {
       "mana": 72
     }
@@ -58,7 +70,16 @@ ERA 变量结构
 }
 </VariableEdit>
 
-示例2（角色升级）：
+示例2（牌局亏了 80 银弗）：
+<VariableEdit>
+{
+  "hero": {
+    "funds_down": 80
+  }
+}
+</VariableEdit>
+
+示例3（角色升级）：
 <VariableEdit>
 {
   "hero": {

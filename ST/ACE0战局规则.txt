@@ -6,13 +6,15 @@ ACE0引擎协议是一个德州扑克 × 命运对决的场景模拟器。
 核心原则：
 1. 主角(hero)数据**不写入** —— 由系统从 ERA 变量自动注入。
 2. AI 只需描述**"这是个什么人"**，系统自动展开为完整配置。
-3. 座位标识符：UTG, HJ, CO, BTN, SB, BB（最多6个座位）。
-4. NPC 由四个独立维度组装，只在最终生成 config 时缝合。
+3. 座位标识符：BTN, SB, BB, UTG, HJ, CO（最多6个座位）。
+4. NPC 由三个独立维度组装，只在最终生成 config 时缝合。
+5. 筹码和盲注由战局 JSON 的 blinds/chips 直接指定。
 
-核心架构：NPC 四维度组装
+核心架构：NPC 三维度组装
 
-一个 NPC = kernel(性格水平) + wealth(经济) + archetype(异能) + mood(情绪)
-四个维度完全解耦，自由组合。
+一个 NPC = kernel(性格水平) + archetype(异能) + mood(情绪)
+三个维度完全解耦，自由组合。
+筹码/盲注不属于 NPC 维度，由战局根结构的 blinds/chips 统一指定。
 
 [维度1: AI 核心 (kernel) — 性格 + 水平]
 - "mob"      — 杂鱼：被动+菜鸟，盲目跟注
@@ -21,20 +23,14 @@ ACE0引擎协议是一个德州扑克 × 命运对决的场景模拟器。
 - "shark"    — 鲨鱼：激进+专家，剥削型打法，极难缠
 - "boss"     — 魔王：均衡+专家，滴水不漏
 
-[维度2: 经济阶级 (wealth) — 筹码 + 盲注]
-- "poor"     — 贫民窟：500筹码，盲注 5/10
-- "normal"   — 市民：2000筹码，盲注 20/40
-- "rich"     — 富豪：10000筹码，盲注 100/200
-- "whale"    — 巨鲸：50000筹码，盲注 500/1000
-
-[维度3: 异能模版 (archetype) — RPG属性+技能]
+[维度2: 异能模版 (archetype) — RPG属性+技能]
 - "muggle"     — 麻瓜/常人：无异能
 - "lucky"      — 幸运儿：命运40（可用大吉）
 - "cursed"     — 厄运散播者：混沌50（可用大凶、灾变）
 - "esper"      — 灵能者：心智80（透视+真理）
 - "nullifier"  — 抹杀者：虚空100（屏蔽+现实）
 
-[维度4: 情绪修正 (mood) — 运行时覆写]
+[维度3: 情绪修正 (mood) — 运行时覆写]
 - "calm"       — 冷静（默认）
 - "confident"  — 自信，敢打敢冲
 - "tilt"       — 上头，情绪失控
@@ -42,43 +38,54 @@ ACE0引擎协议是一个德州扑克 × 命运对决的场景模拟器。
 - "desperate"  — 绝望，孤注一掷
 - "euphoric"   — 狂喜，容易轻敌
 
+[筹码与盲注 — 战局级别设定]
+在根结构中直接指定，所有玩家共用同一桌面经济：
+- "blinds": [小盲, 大盲]   — 例: [10, 20] 或 [100, 200]
+- "chips": 初始筹码          — 例: 1000 或 10000
+单位: 银弗 (1金弗 = 100银弗)
+
+参考经济档位（非强制，仅供参考）：
+- 贫民桌: chips 500,   blinds [5, 10]
+- 市民桌: chips 2000,  blinds [20, 40]
+- 富豪桌: chips 10000, blinds [100, 200]
+- 巨鲸桌: chips 50000, blinds [500, 1000]
+
 ===================================================================
 方式一：跑龙套速记（最简，推荐用于杂兵/常见NPC）
 ===================================================================
 
-每个座位只需 runner 名 + 自定义名字，系统自动展开四维度。
+每个座位只需 runner 名 + 自定义名字，系统自动展开三维度。
 
 [跑龙套列表]
 杂兵类:
-- "street_thug"    — 街头小混混 (mob/poor/muggle/calm)
-- "drunk"          — 醉汉赌徒 (gambler/poor/muggle/euphoric)
-- "rookie"         — 紧张新手 (mob/normal/muggle/fearful)
+- "street_thug"    — 街头小混混 (mob/muggle/calm)
+- "drunk"          — 醉汉赌徒 (gambler/muggle/euphoric)
+- "rookie"         — 紧张新手 (mob/muggle/fearful)
 常规对手:
-- "tavern_regular" — 酒馆常客 (rock/normal/muggle/calm)
-- "pro_gambler"    — 职业赌徒 (shark/normal/muggle/confident)
-- "lucky_bastard"  — 运气王 (gambler/normal/lucky/euphoric)
+- "tavern_regular" — 酒馆常客 (rock/muggle/calm)
+- "pro_gambler"    — 职业赌徒 (shark/muggle/confident)
+- "lucky_bastard"  — 运气王 (gambler/lucky/euphoric)
 精英/小Boss:
-- "casino_shark"   — 赌场鲨鱼 (shark/rich/muggle/calm)
-- "curse_dealer"   — 厄运荷官 (shark/rich/cursed/confident)
-- "mind_reader"    — 读心者 (boss/rich/esper/calm)
+- "casino_shark"   — 赌场鲨鱼 (shark/muggle/calm)
+- "curse_dealer"   — 厄运荷官 (shark/cursed/confident)
+- "mind_reader"    — 读心者 (boss/esper/calm)
 Boss:
-- "void_king"      — 虚空之王 (boss/whale/nullifier/confident)
-- "chaos_lord"     — 混沌领主 (shark/whale/cursed/tilt)
+- "void_king"      — 虚空之王 (boss/nullifier/confident)
+- "chaos_lord"     — 混沌领主 (shark/cursed/tilt)
 
 [跑龙套格式]
 { "runner": "跑龙套名", "name": "自定义显示名" }
 
 ===================================================================
-方式二：四维组装（通用，推荐用于有特色的NPC）
+方式二：三维组装（通用，推荐用于有特色的NPC）
 ===================================================================
 
-自由组合四个维度，不需要记住具体数值。
+自由组合三个维度，不需要记住具体数值。
 
-[四维组装格式]
+[三维组装格式]
 {
   "name": "显示名",
   "kernel": "mob|gambler|rock|shark|boss",
-  "wealth": "poor|normal|rich|whale",
   "archetype": "muggle|lucky|cursed|esper|nullifier",
   "mood": "calm|confident|tilt|fearful|desperate|euphoric"
 }
@@ -108,15 +115,25 @@ Boss:
     "vanguard": "角色名",         // 必填（主手），对应 ERA 中 hero.角色名
     "rearguard": "角色名"         // 可选（副手），省略 = 无副手模式
   },
-  "wealth": "经济阶级",           // 可选，推导全局 blinds/chips
-  "blinds": [小盲, 大盲],         // 可选，覆盖 wealth 推导值
-  "chips": 初始筹码,               // 可选，覆盖 wealth 推导值
+  "heroSeat": "座位ID",           // 可选，主角的座位位置（BTN/SB/BB/UTG/HJ/CO）
+                                  // 省略时系统自动分配到未被NPC占用的第一个空位
+                                  // ⚠️ 不能与 seats 中的 NPC 座位冲突
+  "blinds": [小盲, 大盲],         // 必填，盲注金额（银弗）
+  "chips": 初始筹码,               // 必填，每人初始筹码（银弗）
   "seats": {
     "座位ID": { NPC配置 },         // 三种格式任选
     ...
   }
 }
 </ACE0_BATTLE>
+
+座位系统说明：
+- 座位ID：BTN, SB, BB, UTG, HJ, CO（最多6个，按德州标准顺序排列）
+- BTN = 庄家按钮（Dealer），SB = 小盲，BB = 大盲
+- UTG = 枪口位（Under The Gun），HJ = 劫持位（Hijack），CO = 关煞位（Cutoff）
+- 所有玩家（hero + NPC）按座位顺序排列，位置标签会显示在战斗界面上
+- hero 的 heroSeat 不能和 seats 中的 NPC 座位重复
+- 省略 heroSeat 时，系统按 BB→CO→UTG→HJ→SB→BTN 优先级自动分配空位
 
 注意：
 - 同一桌内三种 NPC 格式可以混用。
@@ -144,10 +161,10 @@ Boss:
 副手: fate_weaver, hex_pulse
 
 [技能ID（通用系统）]
-命运系: minor_wish, grand_wish, divine_order
-混沌系: hex, havoc, catastrophe
-心智系: insight, vision, axiom
-虚空系: static_field, insulation, reality
+命运系: minor_wish(T3), grand_wish(T2), divine_order(T1)
+混沌系: hex(T3), havoc(T2), catastrophe(T1)
+心智系: clarity(T3), refraction(T2), axiom(T1)
+虚空系: static_field(T3), insulation(T2), reality(T1)
 
 [属性三角克制]
 chaos > moirai > psyche > chaos
@@ -155,14 +172,16 @@ void = 纯减伤，不参与克制
 
 示例
 
-示例1（全跑龙套 — 酒馆3人桌）：
+示例1（全跑龙套 — 酒馆3人桌，主角坐BB）：
 <ACE0_BATTLE>
 {
   "hero": {
     "vanguard": "KAZU",
     "rearguard": "RINO"
   },
-  "wealth": "normal",
+  "heroSeat": "BB",
+  "blinds": [20, 40],
+  "chips": 2000,
   "seats": {
     "BTN": { "runner": "tavern_regular", "name": "老张" },
     "SB": { "runner": "drunk", "name": "醉老李" }
@@ -170,13 +189,15 @@ void = 纯减伤，不参与克制
 }
 </ACE0_BATTLE>
 
-示例2（四维组装 — 自定义鲨鱼）：
+示例2（三维组装 — 自定义鲨鱼，主角坐CO）：
 <ACE0_BATTLE>
 {
   "hero": {
     "vanguard": "KAZU"
   },
-  "wealth": "rich",
+  "heroSeat": "CO",
+  "blinds": [100, 200],
+  "chips": 10000,
   "seats": {
     "BB": {
       "name": "黑寡妇",
@@ -188,13 +209,14 @@ void = 纯减伤，不参与克制
 }
 </ACE0_BATTLE>
 
-示例3（混合格式 — 杂兵+Boss 同桌）：
+示例3（混合格式 — 杂兵+Boss 同桌，主角坐BTN）：
 <ACE0_BATTLE>
 {
   "hero": {
     "vanguard": "KAZU",
     "rearguard": "RINO"
   },
+  "heroSeat": "BTN",
   "blinds": [50, 100],
   "chips": 5000,
   "seats": {
@@ -210,12 +232,13 @@ void = 纯减伤，不参与克制
 }
 </ACE0_BATTLE>
 
-示例4（原始直写 — 特殊双角色Boss）：
+示例4（原始直写 — 特殊双角色Boss，主角坐CO）：
 <ACE0_BATTLE>
 {
   "hero": {
     "vanguard": "RINO"
   },
+  "heroSeat": "CO",
   "blinds": [100, 200],
   "chips": 10000,
   "seats": {
@@ -223,7 +246,7 @@ void = 纯减伤，不参与克制
       "vanguard": { "name": "VOID_KING", "level": 5, "trait": "iron_nerve" },
       "rearguard": { "name": "VOID_QUEEN", "level": 4, "trait": "hex_pulse" },
       "attrs": { "moirai": 70, "chaos": 50, "psyche": 60, "void": 80 },
-      "skills": ["grand_wish", "havoc", "vision"],
+      "skills": ["grand_wish", "havoc", "refraction"],
       "ai": "aggressive",
       "emotion": "tilt"
     }
@@ -231,14 +254,16 @@ void = 纯减伤，不参与克制
 }
 </ACE0_BATTLE>
 
-示例5（多手牌 — 第二把情绪变化）：
+示例5（多手牌 — 第二把情绪变化，主角坐BB）：
 <ACE0_BATTLE>
 {
   "hero": {
     "vanguard": "KAZU",
     "rearguard": "RINO"
   },
-  "wealth": "normal",
+  "heroSeat": "BB",
+  "blinds": [20, 40],
+  "chips": 2000,
   "seats": {
     "BTN": { "name": "赌徒阿飞", "kernel": "gambler", "archetype": "muggle", "mood": "euphoric" },
     "SB": { "name": "铁面张", "kernel": "rock", "archetype": "muggle", "mood": "calm" }
@@ -252,7 +277,9 @@ void = 纯减伤，不参与克制
     "vanguard": "KAZU",
     "rearguard": "RINO"
   },
-  "wealth": "normal",
+  "heroSeat": "BB",
+  "blinds": [20, 40],
+  "chips": 2000,
   "seats": {
     "BTN": { "name": "赌徒阿飞", "kernel": "gambler", "archetype": "muggle", "mood": "tilt" },
     "SB": { "name": "铁面张", "kernel": "rock", "archetype": "muggle", "mood": "fearful" }

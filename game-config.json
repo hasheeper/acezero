@@ -1,6 +1,7 @@
 {
   "blinds": [10, 20],
   "chips": 1000,
+  "heroSeat": "CO",
 
   "hero": {
     "vanguard": { "name": "KAZU", "level": 3, "trait": "blank_body" },
@@ -44,7 +45,7 @@
       "difficulty": "regular",
       "emotion": "fearful"
     },
-    "CO": {
+    "HJ": {
       "vanguard": { "name": "EPSILON", "level": 4, "trait": "wild_surge" },
       "attrs": { "moirai": 10, "chaos": 65, "psyche": 5, "void": 0 },
       "skills": ["hex", "havoc", "catastrophe"],

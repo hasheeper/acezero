@@ -15,6 +15,7 @@
   const DEFAULT_CONFIG = {
     blinds: [10, 20],
     chips: 1000,
+    heroSeat: 'CO',
     hero: {
       vanguard: { name: 'KAZU', level: 3 },
       rearguard: { name: 'RINO', level: 5 },
@@ -30,8 +31,8 @@
     }
   };
 
-  // 座位顺序（德州规则：UTG 先行动，BB 最后）
-  const SEAT_ORDER = ['UTG', 'HJ', 'CO', 'BTN', 'SB', 'BB'];
+  // 座位顺序（德州规则：BTN 先发牌，UTG 先行动）
+  const SEAT_ORDER = ['BTN', 'SB', 'BB', 'UTG', 'HJ', 'CO'];
 
   // AI 性格→难度映射
   const AI_DIFF_MAP = {
@@ -53,41 +54,66 @@
   }
 
   /**
-   * 从 seats 构建玩家配置列表（index 0 = hero, 1+ = NPC）
+   * 从 seats + heroSeat 构建玩家配置列表
+   * 所有玩家（hero + NPC）按 SEAT_ORDER 排列，hero 在 heroSeat 位置
+   * dealerIndex 自动指向 BTN 座位的玩家
    */
   function getPlayerConfigs() {
     var cfg = _cfg();
     var result = [];
     var tableChips = cfg.chips || 1000;
-
-    // index 0: hero（显示名用 vanguard.name）
-    // heroChips: 来自 ERA funds（上限为 table chips），未设置则用 table chips
     var heroChips = cfg.heroChips || tableChips;
-    result.push({
-      id: 0,
-      name: cfg.hero ? _charName(cfg.hero) : 'RINO',
-      type: 'human',
-      chips: heroChips,
-      personality: null
-    });
-
-    // index 1+: NPC 按 SEAT_ORDER，使用 table chips
+    var heroSeat = cfg.heroSeat || 'BB';
     var seats = cfg.seats || {};
+
+    // 收集所有有人的座位（hero + NPC），按 SEAT_ORDER 排列
     for (var i = 0; i < SEAT_ORDER.length; i++) {
-      var s = seats[SEAT_ORDER[i]];
-      if (!s) continue;
-      var aiStyle = s.ai || 'balanced';
-      var aiEmotion = s.emotion || 'calm';
-      var aiDifficulty = s.difficulty || AI_DIFF_MAP[aiStyle] || 'regular';
-      result.push({
-        id: result.length,
-        name: _charName(s),
-        type: 'ai',
-        chips: tableChips,
-        personality: { riskAppetite: aiStyle, difficulty: aiDifficulty, emotion: aiEmotion },
-        seat: SEAT_ORDER[i]
+      var seatId = SEAT_ORDER[i];
+
+      if (seatId === heroSeat) {
+        // hero 在这个位置
+        result.push({
+          id: result.length,
+          name: cfg.hero ? _charName(cfg.hero) : 'RINO',
+          type: 'human',
+          chips: heroChips,
+          personality: null,
+          seat: seatId
+        });
+      } else if (seats[seatId]) {
+        // NPC 在这个位置
+        var s = seats[seatId];
+        var aiStyle = s.ai || 'balanced';
+        var aiEmotion = s.emotion || 'calm';
+        var aiDifficulty = s.difficulty || AI_DIFF_MAP[aiStyle] || 'regular';
+        result.push({
+          id: result.length,
+          name: _charName(s),
+          type: 'ai',
+          chips: tableChips,
+          personality: { riskAppetite: aiStyle, difficulty: aiDifficulty, emotion: aiEmotion },
+          seat: seatId
+        });
+      }
+    }
+
+    // 安全兜底：如果 heroSeat 不在任何已定义的座位中（配置错误），追加 hero
+    if (!result.some(function(p) { return p.type === 'human'; })) {
+      result.unshift({
+        id: 0,
+        name: cfg.hero ? _charName(cfg.hero) : 'RINO',
+        type: 'human',
+        chips: heroChips,
+        personality: null,
+        seat: heroSeat
       });
     }
+
+    // 重新编号 id
+    for (var j = 0; j < result.length; j++) {
+      result[j].id = j;
+    }
+
     return result;
   }
 
@@ -263,6 +289,9 @@
   // 保存最近一手的结果文字（供 endGame modal 使用）
   let _lastResultMsg = '';
 
+  // 记录 hero 每手开始时的筹码，用于计算 funds_delta
+  let _heroStartChips = 0;
+
   // ========== 工具函数 ==========
   function cardToSolverString(card) {
     if (!card) return '';
@@ -333,7 +362,10 @@
       
       <!-- 座位信息 -->
       <div class="seat-header">
-        <div class="player-name">${player.name}</div>
+        <div class="player-name-row">
+          <span class="position-badge" style="display:none;"></span>
+          <span class="player-name">${player.name}</span>
+        </div>
         <div class="chip-count">${Currency.html(player.chips)}</div>
       </div>
       
@@ -358,14 +390,21 @@
 
   function renderSeats() {
     UI.seatsContainer.innerHTML = '';
-    const positions = SEAT_POSITIONS[gameState.players.length] || SEAT_POSITIONS[2];
+    const n = gameState.players.length;
+    const positions = SEAT_POSITIONS[n] || SEAT_POSITIONS[2];
     
-    gameState.players.forEach((player, index) => {
-      const position = positions[index] || 'bottom';
-      const seatElement = createSeatElement(player, position);
+    // hero 永远在 bottom（视觉位置0），其余按顺时针排列
+    var heroIdx = gameState.players.findIndex(function(p) { return p.type === 'human'; });
+    if (heroIdx < 0) heroIdx = 0;
+
+    for (var step = 0; step < n; step++) {
+      var playerIdx = (heroIdx + step) % n;
+      var player = gameState.players[playerIdx];
+      var position = positions[step] || 'bottom';
+      var seatElement = createSeatElement(player, position);
       UI.seatsContainer.appendChild(seatElement);
       player.seatElement = seatElement;
-    });
+    }
   }
 
   // 根据银弗数值获取筹码颜色 (委托给 Currency 模块)
@@ -430,6 +469,66 @@
     });
   }
 
+  // 动态位置标签：根据 dealerIndex 和活跃玩家数计算每人的位置
+  // 标准德州顺序：BTN → SB → BB → UTG → HJ → CO
+  function assignPositions() {
+    var players = gameState.players;
+    var n = players.length;
+    var active = [];
+    // 从 dealerIndex 开始顺时针收集活跃玩家
+    for (var step = 0; step < n; step++) {
+      var idx = (gameState.dealerIndex + step) % n;
+      if (players[idx].isActive) active.push(idx);
+    }
+    var count = active.length;
+    if (count === 0) return;
+
+    // 位置名称表（按活跃人数）
+    // 2人: BTN(=SB), BB
+    // 3人: BTN, SB, BB
+    // 4人: BTN, SB, BB, UTG
+    // 5人: BTN, SB, BB, UTG, CO
+    // 6人: BTN, SB, BB, UTG, HJ, CO
+    var labels;
+    if (count === 2) {
+      labels = ['BTN', 'BB'];
+    } else if (count === 3) {
+      labels = ['BTN', 'SB', 'BB'];
+    } else if (count === 4) {
+      labels = ['BTN', 'SB', 'BB', 'UTG'];
+    } else if (count === 5) {
+      labels = ['BTN', 'SB', 'BB', 'UTG', 'CO'];
+    } else {
+      labels = ['BTN', 'SB', 'BB', 'UTG', 'HJ', 'CO'];
+    }
+
+    // 先清除所有玩家的位置
+    for (var i = 0; i < n; i++) {
+      players[i].position = '';
+    }
+    // 分配位置
+    for (var j = 0; j < count && j < labels.length; j++) {
+      players[active[j]].position = labels[j];
+    }
+  }
+
+  function updatePositionBadges() {
+    gameState.players.forEach(function(player) {
+      if (!player.seatElement) return;
+      var badge = player.seatElement.querySelector('.position-badge');
+      if (!badge) return;
+      var pos = player.position || '';
+      badge.textContent = pos;
+      badge.style.display = pos ? 'inline-block' : 'none';
+      // 颜色区分
+      badge.className = 'position-badge';
+      if (pos === 'BTN') badge.classList.add('pos-btn');
+      else if (pos === 'SB') badge.classList.add('pos-sb');
+      else if (pos === 'BB') badge.classList.add('pos-bb');
+      else badge.classList.add('pos-other');
+    });
+  }
+
   function animateChipsToCenter() {
     gameState.players.forEach(player => {
       if (player.currentBet > 0 && player.seatElement) {
@@ -457,7 +556,7 @@
     
     for (let i = 0; i < count; i++) {
       const config = getPlayerConfig(i);
-      const isHuman = config.type === 'human' || i === 0;
+      const isHuman = config.type === 'human';
       
       const player = {
         id: i,
@@ -471,7 +570,8 @@
         folded: false,
         hasActedThisRound: false,
         ai: null,
-        personality: config.personality || null
+        personality: config.personality || null,
+        seat: config.seat || ''
       };
       
       // 为 AI 玩家创建个性化 AI 实例
@@ -1458,7 +1558,9 @@
       const configs = getPlayerConfigs();
       const playerCount = Math.min(Math.max(configs.length, 2), 6);
       gameState.players = initializePlayers(playerCount);
-      gameState.dealerIndex = 0;
+      // dealerIndex = BTN 座位的玩家索引
+      var btnIdx = gameState.players.findIndex(function(p) { return p.seat === 'BTN'; });
+      gameState.dealerIndex = btnIdx >= 0 ? btnIdx : 0;
       skillSystem.reset();
       // 从配置注册所有技能 + 生成UI
       skillUI.registerFromConfig(_cfg());
@@ -1486,10 +1588,16 @@
     
     // 技能系统：新一手牌开始
     skillUI.onNewHand();
+
+    // 快照 hero 开始筹码（用于 funds_delta 计算）
+    var heroPlayer = gameState.players.find(function(p) { return p.type === 'human'; });
+    _heroStartChips = heroPlayer ? heroPlayer.chips : 0;
     
     // 渲染座位
     renderSeats();
     updateDealerButton();
+    assignPositions();
+    updatePositionBadges();
     skillUI.updateDisplay();
     
     // 收取盲注
@@ -1897,6 +2005,12 @@
     });
     // 收集 mana 信息
     var heroMana = skillSystem.getMana(0);
+
+    // 计算 hero 资金变化
+    var heroP = gameState.players.find(function(p) { return p.type === 'human'; });
+    var heroEndChips = heroP ? heroP.chips : 0;
+    var fundsDelta = heroEndChips - _heroStartChips;
+
     return {
       playerCount: gameState.players.length,
       playerNames: gameState.players.map(function (p) { return p.name; }),
@@ -1912,7 +2026,10 @@
       smallBlind: getSmallBlind(),
       bigBlind: getBigBlind(),
       maxPot: maxPot,
-      heroMana: heroMana
+      heroMana: heroMana,
+      fundsDelta: fundsDelta,
+      fundsUp: fundsDelta > 0 ? fundsDelta : 0,
+      fundsDown: fundsDelta < 0 ? -fundsDelta : 0
     };
   }
 

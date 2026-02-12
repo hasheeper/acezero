@@ -138,10 +138,11 @@
   }
 
   // ==========================================================
-  //  NPC 组装流水线 — 四维度模块化系统
+  //  NPC 组装流水线 — 三维度模块化系统
   //
-  //  一个 NPC = kernel + wealth + archetype + mood
-  //  四个维度完全解耦，只在 assembleNPC() 时缝合为 seat config
+  //  一个 NPC = kernel + archetype + mood
+  //  三个维度完全解耦，只在 assembleNPC() 时缝合为 seat config
+  //  筹码/盲注由战局 JSON 的 blinds/chips 直接指定
   // ==========================================================
 
   // ----------------------------------------------------------
@@ -156,18 +157,7 @@
   };
 
   // ----------------------------------------------------------
-  //  维度 2: 经济阶级 (WEALTH_CLASSES) — 筹码 + 盲注锚点
-  //  单位: 银弗 (1金弗 = 100银弗, 最小筹码 = 1银弗)
-  // ----------------------------------------------------------
-  const WEALTH_CLASSES = {
-    poor:   { chips: 500,   blinds: [5, 10],      desc: '贫民窟 (5金)' },
-    normal: { chips: 2000,  blinds: [20, 40],     desc: '市民 (20金)' },
-    rich:   { chips: 10000, blinds: [100, 200],   desc: '富豪 (100金)' },
-    whale:  { chips: 50000, blinds: [500, 1000],  desc: '巨鲸 (500金)' }
-  };
-
-  // ----------------------------------------------------------
-  //  维度 3: 异能模版 (RPG_TEMPLATES) — 属性 + 技能快速入口
+  //  维度 2: 异能模版 (RPG_TEMPLATES) — 属性 + 技能快速入口
   //  attrs 由模版定义，skills 由 deriveSkillsFromAttrs 自动推导
   // ----------------------------------------------------------
   const RPG_TEMPLATES = {
@@ -199,7 +189,7 @@
   };
 
   // ----------------------------------------------------------
-  //  维度 4: 情绪修正 (MOOD_MODIFIERS) — 运行时覆写层
+  //  维度 3: 情绪修正 (MOOD_MODIFIERS) — 运行时覆写层
   //  与 poker-ai.js EMOTION_PROFILES 同步，此处仅做枚举 + 描述
   // ----------------------------------------------------------
   const MOOD_MODIFIERS = {
@@ -213,37 +203,36 @@
 
   // ----------------------------------------------------------
   //  跑龙套预设 (RUNNER_PRESETS) — 常见 NPC 一键生成
-  //  每个 = kernel + wealth + archetype + mood 的固定组合
+  //  每个 = kernel + archetype + mood 的固定组合
   // ----------------------------------------------------------
   const RUNNER_PRESETS = {
     // 杂兵类
-    street_thug:    { kernel: 'mob',     wealth: 'poor',   archetype: 'muggle',  mood: 'calm',      desc: '街头小混混' },
-    drunk:          { kernel: 'gambler', wealth: 'poor',   archetype: 'muggle',  mood: 'euphoric',  desc: '醉汉赌徒' },
-    rookie:         { kernel: 'mob',     wealth: 'normal', archetype: 'muggle',  mood: 'fearful',   desc: '紧张的新手' },
+    street_thug:    { kernel: 'mob',     archetype: 'muggle',    mood: 'calm',      desc: '街头小混混' },
+    drunk:          { kernel: 'gambler', archetype: 'muggle',    mood: 'euphoric',  desc: '醉汉赌徒' },
+    rookie:         { kernel: 'mob',     archetype: 'muggle',    mood: 'fearful',   desc: '紧张的新手' },
     // 常规对手
-    tavern_regular: { kernel: 'rock',    wealth: 'normal', archetype: 'muggle',  mood: 'calm',      desc: '酒馆常客' },
-    pro_gambler:    { kernel: 'shark',   wealth: 'normal', archetype: 'muggle',  mood: 'confident', desc: '职业赌徒' },
-    lucky_bastard:  { kernel: 'gambler', wealth: 'normal', archetype: 'lucky',   mood: 'euphoric',  desc: '运气极好的家伙' },
+    tavern_regular: { kernel: 'rock',    archetype: 'muggle',    mood: 'calm',      desc: '酒馆常客' },
+    pro_gambler:    { kernel: 'shark',   archetype: 'muggle',    mood: 'confident', desc: '职业赌徒' },
+    lucky_bastard:  { kernel: 'gambler', archetype: 'lucky',     mood: 'euphoric',  desc: '运气极好的家伙' },
     // 精英/小Boss
-    casino_shark:   { kernel: 'shark',   wealth: 'rich',   archetype: 'muggle',  mood: 'calm',      desc: '赌场鲨鱼' },
-    curse_dealer:   { kernel: 'shark',   wealth: 'rich',   archetype: 'cursed',  mood: 'confident', desc: '厄运荷官' },
-    mind_reader:    { kernel: 'boss',    wealth: 'rich',   archetype: 'esper',   mood: 'calm',      desc: '读心者' },
+    casino_shark:   { kernel: 'shark',   archetype: 'muggle',    mood: 'calm',      desc: '赌场鲨鱼' },
+    curse_dealer:   { kernel: 'shark',   archetype: 'cursed',    mood: 'confident', desc: '厄运荷官' },
+    mind_reader:    { kernel: 'boss',    archetype: 'esper',     mood: 'calm',      desc: '读心者' },
     // Boss
-    void_king:      { kernel: 'boss',    wealth: 'whale',  archetype: 'nullifier', mood: 'confident', desc: '虚空之王' },
-    chaos_lord:     { kernel: 'shark',   wealth: 'whale',  archetype: 'cursed',    mood: 'tilt',      desc: '混沌领主' }
+    void_king:      { kernel: 'boss',    archetype: 'nullifier', mood: 'confident', desc: '虚空之王' },
+    chaos_lord:     { kernel: 'shark',   archetype: 'cursed',    mood: 'tilt',      desc: '混沌领主' }
   };
 
   // ----------------------------------------------------------
-  //  组装函数：四维度 → 完整 NPC seat config
+  //  组装函数：三维度 → 完整 NPC seat config
   // ----------------------------------------------------------
 
   /**
-   * 从四个维度组装一个完整的 NPC 座位配置
+   * 从三个维度组装一个完整的 NPC 座位配置
    *
    * @param {string} name - NPC 显示名称（必填）
-   * @param {object} dims - 四维度参数
+   * @param {object} dims - 三维度参数
    * @param {string} dims.kernel    - AI_KERNELS 键名（默认 'mob'）
-   * @param {string} dims.wealth    - WEALTH_CLASSES 键名（默认 'normal'）
    * @param {string} dims.archetype - RPG_TEMPLATES 键名（默认 'muggle'）
    * @param {string} dims.mood      - MOOD_MODIFIERS 键名（默认 'calm'）
    * @returns {object} - 完整的 NPC seat config（可直接放入 seats.XX）
@@ -251,7 +240,6 @@
   function assembleNPC(name, dims) {
     const d = dims || {};
     const kernel    = AI_KERNELS[d.kernel]       || AI_KERNELS.mob;
-    const wealth    = WEALTH_CLASSES[d.wealth]    || WEALTH_CLASSES.normal;
     const archetype = RPG_TEMPLATES[d.archetype]  || RPG_TEMPLATES.muggle;
     const mood      = MOOD_MODIFIERS[d.mood]      || MOOD_MODIFIERS.calm;
 
@@ -284,24 +272,15 @@
     }
     return assembleNPC(name || preset.desc, {
       kernel: preset.kernel,
-      wealth: preset.wealth,
       archetype: preset.archetype,
       mood: preset.mood
     });
   }
 
   /**
-   * 从跑龙套预设推导经济参数（blinds, chips）
-   * 用于整桌都是同一经济阶级时的快捷推导
-   */
-  function getWealthParams(wealthKey) {
-    return WEALTH_CLASSES[wealthKey] || WEALTH_CLASSES.normal;
-  }
-
-  /**
    * 解析 AI 输出的座位配置：支持三种格式
    *   1. 跑龙套速记: { "runner": "street_thug", "name": "阿猫" }
-   *   2. 四维组装:    { "name": "X", "kernel": "shark", "wealth": "rich", "archetype": "cursed", "mood": "tilt" }
+   *   2. 三维组装:    { "name": "X", "kernel": "shark", "archetype": "cursed", "mood": "tilt" }
    *   3. 原始直写:    { "vanguard": {...}, "ai": "balanced", ... }（透传，不处理）
    */
   function resolveNpcSeat(seatData) {
@@ -312,11 +291,10 @@
       return assembleFromRunner(seatData.runner, seatData.name);
     }
 
-    // 模式 2: 四维组装（有 kernel 字段）
+    // 模式 2: 三维组装（有 kernel 字段）
     if (seatData.kernel) {
       return assembleNPC(seatData.name || '???', {
         kernel:    seatData.kernel,
-        wealth:    seatData.wealth,
         archetype: seatData.archetype,
         mood:      seatData.mood
       });
@@ -328,19 +306,12 @@
 
   /**
    * 解析整个战局数据：遍历 seats，对每个座位调用 resolveNpcSeat
-   * 同时处理 wealth 字段推导全局 blinds/chips
+   * blinds/chips 由战局 JSON 直接指定
    */
   function resolveBattleData(battleData) {
     if (!battleData || !battleData.seats) return battleData;
 
     const resolved = { ...battleData };
-
-    // 全局经济阶级：如果 battleData 有 wealth 字段，用它推导 blinds/chips
-    if (battleData.wealth && !battleData.blinds) {
-      const wp = getWealthParams(battleData.wealth);
-      resolved.blinds = wp.blinds;
-      resolved.chips = wp.chips;
-    }
 
     // 解析每个座位
     const resolvedSeats = {};
@@ -465,13 +436,27 @@
       if (rTrait) heroConfig.rearguard.trait = rTrait;
     }
 
-    return {
+    const result = {
       blinds: battle.blinds || [10, 20],
       chips: tableChips,
       heroChips: heroChips,
       hero: heroConfig,
       seats: battle.seats || {}
     };
+
+    // hero 的座位位置（BTN/SB/BB/UTG/HJ/CO）
+    // 必须是 seats 中未被 NPC 占用的位置
+    if (battle.heroSeat) {
+      result.heroSeat = battle.heroSeat;
+    } else {
+      // 自动分配：找到 SEAT_ORDER 中第一个未被 NPC 占用的位置
+      const SEAT_ORDER = ['BB', 'CO', 'UTG', 'HJ', 'SB', 'BTN'];
+      const usedSeats = new Set(Object.keys(battle.seats || {}));
+      const freeSeat = SEAT_ORDER.find(s => !usedSeats.has(s));
+      result.heroSeat = freeSeat || 'BB';
+    }
+
+    return result;
   }
 
   /**
@@ -696,6 +681,50 @@ ${charLines}
   }
 
   // ==========================================================
+  //  E. 资金结算：funds_up / funds_down → hero.funds
+  // ==========================================================
+
+  /**
+   * ERA 写入完成后，检测 hero.funds_up / funds_down
+   * 如果存在非零值：
+   *   1. hero.funds += funds_up - funds_down
+   *   2. 重置 funds_up = 0, funds_down = 0
+   *
+   * 这样 AI 只需在 VariableEdit 中写入 funds_up/funds_down，
+   * 插件自动完成 funds 的增减和归零。
+   */
+  async function reconcileFunds() {
+    try {
+      const vars = await getEraVars();
+      if (!vars || !vars.hero) return;
+
+      const hero = vars.hero;
+      const up = Number(hero.funds_up) || 0;
+      const down = Number(hero.funds_down) || 0;
+
+      if (up === 0 && down === 0) return;
+
+      const oldFunds = Number(hero.funds) || 0;
+      const newFunds = Math.max(0, oldFunds + up - down);
+
+      console.log(`${PLUGIN_NAME} 资金结算: ${oldFunds} + ${up} - ${down} = ${newFunds}`);
+
+      // 更新 ERA: 写入新 funds，归零 funds_up/funds_down
+      eventEmit('era:updateByObject', {
+        hero: {
+          funds: newFunds,
+          funds_up: 0,
+          funds_down: 0
+        }
+      });
+
+      console.log(`${PLUGIN_NAME} 资金已更新: ${oldFunds} → ${newFunds} (↑${up} ↓${down})`);
+    } catch (e) {
+      console.error(`${PLUGIN_NAME} 资金结算失败:`, e);
+    }
+  }
+
+  // ==========================================================
   //  事件绑定
   // ==========================================================
 
@@ -714,9 +743,13 @@ ${charLines}
     await handleGenerationBefore();
   });
 
-  // ERA 写入完成：检测 ACE0_BATTLE → 合并 → 注入 ACE0_FRONTEND
+  // ERA 写入完成：
+  //   1. 检测 ACE0_BATTLE → 合并 → 注入 ACE0_FRONTEND
+  //   2. 检测 funds_up/funds_down → 结算 → 归零
   eventOn('era:writeDone', async (detail) => {
     await handleWriteDone(detail);
+    // 延迟一帧让 ERA 完成写入后再结算资金
+    setTimeout(() => reconcileFunds(), 500);
   });
 
   // ==========================================================
@@ -761,10 +794,9 @@ ${charLines}
     assembleFromRunner,
     resolveBattleData,
 
-    // 四维度配置表
+    // 三维度配置表
     NPC: {
       AI_KERNELS,
-      WEALTH_CLASSES,
       RPG_TEMPLATES,
       MOOD_MODIFIERS,
       RUNNER_PRESETS
@@ -782,15 +814,15 @@ ${charLines}
 
     deriveSkillsFromAttrs,
 
-    version: '0.5.0'
+    version: '0.6.0'
   };
 
   // ==========================================================
   //  初始化完成
   // ==========================================================
 
-  console.log(`${PLUGIN_NAME} 插件加载完成 (v0.5.0)`);
-  console.log(`${PLUGIN_NAME} NPC 组装: kernel=${Object.keys(AI_KERNELS).join('/')} | wealth=${Object.keys(WEALTH_CLASSES).join('/')} | archetype=${Object.keys(RPG_TEMPLATES).join('/')} | mood=${Object.keys(MOOD_MODIFIERS).join('/')}`);
+  console.log(`${PLUGIN_NAME} 插件加载完成 (v0.6.0)`);
+  console.log(`${PLUGIN_NAME} NPC 组装: kernel=${Object.keys(AI_KERNELS).join('/')} | archetype=${Object.keys(RPG_TEMPLATES).join('/')} | mood=${Object.keys(MOOD_MODIFIERS).join('/')}`);
   console.log(`${PLUGIN_NAME} 跑龙套: ${Object.keys(RUNNER_PRESETS).join(', ')}`);
   console.log(`${PLUGIN_NAME} 流程: AI 输出 <${BATTLE_TAG}> → NPC组装 → 合并 ERA hero → 注入 <${FRONTEND_TAG}> → ST 正则 → STver.html`);
 
