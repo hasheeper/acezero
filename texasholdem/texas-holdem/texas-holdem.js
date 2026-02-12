@@ -293,6 +293,15 @@
   let _heroStartChips = 0;
 
   // ========== 工具函数 ==========
+  function getHeroPlayer() {
+    return gameState.players.find(function(p) { return p.type === 'human'; }) || gameState.players[0];
+  }
+
+  function getHeroIndex() {
+    var idx = gameState.players.findIndex(function(p) { return p.type === 'human'; });
+    return idx >= 0 ? idx : 0;
+  }
+
   function cardToSolverString(card) {
     if (!card) return '';
     return RANK_TRANSLATE[card.rank] + SUIT_TRANSLATE[card.suit];
@@ -715,8 +724,8 @@
     UI.btnCheckCall.disabled = !enabled;
     UI.btnRaise.disabled = !enabled;
     
-    const player = gameState.players[0]; // 人类玩家
-    if (!player) return; // 防止初始化时玩家未加载
+    const player = getHeroPlayer();
+    if (!player) return;
     
     const toCall = gameState.currentBet - (player.currentBet || 0);
     
@@ -738,7 +747,7 @@
   }
 
   function playerFold() {
-    const player = gameState.players[0];
+    const player = getHeroPlayer();
     player.folded = true;
     player.hasActedThisRound = true;
     updateSeatDisplay(player);
@@ -760,7 +769,7 @@
 
   function playerCheckCall() {
     UI.raiseControls.style.display = 'none';
-    const player = gameState.players[0];
+    const player = getHeroPlayer();
     const toCall = gameState.currentBet - player.currentBet;
     
     if (toCall > 0) {
@@ -789,7 +798,7 @@
   }
 
   function confirmRaise() {
-    const player = gameState.players[0];
+    const player = getHeroPlayer();
     const raiseAmount = parseInt(UI.raiseSlider.value);
     const toCall = gameState.currentBet - player.currentBet;
     
@@ -806,7 +815,7 @@
     player.currentBet += actualRaise;
     player.totalBet += actualRaise;
     gameState.currentBet = player.currentBet;
-    gameState.lastRaiserIndex = 0;
+    gameState.lastRaiserIndex = getHeroIndex();
     
     // 区分 BET 和 RAISE：当前轮无人下注时是 BET，否则是 RAISE
     // 注意：此时 gameState.currentBet 已更新，需要用 toCall 判断之前状态
@@ -850,7 +859,7 @@
       pot: gameState.pot + gameState.players.reduce((sum, p) => sum + p.currentBet, 0),
       toCall: toCall,
       aiStack: player.chips,
-      playerStack: gameState.players[0].chips,
+      playerStack: getHeroPlayer().chips,
       phase: gameState.phase,
       minRaise: getBigBlind(),
       activeOpponentCount: getActivePlayers().length - 1,
@@ -1592,6 +1601,12 @@
     // 快照 hero 开始筹码（用于 funds_delta 计算）
     var heroPlayer = gameState.players.find(function(p) { return p.type === 'human'; });
     _heroStartChips = heroPlayer ? heroPlayer.chips : 0;
+
+    // 诊断日志：玩家排列
+    console.log('[GAME] 玩家列表:', gameState.players.map(function(p, i) {
+      return '#' + i + ' ' + p.name + ' (' + p.type + ') seat=' + p.seat + ' chips=' + p.chips;
+    }).join(' | '));
+    console.log('[GAME] heroIndex=' + getHeroIndex() + ', dealerIndex=' + gameState.dealerIndex);
     
     // 渲染座位
     renderSeats();
