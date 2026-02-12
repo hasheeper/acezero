@@ -546,6 +546,13 @@
      * 面对下注时的决策
      */
     decideWhenFacingBet(adjustedStrength, rawStrength, pot, toCall, aiStack, minRaise, potOdds, isBluffing, phase, opponents, magicLevel) {
+      // 底池承诺快速通道：筹码极少且底池巨大时，跳过所有恐惧逻辑直接跟
+      // 例：6银 vs 20金底池 → 弃牌是数学错误
+      const potCommitRatio = pot / (toCall + 0.01);
+      if (toCall >= aiStack * 0.8 && potCommitRatio >= 5) {
+        return { action: ACTIONS.ALL_IN, amount: aiStack };
+      }
+
       // 生存本能 v2：多层次恐惧机制
       const betRatio = toCall / (pot + 0.01);        // 下注占底池比例
       const stackRatio = toCall / (aiStack + 0.01); // 下注占筹码比例
@@ -623,7 +630,18 @@
       
       // 需要全押才能跟
       if (toCall >= aiStack) {
-        // 提高 All-in 门槛：必须有真货
+        // 底池承诺：底池远大于跟注额时，弃牌是数学错误
+        // 例：底池 20金，跟注 6银 → potOddsRatio ≈ 33 → 必须跟
+        const potOddsRatio = pot / (aiStack + 0.01);
+        if (potOddsRatio >= 3) {
+          // 底池 ≥ 3倍跟注额：任何两张牌都应该跟（底池赔率太好）
+          return { action: ACTIONS.ALL_IN, amount: aiStack };
+        }
+        if (potOddsRatio >= 1.5 && adjustedStrength >= 15) {
+          // 底池 ≥ 1.5倍：只要不是纯空气就跟
+          return { action: ACTIONS.ALL_IN, amount: aiStack };
+        }
+        // 正常 All-in 门槛：必须有真货
         if (rawStrength >= 60) {
           return { action: ACTIONS.ALL_IN, amount: aiStack };
         }
