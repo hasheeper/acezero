@@ -1037,93 +1037,167 @@
     const isDebug = moz.debugMode;
     const _s = _svgIcons;
 
+    // 没有力量也没有候选牌时不弹出
+    if (forces.length === 0 && candidates.length === 0) return;
+
     const TYPE_CN = {
       fortune: '幸运', curse: '凶', backlash: '反噬',
       clarity: '澄澈', refraction: '折射', reversal: '真理',
       null_field: '屏蔽', void_shield: '绝缘', purge_all: '现实'
     };
 
+    // 力量三分类：favorable(对玩家有利) / hostile(对玩家不利) / neutral(中立)
+    // 玩家 ID = 0
+    var HERO_ID = 0;
+    var BENEFICIAL_TYPES = { fortune: 1, clarity: 1, refraction: 1, reversal: 1, null_field: 1, void_shield: 1, purge_all: 1 };
+    var HARMFUL_TYPES = { curse: 1, backlash: 1 };
+
+    function _classifyForce(f) {
+      // 对玩家有利：玩家自己的有益技能，或转化后归属玩家的幸运
+      if (BENEFICIAL_TYPES[f.type] && f.ownerId === HERO_ID) return 'favorable';
+      if (f.converted && f.ownerId === HERO_ID) return 'favorable';
+      // 对玩家不利：诅咒/反噬 targeting 玩家
+      if (HARMFUL_TYPES[f.type] && f.targetId === HERO_ID) return 'hostile';
+      // 其余都是中立（别人的幸运、别人的psyche、诅咒别人的等）
+      return 'neutral';
+    }
+
     // ---- 构建 HTML ----
     let html = '';
 
-    // 标题行：活跃力量摘要
+    // === Header ===
+    html += '<div class="fpk-header">';
+    html += '<div class="fpk-title-group">';
+    html += '<div class="fpk-title">DESTINY RECALIBRATION</div>';
+    html += '<div class="fpk-subtitle">/// TERMINAL V.3.2 // MOZ_ENGINE</div>';
+    html += '</div>';
+    html += '<div class="fpk-sys-status">';
+    html += '<svg class="fpk-spin" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/></svg>';
+    html += '<span>ADJUSTING</span>';
+    html += '</div>';
+    html += '</div>';
+
+    // === Conflict Matrix (Grid 三区布局：ambient 上方，favorable左 vs hostile右) ===
     if (forces.length > 0) {
-      html += '<div class="fpk-forces">';
-      for (const f of forces) {
-        const typeCn = TYPE_CN[f.type] || f.type;
-        const icon = _s[f.type] || '';
-        const isPsyche = f.type === 'clarity' || f.type === 'refraction' || f.type === 'reversal';
-        let cls;
-        if (f.converted) {
-          cls = 'fpk-tag-converted';  // Psyche 转化的幸运
-        } else if (f.type === 'fortune') {
-          cls = 'fpk-tag-good';
-        } else if (f.type === 'curse' || f.type === 'backlash') {
-          cls = 'fpk-tag-bad';
-        } else if (isPsyche) {
-          cls = 'fpk-tag-psyche';
-        } else {
-          cls = 'fpk-tag-neutral';
-        }
-        const suppressed = f.suppressed ? ' fpk-tag-suppressed' : '';
-        html += '<span class="fpk-tag ' + cls + suppressed + '">' + icon + ' ' + f.owner + ' ' + typeCn + '</span>';
+      var favorableForces = [];
+      var hostileForces = [];
+      var neutralForces = [];
+      for (var ci = 0; ci < forces.length; ci++) {
+        var cat = _classifyForce(forces[ci]);
+        if (cat === 'favorable') favorableForces.push(forces[ci]);
+        else if (cat === 'hostile') hostileForces.push(forces[ci]);
+        else neutralForces.push(forces[ci]);
       }
-      html += '</div>';
-    }
 
-    // Psyche 拦截结果
-    const psycheEvents = meta.psycheEvents || [];
-    if (psycheEvents.length > 0) {
-      html += '<div class="fpk-psyche-events">';
-      for (const ev of psycheEvents) {
-        const arbiterCn = TYPE_CN[ev.arbiterType] || ev.arbiterType;
-        if (ev.action === 'convert') {
-          html += '<div class="fpk-psyche-row fpk-psyche-convert">';
-          var beneficiary = ev.beneficiary || ev.arbiterOwner;
-          html += '✨ [' + arbiterCn + '] 拦截 ' + ev.targetOwner + ' 的' + (TYPE_CN[ev.targetType] || '凶') + '(P' + ev.originalPower + ') → ' + beneficiary + '的幸运(P' + ev.convertedPower + ')';
-          html += '</div>';
-        } else if (ev.action === 'nullify') {
-          html += '<div class="fpk-psyche-row fpk-psyche-nullify">';
-          html += '✨ [' + arbiterCn + '] 消除 ' + ev.targetOwner + ' 的' + (TYPE_CN[ev.targetType] || '凶') + '(P' + ev.originalPower + ')';
-          html += '</div>';
-        } else if (ev.action === 'whiff') {
-          html += '<div class="fpk-psyche-row fpk-psyche-whiff">';
-          html += '⚠ [' + arbiterCn + '] 空放 — 无敌方诅咒可拦截';
-          html += '</div>';
-        }
-      }
-      html += '</div>';
-    }
-
-    // 候选牌排行（核心展示）
-    if (candidates.length > 0) {
-      const maxProb = Math.max(...candidates.map(c => c.prob), 1);
-
-      html += '<div class="fpk-list">';
-      for (let i = 0; i < candidates.length; i++) {
-        const c = candidates[i];
-        const rank = c.rank || (i + 1);
-        const barWidth = Math.max(2, Math.round((c.prob / maxProb) * 100));
-        // 颜色：rinoWins=true 绿色（对你有利），false 红色（对你不利）
-        const winCls = c.rinoWins ? 'fpk-row-win' : 'fpk-row-lose';
-        const selCls = c.selected ? ' fpk-row-selected' : '';
-        const barCls = c.rinoWins ? 'fpk-bar-win' : 'fpk-bar-lose';
-
-        html += '<div class="fpk-row ' + winCls + selCls + '">';
-        html += '<span class="fpk-rank">#' + rank + '</span>';
-        html += '<span class="fpk-row-card">' + _cardToDisplay(c.card) + '</span>';
-        html += '<span class="fpk-row-score">' + c.score.toFixed(1) + '</span>';
-        html += '<span class="fpk-row-bar"><span class="fpk-bar-fill ' + barCls + '" style="width:' + barWidth + '%"></span></span>';
-        html += '<span class="fpk-row-prob">' + c.prob.toFixed(1) + '%</span>';
-        if (c.selected) {
-          html += '<span class="fpk-row-pick">&larr;</span>';
+      // 中立区（全宽横排，在 matrix 上方）
+      if (neutralForces.length > 0) {
+        html += '<div class="fpk-ambient-row">';
+        html += '<span class="fpk-zone-label fpk-z-env">AMBIENT FIELD</span>';
+        for (var ni = 0; ni < neutralForces.length; ni++) {
+          html += _buildChip(neutralForces[ni]);
         }
         html += '</div>';
       }
+
+      // 有利(左) vs 不利(右) Grid
+      if (favorableForces.length > 0 || hostileForces.length > 0) {
+        html += '<div class="fpk-conflict-matrix">';
+
+        // 左列：有利
+        html += '<div class="fpk-matrix-col fpk-col-favorable">';
+        html += '<div class="fpk-zone-label fpk-z-good">ACTIVE PROTOCOLS</div>';
+        for (var fi = 0; fi < favorableForces.length; fi++) {
+          html += _buildChip(favorableForces[fi]);
+        }
+        if (favorableForces.length === 0) {
+          html += '<div class="fpk-none-hint">NONE</div>';
+        }
+        html += '</div>';
+
+        // 中间分隔线
+        html += '<div class="fpk-matrix-divider"></div>';
+
+        // 右列：不利
+        html += '<div class="fpk-matrix-col fpk-col-hostile">';
+        html += '<div class="fpk-zone-label fpk-z-bad">HOSTILE INTENT</div>';
+        for (var hi = 0; hi < hostileForces.length; hi++) {
+          html += _buildChip(hostileForces[hi]);
+        }
+        if (hostileForces.length === 0) {
+          html += '<div class="fpk-none-hint">NONE</div>';
+        }
+        html += '</div>';
+
+        html += '</div>'; // fpk-conflict-matrix
+      }
+    }
+
+    // === Console Log (Psyche events) ===
+    const psycheEvents = meta.psycheEvents || [];
+    if (psycheEvents.length > 0) {
+      html += '<div class="fpk-console">';
+      for (const ev of psycheEvents) {
+        const arbiterCn = TYPE_CN[ev.arbiterType] || ev.arbiterType;
+        if (ev.action === 'convert') {
+          var beneficiary = ev.beneficiary || ev.arbiterOwner;
+          html += '<div class="fpk-console-line">';
+          html += '<span class="fpk-log-icon">&gt;</span>';
+          html += '<span class="fpk-log-txt"><span class="fpk-log-skill">[' + arbiterCn + ']</span> INTERCEPTED</span>';
+          html += '<span class="fpk-log-bad">' + (TYPE_CN[ev.targetType] || '凶') + '(P' + ev.originalPower + ')</span>';
+          html += '</div>';
+          html += '<div class="fpk-console-line" style="padding-left:12px;">';
+          html += '<span class="fpk-log-txt">&xrarr; RECONSTRUCTED TO</span>';
+          html += '<span class="fpk-log-res">' + beneficiary + '::LUCK(P' + ev.convertedPower + ')</span>';
+          html += '</div>';
+        } else if (ev.action === 'nullify') {
+          html += '<div class="fpk-console-line">';
+          html += '<span class="fpk-log-icon">&gt;</span>';
+          html += '<span class="fpk-log-txt"><span class="fpk-log-skill">[' + arbiterCn + ']</span> NULLIFIED</span>';
+          html += '<span class="fpk-log-bad">' + (TYPE_CN[ev.targetType] || '凶') + '(P' + ev.originalPower + ')</span>';
+          html += '</div>';
+        } else if (ev.action === 'whiff') {
+          html += '<div class="fpk-console-line">';
+          html += '<span class="fpk-log-icon">&gt;</span>';
+          html += '<span class="fpk-log-whiff">[' + arbiterCn + '] WHIFF — NO HOSTILE FORCES</span>';
+          html += '</div>';
+        }
+      }
       html += '</div>';
     }
 
-    // Debug 面板（仅 debugMode）
+    // === Candidate Grid ===
+    if (candidates.length > 0) {
+      // 显示前5个 + 如果选中的不在前5，显示为第6行（带实际排名）
+      var top5 = candidates.slice(0, 5);
+      var selectedInTop5 = top5.some(function(c) { return c.selected; });
+      var extraSelected = null;
+      if (!selectedInTop5) {
+        for (var k = 5; k < candidates.length; k++) {
+          if (candidates[k].selected) { extraSelected = candidates[k]; break; }
+        }
+      }
+
+      var maxProb = Math.max.apply(null, candidates.map(function(c) { return c.prob; }).concat([1]));
+
+      html += '<div class="fpk-list">';
+      html += '<div class="fpk-table-header">';
+      html += '<span>#</span><span>CARD</span><span style="text-align:right">SCR</span><span>PROBABILITY</span><span>%</span>';
+      html += '</div>';
+
+      // Top 5 rows
+      for (var ri = 0; ri < top5.length; ri++) {
+        html += _buildCandidateRow(top5[ri], ri + 1, maxProb);
+      }
+
+      // Extra selected row (if outside top 5)
+      if (extraSelected) {
+        html += _buildCandidateRow(extraSelected, extraSelected.rank || '?', maxProb);
+      }
+
+      html += '</div>';
+    }
+
+    // === Debug 面板（仅 debugMode） ===
     if (isDebug && timeline.length > 0) {
       html += '<div class="fpk-debug">';
       html += '<div class="fpk-debug-title">' + _s.debug + ' DEBUG</div>';
@@ -1175,7 +1249,7 @@
             break;
           case 'CARD_SELECTED':
             if (step.data.top3) {
-              html += 'top: ' + step.data.top3.map(u => u.card + '=' + u.score.toFixed(1)).join(', ');
+              html += 'top: ' + step.data.top3.map(function(u) { return u.card + '=' + u.score.toFixed(1); }).join(', ');
             }
             break;
           default: break;
@@ -1184,6 +1258,9 @@
       }
       html += '</div>';
     }
+
+    // === Click hint ===
+    html += '<div class="fpk-click-hint">Click Anywhere to Dismiss</div>';
 
     overlay.innerHTML = html;
     overlay.classList.remove('fpk-fade-out');
@@ -1194,7 +1271,7 @@
     overlay.style.pointerEvents = 'auto';
     overlay.onclick = function () {
       overlay.classList.add('fpk-fade-out');
-      setTimeout(() => {
+      setTimeout(function() {
         overlay.style.display = 'none';
         overlay.style.pointerEvents = 'none';
       }, 400);
@@ -1202,16 +1279,65 @@
     };
   }
 
+  // 构建力量 Chip HTML (线框风格)
+  function _buildChip(f) {
+    var TYPE_CN = {
+      fortune: '幸运', curse: '凶', backlash: '反噬',
+      clarity: '澄澈', refraction: '折射', reversal: '真理',
+      null_field: '屏蔽', void_shield: '绝缘', purge_all: '现实'
+    };
+    // attr → CSS class 映射
+    var ATTR_CLS = {
+      fortune: 'fpk-attr-moirai', curse: 'fpk-attr-chaos', backlash: 'fpk-attr-chaos',
+      clarity: 'fpk-attr-psyche', refraction: 'fpk-attr-psyche', reversal: 'fpk-attr-psyche',
+      null_field: 'fpk-attr-void', void_shield: 'fpk-attr-void', purge_all: 'fpk-attr-void'
+    };
+    var typeCn = TYPE_CN[f.type] || f.type;
+    var attrCls = ATTR_CLS[f.type] || 'fpk-attr-void';
+    var suppCls = f.suppressed ? ' fpk-chip-suppressed' : '';
+    var h = '<div class="fpk-chip ' + attrCls + suppCls + '">';
+    h += '<span class="c-txt">' + f.owner + ' · ' + typeCn + '</span>';
+    if (f.tier) h += ' <span class="fpk-tier-badge">' + _tierLabel(f.tier) + '</span>';
+    h += '</div>';
+    return h;
+  }
+
+  // 构建候选行 HTML
+  function _buildCandidateRow(c, rank, maxProb) {
+    var barWidth = Math.max(2, Math.round((c.prob / maxProb) * 100));
+    var isWin = c.rinoWins;
+    var selCls = '';
+    if (c.selected) selCls = isWin ? ' is-selected' : ' is-selected-lose';
+    var barCls = isWin ? 'fpk-bar-fill-win' : 'fpk-bar-fill-lose';
+
+    var h = '<div class="fpk-row' + selCls + '">';
+    h += '<span class="fpk-cell-rank">' + (typeof rank === 'number' ? ('0' + rank).slice(-2) : '#' + rank) + '</span>';
+    h += '<span class="fpk-cell-card">' + _cardToDisplay(c.card) + '</span>';
+    h += '<span class="fpk-cell-score">' + c.score.toFixed(1) + '</span>';
+    h += '<div class="fpk-cell-bar-wrap"><div class="fpk-bar-bg"><div class="fpk-bar-fill ' + barCls + '" style="width:' + barWidth + '%"></div></div></div>';
+    h += '<span class="fpk-cell-prob">' + c.prob.toFixed(1) + '%';
+    if (c.selected) h += ' <span class="fpk-pick-arrow">◄</span>';
+    h += '</span>';
+    h += '</div>';
+    return h;
+  }
+
+  // Tier 标签
+  function _tierLabel(tier) {
+    var labels = { 1: 'I', 2: 'II', 3: 'III' };
+    return labels[tier] || '';
+  }
+
   // 牌面字符串 → 可视化显示
   function _cardToDisplay(cardStr) {
     if (!cardStr || cardStr.length < 2) return cardStr || '?';
-    const rank = cardStr[0];
-    const suitChar = cardStr[1];
-    const SUIT_SYMBOLS = { h: '♥', d: '♦', c: '♣', s: '♠' };
-    const SUIT_COLORS = { h: '#e74c3c', d: '#3498db', c: '#2ecc71', s: '#ecf0f1' };
-    const suit = SUIT_SYMBOLS[suitChar] || suitChar;
-    const color = SUIT_COLORS[suitChar] || '#fff';
-    return '<span class="fpk-card" style="color:' + color + '">' + rank + suit + '</span>';
+    var rank = cardStr[0];
+    var suitChar = cardStr[1];
+    var SUIT_SYMBOLS = { h: '♥', d: '♦', c: '♣', s: '♠' };
+    var SUIT_CLASS = { h: 'fpk-suit-h', d: 'fpk-suit-d', c: 'fpk-suit-c', s: 'fpk-suit-s' };
+    var suit = SUIT_SYMBOLS[suitChar] || suitChar;
+    var cls = SUIT_CLASS[suitChar] || '';
+    return '<span class="' + cls + '">' + rank + suit + '</span>';
   }
 
   // Psyche 拦截事件 → 游戏消息（让玩家看到技能生效）

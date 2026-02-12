@@ -1738,12 +1738,12 @@ body {
 
 #force-balance .force-enemy {
   height: 100%;
-  background: linear-gradient(90deg, #c0392b, #e74c3c);
+  background: linear-gradient(90deg, #e74c3c, #f1948a);
   transition: width 0.5s ease;
 }
 
 /* =========================================================
-   命运裁决 Overlay — 候选牌排行展示
+   命运裁决 Overlay — Gilded Terminal v3
 ========================================================= */
 #force-pk-overlay {
   position: fixed;
@@ -1751,188 +1751,341 @@ body {
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 1100;
-  background: rgba(8, 6, 16, 0.96);
+  width: 420px;
+  background: linear-gradient(135deg, rgba(16, 17, 24, 0.98), rgba(5, 5, 8, 0.96));
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  padding: 10px 12px 8px;
-  min-width: 260px;
-  max-width: 340px;
+  border-top: 1px solid var(--gold-dim, #7a6e35);
+  border-bottom: 1px solid var(--gold-dim, #7a6e35);
+  border-radius: 4px;
   font-family: 'JetBrains Mono', monospace;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.7);
-  animation: fpkAppear 0.3s ease-out;
+  box-shadow:
+    0 0 50px rgba(0, 0, 0, 0.8),
+    0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 0 20px rgba(207, 181, 59, 0.05);
+  overflow: hidden;
+  animation: fpkAppear 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
   cursor: pointer;
 }
 
+#force-pk-overlay::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, #CFB53B, transparent);
+  box-shadow: 0 0 10px #CFB53B;
+  opacity: 0.8;
+}
+
 @keyframes fpkAppear {
-  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.92); }
-  100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  from { opacity: 0; transform: translate(-50%, -50%) translateY(20px) scale(0.95); }
+  to   { opacity: 1; transform: translate(-50%, -50%) translateY(0) scale(1); }
 }
 
 #force-pk-overlay.fpk-fade-out {
-  animation: fpkFadeOut 0.5s ease-in forwards;
+  animation: fpkFadeOut 0.4s ease-in forwards;
 }
 
 @keyframes fpkFadeOut {
-  0% { opacity: 1; }
+  0%   { opacity: 1; }
   100% { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
 }
 
-/* ---- 力量标签 ---- */
-.fpk-forces {
+/* ---- Header ---- */
+.fpk-header {
+  padding: 12px 18px;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 6px;
-  justify-content: center;
+  justify-content: space-between;
+  align-items: center;
 }
 
-.fpk-tag {
+.fpk-title-group { display: flex; flex-direction: column; }
+
+.fpk-title {
+  font-family: 'Cinzel', serif;
+  font-size: 14px;
+  color: #CFB53B;
+  letter-spacing: 2px;
+  font-weight: 700;
+  text-shadow: 0 0 10px rgba(207, 181, 59, 0.3);
+}
+
+.fpk-subtitle {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8px;
+  color: #666;
+  letter-spacing: 1px;
+  margin-top: 2px;
+}
+
+.fpk-sys-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 9px;
+  color: #74b9ff;
+  border: 1px solid rgba(116, 185, 255, 0.2);
   padding: 2px 6px;
   border-radius: 3px;
-  white-space: nowrap;
 }
 
-.fpk-tag-good    { color: #9B59B6; background: rgba(155, 89, 182, 0.12); }
-.fpk-tag-bad     { color: #e74c3c; background: rgba(231, 76, 60, 0.12); }
-.fpk-tag-neutral { color: #888;    background: rgba(255, 255, 255, 0.05); }
-.fpk-tag-psyche  { color: #74b9ff; background: rgba(116, 185, 255, 0.12); }
-.fpk-tag-converted { color: #00cec9; background: rgba(0, 206, 201, 0.15); border: 1px solid rgba(0, 206, 201, 0.3); }
-.fpk-tag-suppressed { text-decoration: line-through; opacity: 0.45; }
+.fpk-spin { animation: fpkSpin 4s linear infinite; }
+@keyframes fpkSpin { 100% { transform: rotate(360deg); } }
 
-/* ---- Psyche 拦截结果 ---- */
-.fpk-psyche-events {
-  padding: 4px 8px;
-  margin-bottom: 4px;
-  font-size: 11px;
-  line-height: 1.6;
-}
-.fpk-psyche-row { padding: 2px 0; }
-.fpk-psyche-convert { color: #74b9ff; }
-.fpk-psyche-nullify { color: #a29bfe; }
-.fpk-psyche-whiff   { color: #636e72; font-style: italic; }
-
-/* ---- 牌面通用 ---- */
-.fpk-card {
-  font-weight: 700;
+/* ---- Conflict Matrix (Grid 三区布局) ---- */
+.fpk-conflict-matrix {
+  display: grid;
+  grid-template-columns: 1fr 1px 1fr;
+  gap: 0;
+  background: rgba(0, 0, 0, 0.2);
 }
 
-/* ---- 候选牌排行列表 ---- */
-.fpk-list {
+.fpk-matrix-divider {
+  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+}
+
+.fpk-matrix-col {
+  padding: 15px;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 6px;
+}
+
+.fpk-matrix-col.fpk-col-favorable { align-items: flex-start; }
+.fpk-matrix-col.fpk-col-hostile   { align-items: flex-end; text-align: right; }
+
+/* 区域标题 */
+.fpk-zone-label {
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: #444;
+  margin-bottom: 4px;
+  font-weight: 700;
+  font-family: 'Rajdhani', sans-serif;
+}
+
+.fpk-zone-label.fpk-z-env  { color: #95a5a6; opacity: 0.6; }
+.fpk-zone-label.fpk-z-good { color: #2ecc71; opacity: 0.6; }
+.fpk-zone-label.fpk-z-bad  { color: #e74c3c; opacity: 0.6; }
+
+/* === Chip 样式 (线框风格) === */
+.fpk-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  position: relative;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #ccc;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+/* 左侧高亮边框（有利侧） */
+.fpk-chip::before {
+  content: '';
+  position: absolute;
+  top: 20%; bottom: 20%;
+  left: 0; width: 2px;
+  background: currentColor;
+  box-shadow: 0 0 6px currentColor;
+}
+
+/* 不利侧：边框在右侧 */
+.fpk-col-hostile .fpk-chip::before {
+  left: auto; right: 0;
+}
+.fpk-col-hostile .fpk-chip {
+  padding-right: 10px;
+}
+
+/* 属性着色 */
+.fpk-chip.fpk-attr-moirai { color: #9B59B6; border-bottom: 1px solid rgba(155, 89, 182, 0.1); }
+.fpk-chip.fpk-attr-chaos  { color: #e74c3c; border-bottom: 1px solid rgba(231, 76, 60, 0.15); }
+.fpk-chip.fpk-attr-psyche { color: #74b9ff; border-bottom: 1px solid rgba(116, 185, 255, 0.15); }
+.fpk-chip.fpk-attr-void   { color: #95a5a6; border-bottom: 1px solid rgba(149, 165, 166, 0.15); }
+
+/* 废除状态 */
+.fpk-chip.fpk-chip-suppressed {
+  opacity: 0.4;
+  text-decoration: line-through;
+  filter: grayscale(1);
+}
+
+/* Tier 标 */
+.fpk-tier-badge {
+  font-size: 8px;
+  opacity: 0.7;
+  border: 1px solid currentColor;
+  padding: 0 3px;
+  border-radius: 2px;
+  margin-left: 4px;
+}
+
+/* 中立区 Ambient（全宽横排，在 matrix 上方） */
+.fpk-ambient-row {
+  padding: 10px 15px;
+  background: rgba(0, 0, 0, 0.15);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.fpk-ambient-row .fpk-zone-label {
+  margin-bottom: 0;
+  margin-right: 6px;
+}
+
+.fpk-chip .fpk-icon { width: 12px; height: 12px; fill: currentColor; vertical-align: middle; }
+
+/* NONE 占位 */
+.fpk-none-hint {
+  font-size: 9px;
+  color: #444;
+  font-style: italic;
+}
+
+/* ---- Console Log (Psyche events) ---- */
+.fpk-console {
+  padding: 10px 20px;
+  background: #060608;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.fpk-console-line {
+  display: flex;
+  gap: 6px;
+  opacity: 0.9;
+}
+
+.fpk-log-icon  { color: #74b9ff; font-weight: bold; }
+.fpk-log-skill { color: #74b9ff; font-weight: bold; }
+.fpk-log-txt   { color: #888; }
+.fpk-log-bad   { color: #e74c3c; text-decoration: line-through; opacity: 0.7; }
+.fpk-log-res   { color: #9B59B6; font-weight: bold; animation: fpkGlowPulse 2s infinite; }
+.fpk-log-whiff { color: #636e72; font-style: italic; }
+
+@keyframes fpkGlowPulse { 50% { text-shadow: 0 0 8px rgba(155, 89, 182, 0.6); } }
+
+/* ---- Candidate Grid ---- */
+.fpk-list {
+  padding: 0;
+  background: rgba(0, 0, 0, 0.3);
+  position: relative;
+}
+
+.fpk-list::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+}
+
+.fpk-table-header {
+  display: grid;
+  grid-template-columns: 32px 30px 40px 1fr 40px;
+  padding: 8px 16px;
+  font-size: 9px;
+  color: #555;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  font-family: 'Rajdhani', sans-serif;
 }
 
 .fpk-row {
   display: grid;
-  grid-template-columns: 24px 28px 42px 1fr 36px 16px;
+  grid-template-columns: 32px 30px 40px 1fr 40px;
   align-items: center;
-  gap: 4px;
-  padding: 3px 4px;
-  border-radius: 3px;
-  font-size: 10px;
-  color: #777;
+  padding: 8px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.02);
+  opacity: 0.6;
+  transition: opacity 0.2s, background 0.2s;
+  position: relative;
 }
 
-/* \u80dc\u8d1f\u989c\u8272 */
-.fpk-row-win {
-  border-left: 2px solid rgba(46, 204, 113, 0.4);
+.fpk-row.is-selected {
+  opacity: 1;
+  background: linear-gradient(90deg, rgba(207, 181, 59, 0.05) 0%, rgb(26, 26, 26) 40%, rgba(46, 204, 113, 0.05) 100%);
+  border-left: 2px solid #CFB53B;
 }
 
-.fpk-row-lose {
-  border-left: 2px solid rgba(231, 76, 60, 0.3);
+.fpk-row.is-selected-lose {
+  opacity: 1;
+  background: linear-gradient(90deg, rgba(207, 181, 59, 0.05) 0%, rgb(26, 26, 26) 40%, rgba(231, 76, 60, 0.05) 100%);
+  border-left: 2px solid #CFB53B;
 }
 
-.fpk-row-selected.fpk-row-win {
-  background: rgba(46, 204, 113, 0.1);
-  color: #ddd;
-}
+/* Cell styles */
+.fpk-cell-rank { font-size: 10px; color: #555; font-weight: 700; }
+.fpk-row.is-selected .fpk-cell-rank { color: #2ecc71; }
+.fpk-row.is-selected-lose .fpk-cell-rank { color: #e74c3c; }
 
-.fpk-row-selected.fpk-row-lose {
-  background: rgba(231, 76, 60, 0.1);
-  color: #ddd;
-}
+.fpk-cell-card { font-size: 14px; font-weight: 700; color: #fff; font-family: 'Cinzel', serif; }
+.fpk-suit-h, .fpk-suit-d { color: #e74c3c; }
+.fpk-suit-c, .fpk-suit-s { color: #ecf0f1; }
 
-.fpk-rank {
-  font-size: 9px;
-  color: #555;
-  text-align: right;
-}
+.fpk-cell-score { font-size: 11px; color: #777; text-align: right; padding-right: 10px; font-family: 'JetBrains Mono', monospace; }
 
-.fpk-row-selected.fpk-row-win .fpk-rank { color: #2ecc71; }
-.fpk-row-selected.fpk-row-lose .fpk-rank { color: #e74c3c; }
-
-.fpk-row-card {
-  font-size: 13px;
-  font-weight: 700;
-  text-align: center;
-}
-
-.fpk-row-score {
-  font-size: 9px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  color: #888;
-}
-
-.fpk-row-selected .fpk-row-score {
-  color: #ccc;
-}
-
-.fpk-row-bar {
-  display: block;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 3px;
+.fpk-cell-bar-wrap { display: flex; align-items: center; height: 100%; }
+.fpk-bar-bg {
+  flex: 1;
+  height: 4px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 2px;
   overflow: hidden;
+  margin-right: 8px;
 }
-
 .fpk-bar-fill {
-  display: block;
   height: 100%;
-  border-radius: 3px;
-  min-width: 2px;
-  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+  transition: width 0.5s ease-out;
 }
+.fpk-bar-fill-win  { background: #2ecc71; box-shadow: 0 0 8px rgba(46, 204, 113, 0.4); }
+.fpk-bar-fill-lose { background: #555; }
 
-.fpk-bar-win {
-  background: rgba(46, 204, 113, 0.35);
+.fpk-cell-prob { font-size: 10px; color: #666; text-align: right; font-variant-numeric: tabular-nums; }
+.fpk-row.is-selected .fpk-cell-prob { color: #2ecc71; font-weight: 700; }
+.fpk-row.is-selected-lose .fpk-cell-prob { color: #e74c3c; font-weight: 700; }
+
+/* Pick arrow */
+.fpk-pick-arrow {
+  color: #2ecc71;
+  margin-left: 2px;
+  animation: fpkNudge 1s infinite alternate;
 }
+.fpk-row.is-selected-lose .fpk-pick-arrow { color: #e74c3c; }
+@keyframes fpkNudge { from { transform: translateX(0); } to { transform: translateX(3px); } }
 
-.fpk-bar-lose {
-  background: rgba(231, 76, 60, 0.3);
-}
-
-.fpk-row-selected .fpk-bar-win {
-  background: #2ecc71;
-}
-
-.fpk-row-selected .fpk-bar-lose {
-  background: #e74c3c;
-}
-
-.fpk-row-prob {
+/* Click hint */
+.fpk-click-hint {
+  text-align: center;
   font-size: 8px;
-  text-align: right;
-  color: #555;
-  font-variant-numeric: tabular-nums;
+  color: #333;
+  padding: 6px;
+  margin-top: 5px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
 }
 
-.fpk-row-selected.fpk-row-win .fpk-row-prob { color: #2ecc71; }
-.fpk-row-selected.fpk-row-lose .fpk-row-prob { color: #e74c3c; }
-
-.fpk-row-pick {
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.fpk-row-win .fpk-row-pick { color: #2ecc71; }
-.fpk-row-lose .fpk-row-pick { color: #e74c3c; }
+/* ---- 牌面通用 ---- */
+.fpk-card { font-weight: 700; }
 
 /* ---- Debug 面板 ---- */
 .fpk-debug {
-  margin-top: 6px;
+  margin: 0 15px 10px 15px;
   padding: 4px 6px;
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 4px;

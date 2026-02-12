@@ -242,6 +242,7 @@
         activeForces: resolvedForMeta.map(f => ({
           ownerId: f.ownerId,
           owner: f.ownerName || f.ownerId,
+          targetId: f.targetId != null ? f.targetId : null,
           type: f.type,
           attr: f.attr,
           tier: f.tier,
