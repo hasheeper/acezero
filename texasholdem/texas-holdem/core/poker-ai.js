@@ -315,9 +315,10 @@
       // 1. 计算原始手牌强度
       let rawStrength = this.calculateRawStrength(holeCards, boardCards, phase);
       
-      // 2. 添加难度噪音
+      // 2. 添加难度噪音 + 盲目乐观值（只影响感知，不影响 rawStrength）
       const noise = (Math.random() - 0.5) * this.difficulty.noiseRange;
-      let adjustedStrength = Math.max(0, Math.min(100, rawStrength + noise));
+      const optimism = (this.difficulty.optimism || 0) * 0.5;
+      let adjustedStrength = Math.max(0, Math.min(100, rawStrength + noise + optimism));
       
       // 2.5 魔运自信加成：有魔运的AI感知到命运偏向自己，更不容易弃牌
       // magicLevel 1~5 → +5~+25 的心理加成
@@ -434,10 +435,6 @@
           potentialBonus += 12;
         }
         
-        // 4. 盲目乐观值（越蠢的AI越乐观）- 降低影响
-        const optimism = (this.difficulty.optimism || 0) * 0.5;
-        potentialBonus += optimism;
-        
         strength += potentialBonus;
       }
       
@@ -533,7 +530,9 @@
       }
       
       // 中等牌力：根据风险喜好决定
-      if (adjustedStrength >= this.risk.raiseThreshold) {
+      // 🔧 安全阀：rawStrength < 25 = 垃圾牌，不走价值下注路径
+      //    垃圾牌只能通过上面的 bluff 路径下注（有 40% 筹码上限）
+      if (rawStrength >= 25 && adjustedStrength >= this.risk.raiseThreshold) {
         const raiseAmount = this.calculateRaiseAmount(adjustedStrength, pot, aiStack, minRaise);
         return { action: ACTIONS.RAISE, amount: raiseAmount };
       }
@@ -674,10 +673,13 @@
       }
       
       // 强牌：跟注或加注
+      // 🔧 安全阀：rawStrength < 25 = 垃圾牌，不走加注路径（防止 tilt 乱加注）
       if (adjustedStrength >= this.risk.raiseThreshold) {
-        const raiseAmount = this.calculateRaiseAmount(adjustedStrength, pot, aiStack, minRaise);
-        if (raiseAmount > toCall * 2) {
-          return { action: ACTIONS.RAISE, amount: raiseAmount };
+        if (rawStrength >= 25) {
+          const raiseAmount = this.calculateRaiseAmount(adjustedStrength, pot, aiStack, minRaise);
+          if (raiseAmount > toCall * 2) {
+            return { action: ACTIONS.RAISE, amount: raiseAmount };
+          }
         }
         return { action: ACTIONS.CALL, amount: toCall };
       }
