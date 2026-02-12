@@ -188,10 +188,16 @@
 
     /**
      * 从配置注册技能（委托给 skillSystem）+ 生成UI
+     * @param {object} playerConfigs - 游戏配置
+     * @param {object} [playerIdMap] - { heroId, seats: { BTN: id, ... } }
      */
-    registerFromConfig(playerConfigs) {
+    registerFromConfig(playerConfigs, playerIdMap) {
       if (!this.skillSystem) return;
-      this.skillSystem.registerFromConfig(playerConfigs);
+      // 同步 humanPlayerId
+      if (playerIdMap && playerIdMap.heroId != null) {
+        this.humanPlayerId = playerIdMap.heroId;
+      }
+      this.skillSystem.registerFromConfig(playerConfigs, playerIdMap);
       this._buildSkillButtons();
     }
 
@@ -360,8 +366,9 @@
 
       // 检查是否已有同 effect 的 force pending（玩家方）
       var queuedEffects = {};
+      var _hpid = this.humanPlayerId;
       ss.pendingForces.forEach(function (f) {
-        if (f.ownerId === 0) queuedEffects[f.type] = true;
+        if (f.ownerId === _hpid) queuedEffects[f.type] = true;
       });
 
       for (var entry of this._buttons) {

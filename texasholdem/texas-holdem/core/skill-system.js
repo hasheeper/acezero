@@ -218,9 +218,23 @@
      * skills key 必须是 UNIVERSAL_SKILLS 中的 key
      * mana 由 max(vanguard.level, rearguard.level) 推导
      */
-    registerFromConfig(config) {
+    /**
+     * @param {object} config - 游戏配置
+     * @param {object} [playerIdMap] - 座位→gameState玩家ID映射
+     *   { heroId: number, seats: { BTN: number, SB: number, ... } }
+     *   如果不传，hero=0, NPC从1开始（兼容旧调用）
+     */
+    registerFromConfig(config, playerIdMap) {
       this.skills.clear();
       this.manaPools.clear();
+
+      // 解析玩家ID映射
+      const idMap = playerIdMap || {};
+      const heroId = idMap.heroId != null ? idMap.heroId : 0;
+      const seatIds = idMap.seats || {};
+      this._heroId = heroId; // 存储供 getState() 使用
+
+      console.log('[SKILL-SYS] registerFromConfig heroId=' + heroId, 'seatIds=', seatIds);
 
       // --- Hero ---
       if (config.hero) {
@@ -242,33 +256,35 @@
 
         if (h.vanguardSkills || h.rearguardSkills) {
           // 注册 mana 池（共享一个池）
-          this._registerManaPool(0, manaConfig);
+          this._registerManaPool(heroId, manaConfig);
           // 主手技能
           if (h.vanguardSkills) {
-            this._registerSkillList(0, name, 'human', h.vanguardSkills, vName);
+            this._registerSkillList(heroId, name, 'human', h.vanguardSkills, vName);
           }
           // 副手技能
           if (h.rearguardSkills && rName) {
-            this._registerSkillList(0, name, 'human', h.rearguardSkills, rName);
+            this._registerSkillList(heroId, name, 'human', h.rearguardSkills, rName);
           }
         } else {
           // 兼容旧格式：单一 skills 数组
-          this._registerEntity(0, name, 'human', h.skills || {}, manaConfig);
+          this._registerEntity(heroId, name, 'human', h.skills || {}, manaConfig);
         }
       }
 
       // --- Seats (NPC) ---
       if (config.seats) {
         const seatOrder = ['UTG', 'HJ', 'CO', 'BTN', 'SB', 'BB'];
-        let npcIndex = 1;
+        let fallbackIndex = 1;
         for (const seat of seatOrder) {
           const s = config.seats[seat];
           if (!s) continue;
+          // 使用 playerIdMap 中的真实 ID，否则 fallback 递增
+          const npcId = seatIds[seat] != null ? seatIds[seat] : fallbackIndex;
           const level = this._getCharLevel(s);
           const name = this._getCharName(s) || seat;
           const mana = MANA_BY_LEVEL[Math.min(5, level)] || MANA_BY_LEVEL[0];
-          this._registerEntity(npcIndex, name, 'ai', s.skills || {}, mana);
-          npcIndex++;
+          this._registerEntity(npcId, name, 'ai', s.skills || {}, mana);
+          fallbackIndex++;
         }
       }
 
@@ -402,8 +418,9 @@
       pool.current -= amount;
       this._log('MANA_SPENT', { ownerId, amount, remaining: pool.current });
 
-      // Rino 反噬检查
-      if (ownerId === 0 && pool.current <= 0) {
+      // Hero 反噬检查
+      const hid = this._heroId != null ? this._heroId : 0;
+      if (ownerId === hid && pool.current <= 0) {
         this.backlash = { active: true, counter: 3 };
         this._log('BACKLASH_TRIGGERED', { duration: 3 });
         this.emit('backlash:start', { counter: 3 });
@@ -439,8 +456,9 @@
       if (!skill) return { success: false, reason: 'SKILL_NOT_FOUND' };
       if (skill.activation !== ACTIVATION.ACTIVE) return { success: false, reason: 'NOT_ACTIVE_TYPE' };
 
-      // 反噬检查（仅 Rino）
-      if (skill.ownerId === 0 && this.backlash.active) {
+      // 反噬检查（仅 hero）
+      const hid2 = this._heroId != null ? this._heroId : 0;
+      if (skill.ownerId === hid2 && this.backlash.active) {
         return { success: false, reason: 'BACKLASH_ACTIVE', counter: this.backlash.counter };
       }
 
@@ -665,7 +683,7 @@
           type: 'backlash',
           level: 5,
           power: 50,
-          targetId: 0, // 反噬 Rino
+          targetId: this._heroId != null ? this._heroId : 0, // 反噬 hero
           source: 'backlash'
         });
         this.backlash.counter--;
@@ -796,7 +814,8 @@
     // ========== 状态查询 ==========
 
     getState() {
-      const rinoMana = this.getMana(0);
+      const heroId = this._heroId != null ? this._heroId : 0;
+      const rinoMana = this.getMana(heroId);
       return {
         backlash: { ...this.backlash },
         rinoMana: rinoMana.current,
@@ -831,7 +850,8 @@
         if (skill.activation !== ACTIVATION.PASSIVE) continue;
 
         const entry = { name: skill.ownerName, type: skill.effect, tier: skill.tier, power: skill.power };
-        if (skill.ownerId === 0) {
+        const hid4 = this._heroId != null ? this._heroId : 0;
+        if (skill.ownerId === hid4) {
           summary.allies.push(entry);
           summary.total.ally += entry.power;
         } else {
@@ -844,7 +864,8 @@
       for (const f of this.pendingForces) {
         if (f.type === 'purge_all') continue;
         const entry = { name: f.ownerName, type: f.type, tier: f.tier, power: f.power };
-        if (f.ownerId === 0) {
+        const hid5 = this._heroId != null ? this._heroId : 0;
+        if (f.ownerId === hid5) {
           summary.allies.push(entry);
           summary.total.ally += entry.power;
         } else {

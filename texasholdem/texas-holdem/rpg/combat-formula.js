@@ -33,6 +33,7 @@ export class CombatFormula {
       opts = opts || {};
       this.attributeSystem = opts.attributeSystem || null;
       this.switchSystem = opts.switchSystem || null;
+      this.heroId = opts.heroId != null ? opts.heroId : 0;
     }
 
     /**
@@ -134,11 +135,12 @@ export class CombatFormula {
      * @private
      */
     _getOpponentPrimaryAttr(force, allForces) {
-      const isPlayerForce = (force.ownerId === 0 || force.ownerId === -2);
+      const hid = this.heroId != null ? this.heroId : 0;
+      const isPlayerForce = (force.ownerId === hid || force.ownerId === -2);
 
       // 找到敌方的同类型 forces
       const opponentForces = allForces.filter(f => {
-        const isOpponentPlayer = (f.ownerId === 0 || f.ownerId === -2);
+        const isOpponentPlayer = (f.ownerId === hid || f.ownerId === -2);
         // 不同阵营
         if (isPlayerForce === isOpponentPlayer) return false;
         // 同类型对抗（fortune vs fortune, curse vs curse）

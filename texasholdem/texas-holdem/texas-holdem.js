@@ -293,6 +293,22 @@
   let _heroStartChips = 0;
 
   // ========== 工具函数 ==========
+  /**
+   * 构建 playerIdMap：座位→gameState玩家ID映射
+   * 供 skill-system 使用，确保 ownerId 与 gameState.players[].id 一致
+   */
+  function buildPlayerIdMap() {
+    var heroPlayer = gameState.players.find(function(p) { return p.type === 'human'; });
+    var map = {
+      heroId: heroPlayer ? heroPlayer.id : 0,
+      seats: {}
+    };
+    gameState.players.forEach(function(p) {
+      if (p.seat) map.seats[p.seat] = p.id;
+    });
+    return map;
+  }
+
   function getHeroPlayer() {
     return gameState.players.find(function(p) { return p.type === 'human'; }) || gameState.players[0];
   }
@@ -1539,8 +1555,8 @@
       var btnIdx = gameState.players.findIndex(function(p) { return p.seat === 'BTN'; });
       gameState.dealerIndex = btnIdx >= 0 ? btnIdx : 0;
       skillSystem.reset();
-      // 从配置注册所有技能 + 生成UI
-      skillUI.registerFromConfig(_cfg());
+      // 从配置注册所有技能 + 生成UI（传入玩家ID映射）
+      skillUI.registerFromConfig(_cfg(), buildPlayerIdMap());
     } else {
       // 连续对局：保留筹码，重置手牌状态
       gameState.players.forEach(p => {
@@ -1986,8 +2002,8 @@
     gameLogger.entries.forEach(function (e) {
       if (e.pot > maxPot) maxPot = e.pot;
     });
-    // 收集 mana 信息
-    var heroMana = skillSystem.getMana(0);
+    // 收集 mana 信息（使用真实 hero ID）
+    var heroMana = skillSystem.getMana(getHeroIndex());
 
     // 计算 hero 资金变化
     var heroP = gameState.players.find(function(p) { return p.type === 'human'; });

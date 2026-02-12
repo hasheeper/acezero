@@ -92,6 +92,8 @@
     selectCard(deckCards, currentBoard, players, forces, options) {
       options = options || {};
       const rinoPlayerId = options.rinoPlayerId != null ? options.rinoPlayerId : 0;
+      this._heroId = rinoPlayerId; // 存储供内部方法使用
+      if (this.combatFormula) this.combatFormula.heroId = rinoPlayerId;
 
       // ---- 调试时间线 ----
       if (this.debugMode) {
@@ -229,6 +231,30 @@
           }))
         });
       }
+
+      // ---- 控制台诊断日志 ----
+      console.log('[MoZ] ═══ 命运选牌 ═══');
+      console.log('[MoZ] heroId=' + rinoPlayerId + ', 候选牌=' + universes.length);
+      // 力量对抗结果
+      var rfLog = (this._lastResolvedForces || []).filter(function(f) { return !f._suppressed; });
+      console.log('[MoZ] 生效力量:', rfLog.map(function(f) {
+        return (f.ownerName || f.ownerId) + ' ' + f.type + ' P=' + f.power + '→EP=' + f.effectivePower;
+      }).join(' | '));
+      // Top 5 + 选中牌
+      console.log('[MoZ] Top候选:', topCandidates.map(function(c) {
+        return c.card + ' S=' + c.score + (c.rinoWins ? '✓' : '✗') + (c.selected ? ' ★' : '');
+      }).join(' | '));
+      console.log('[MoZ] 选中: ' + cardToSolverString(selectedUniverse.card) +
+        ' (rank #' + (selectedRank + 1) + '/' + universes.length + ')' +
+        ' heroWins=' + selectedUniverse.winnerIds.includes(rinoPlayerId) +
+        ' score=' + selectedUniverse.destinyScore);
+      // 选中牌的各玩家得分
+      var scoreEntries = [];
+      for (var sid in selectedUniverse.scores) {
+        scoreEntries.push('p' + sid + '=' + Math.round(selectedUniverse.scores[sid]));
+      }
+      console.log('[MoZ] 各玩家分:', scoreEntries.join(', '),
+        '| 牌型:', JSON.stringify(selectedUniverse.handDescriptions));
 
       // ---- 记录赢家牌型（反单调系统） ----
       const fortuneForces = dealForces.filter(f => f.type === 'fortune');
@@ -479,8 +505,9 @@
       }
 
       // ---- 主动 vs 被动压制：主动技能削弱敌方被动技能 ----
-      const playerActiveF = fortuneForces.filter(f => f.ownerId === 0 && f.activation === 'active');
-      const npcPassiveF = fortuneForces.filter(f => f.ownerId !== 0 && f.activation === 'passive');
+      const hid = this._heroId != null ? this._heroId : 0;
+      const playerActiveF = fortuneForces.filter(f => f.ownerId === hid && f.activation === 'active');
+      const npcPassiveF = fortuneForces.filter(f => f.ownerId !== hid && f.activation === 'passive');
       if (playerActiveF.length > 0 && npcPassiveF.length > 0) {
         // 主动技能 tier 越低（越强），压制越大
         const bestTier = Math.min(...playerActiveF.map(f => f.tier));
@@ -493,8 +520,8 @@
       }
 
       // NPC的主动fortune也可以削弱玩家的被动fortune
-      const npcActiveF = fortuneForces.filter(f => f.ownerId !== 0 && f.activation === 'active');
-      const playerPassiveF = fortuneForces.filter(f => f.ownerId === 0 && f.activation === 'passive');
+      const npcActiveF = fortuneForces.filter(f => f.ownerId !== hid && f.activation === 'active');
+      const playerPassiveF = fortuneForces.filter(f => f.ownerId === hid && f.activation === 'passive');
       if (npcActiveF.length > 0 && playerPassiveF.length > 0) {
         const bestTier = Math.min(...npcActiveF.map(f => f.tier));
         for (const pf of playerPassiveF) {
@@ -562,8 +589,9 @@
       const ADV_MULT = 1.5;
 
       // 先处理 T1 vs T1 碰撞（不同阵营的 T1 互相对抗）
-      const playerT1 = t1Forces.filter(f => f.ownerId === 0);
-      const npcT1 = t1Forces.filter(f => f.ownerId !== 0);
+      const hid2 = this._heroId != null ? this._heroId : 0;
+      const playerT1 = t1Forces.filter(f => f.ownerId === hid2);
+      const npcT1 = t1Forces.filter(f => f.ownerId !== hid2);
 
       if (playerT1.length > 0 && npcT1.length > 0) {
         for (const pt1 of playerT1) {
@@ -759,8 +787,9 @@
       if (typedForces.length < 2) return;
 
       // 分阵营
-      const playerSide = typedForces.filter(f => f.ownerId === 0);
-      const npcSide = typedForces.filter(f => f.ownerId !== 0);
+      const hid3 = this._heroId != null ? this._heroId : 0;
+      const playerSide = typedForces.filter(f => f.ownerId === hid3);
+      const npcSide = typedForces.filter(f => f.ownerId !== hid3);
 
       if (playerSide.length === 0 || npcSide.length === 0) return;
 
