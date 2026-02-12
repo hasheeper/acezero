@@ -720,6 +720,337 @@
     }
   }
 
+  // ========== SkillAI — 技能决策模块 ==========
+  // 纯函数，无状态。所有技能相关的 AI 决策集中在这里。
+  // skill-system.js 通过回调委托到这里，不直接耦合。
+  //
+  // 两大职责：
+  //   1. shouldUseSkill — NPC 是否使用某个主动技能（4属性 × 3难度）
+  //   2. pickCurseTarget — Curse 选目标（3难度）
+
+  const PHASE_INDEX = { preflop: 0, flop: 1, turn: 2, river: 3 };
+
+  const SkillAI = {
+
+    // ================================================================
+    //  shouldUseSkill — NPC 技能使用决策
+    // ================================================================
+
+    /**
+     * NPC 是否应该使用某个主动技能
+     *
+     * @param {string} difficulty    - 'noob' | 'regular' | 'pro'
+     * @param {object} skill         - skill 注册对象 (effect, attr, tier, manaCost, ...)
+     * @param {object} owner         - gameContext.players 中的 owner 对象
+     * @param {object} ctx           - gameContext { phase, pot, players, board }
+     * @param {Array}  pendingForces - skillSystem.pendingForces
+     * @param {object} mana          - { current, max }
+     * @returns {boolean}
+     */
+    shouldUseSkill(difficulty, skill, owner, ctx, pendingForces, mana) {
+      // river 阶段无牌可发，发牌类技能无意义
+      if (ctx.phase === 'river') return false;
+
+      switch (skill.attr) {
+        case 'moirai': return SkillAI._decideMoirai(difficulty, skill, owner, ctx, pendingForces, mana);
+        case 'chaos':  return SkillAI._decideChaos(difficulty, skill, owner, ctx, pendingForces, mana);
+        case 'psyche': return SkillAI._decidePsyche(difficulty, skill, owner, ctx, pendingForces, mana);
+        case 'void':   return SkillAI._decideVoid(difficulty, skill, owner, ctx, pendingForces, mana);
+        default:       return Math.random() < 0.2;
+      }
+    },
+
+    // ---- Moirai (天命: fortune) ----
+    // 核心问题：什么时候用大吉 vs 小吉？什么阶段用？
+    _decideMoirai(difficulty, skill, owner, ctx, forces, mana) {
+      const pi = PHASE_INDEX[ctx.phase] || 0;
+      const pot = ctx.pot || 0;
+
+      switch (difficulty) {
+        case 'noob': {
+          // 本能型：有就用，不区分大小，不看局势
+          // preflop 也可能用（浪费），概率随阶段略增
+          return Math.random() < (0.25 + pi * 0.12);
+        }
+        case 'regular': {
+          // 底池感知：底池大用大吉，底池小用小吉省 mana
+          // preflop: T3 有一定概率，T2 低概率（赌一把的心态）
+          if (pi === 0) {
+            if (skill.tier === 3) return Math.random() < 0.2;
+            if (skill.tier === 2) return Math.random() < 0.1;
+            return false; // T1 preflop 不用
+          }
+          // mana 紧张时只用 T3
+          if (mana && mana.current < mana.max * 0.3 && skill.tier !== 3) return false;
+          // 底池越大越积极（相对于盲注，而非固定值）
+          var blinds = ctx.blinds || 20;
+          var potFactor = Math.min(1, pot / (blinds * 12));
+          var tierBoost = skill.tier === 1 ? 0.18 : skill.tier === 2 ? 0.12 : 0;
+          return Math.random() < (0.25 + potFactor * 0.35 + tierBoost);
+        }
+        case 'pro': {
+          // 手牌感知：强牌才用大吉（放大优势），弱牌不浪费
+          // turn/river 优先（信息更完整）
+          if (pi === 0) return false;
+          // 评估手牌强度
+          var strength = SkillAI._getHandStrength(owner, ctx);
+          // 弱牌（<40）不用 T1/T2，省 mana 弃牌
+          if (strength < 40 && skill.tier <= 2) return false;
+          // mana 管理：预留 mana 给高价值技能
+          if (mana && mana.current < skill.manaCost * 1.5 && skill.tier !== 1) return false;
+          // 强牌 + 后期 = 积极使用
+          var strengthFactor = Math.min(1, strength / 80);
+          var phaseFactor = pi * 0.12;
+          return Math.random() < (strengthFactor * 0.5 + phaseFactor);
+        }
+        default: return false;
+      }
+    },
+
+    // ---- Chaos (狂厄: curse) ----
+    // 核心问题：诅咒谁？什么时候诅咒？
+    _decideChaos(difficulty, skill, owner, ctx, forces, mana) {
+      var pi = PHASE_INDEX[ctx.phase] || 0;
+      var pot = ctx.pot || 0;
+
+      switch (difficulty) {
+        case 'noob': {
+          // 筹码导向 + 随机：谁筹码多打谁，但有随机性
+          // 不管 mana，有就花
+          return Math.random() < (0.25 + pi * 0.1);
+        }
+        case 'regular': {
+          // 底池感知：底池大时更积极（收益高）
+          if (pi === 0) return Math.random() < 0.12; // preflop 偶尔
+          if (mana && mana.current < mana.max * 0.3 && skill.tier !== 3) return false;
+          var blinds2 = ctx.blinds || 20;
+          var potFactor = Math.min(1, pot / (blinds2 * 12));
+          return Math.random() < (0.2 + potFactor * 0.45);
+        }
+        case 'pro': {
+          // 战术型：自己牌力中等时用（弱牌弃牌更好，强牌不需要）
+          if (pi === 0) return false;
+          var strength = SkillAI._getHandStrength(owner, ctx);
+          // 太弱（<25）不值得投入 mana，弃牌更好
+          if (strength < 25) return false;
+          // 太强（>75）不需要诅咒，自己赢面够大
+          if (strength > 75 && skill.tier >= 2) return false;
+          // mana 管理
+          if (mana && mana.current < skill.manaCost * 1.5 && skill.tier !== 1) return false;
+          // 中等牌力 + 后期 = 最佳诅咒时机
+          var midStrengthBonus = (strength >= 30 && strength <= 65) ? 0.2 : 0;
+          var phaseFactor = pi * 0.1;
+          return Math.random() < (0.15 + midStrengthBonus + phaseFactor);
+        }
+        default: return false;
+      }
+    },
+
+    // ---- Psyche (灵视: clarity / refraction / reversal) ----
+    // 核心问题：什么时候反制？预防性使用还是反应性使用？
+    _decidePsyche(difficulty, skill, owner, ctx, forces, mana) {
+      var pi = PHASE_INDEX[ctx.phase] || 0;
+      // 检测敌方 Chaos forces
+      var enemyChaos = forces.filter(function(f) {
+        return f.attr === 'chaos' && f.ownerId !== owner.id;
+      });
+      var hasChaos = enemyChaos.length > 0;
+      // 检测敌方 Chaos 总 power
+      var chaosPower = enemyChaos.reduce(function(sum, f) { return sum + (f.power || 0); }, 0);
+
+      switch (difficulty) {
+        case 'noob': {
+          // 几乎不用：不懂反制价值，偶尔随机触发
+          // 有敌方 Chaos 时稍微积极一点（本能反应）
+          return Math.random() < (hasChaos ? 0.15 : 0.05);
+        }
+        case 'regular': {
+          // 反应式：检测到敌方 Chaos 才用
+          // 优先用低阶（澄澈省 mana），高阶留给大威胁
+          if (!hasChaos) return Math.random() < 0.1; // 无 Chaos 时偶尔用（信息价值）
+          // mana 紧张时只用 T3
+          if (mana && mana.current < mana.max * 0.3 && skill.tier !== 3) return false;
+          // Chaos power 越大越积极
+          var urgency = Math.min(1, chaosPower / 30);
+          // T3 优先（省 mana），除非 Chaos 很强
+          if (skill.tier === 3) return Math.random() < (0.5 + urgency * 0.3);
+          if (skill.tier === 2) return Math.random() < (0.2 + urgency * 0.5);
+          // T1 只在 Chaos power 很高时用
+          return Math.random() < (chaosPower >= 25 ? 0.55 : 0.15);
+        }
+        case 'pro': {
+          // 预判式：即使没 Chaos 也会在关键轮次预防性使用
+          // 优先高阶（折射/真理 > 澄澈，信息+反制双重价值）
+          // mana 精细管理
+          if (mana && mana.current < skill.manaCost * 1.2) return false;
+
+          if (hasChaos) {
+            // 有 Chaos 时：根据威胁等级选择对应技能
+            var urgency2 = Math.min(1, chaosPower / 40);
+            // 高 Chaos → 用高阶技能
+            if (skill.tier === 1) return Math.random() < (chaosPower >= 25 ? 0.7 : 0.2);
+            if (skill.tier === 2) return Math.random() < (0.3 + urgency2 * 0.4);
+            return Math.random() < (0.4 + urgency2 * 0.2); // T3 兜底
+          }
+
+          // 无 Chaos 时：预防性使用（信息价值）
+          // flop/turn 是关键决策点，预防性释放
+          if (pi >= 1 && pi <= 2) {
+            // 优先高阶（信息价值更大）
+            if (skill.tier <= 2) return Math.random() < 0.2;
+            return Math.random() < 0.12;
+          }
+          return false; // preflop 不预防
+        }
+        default: return false;
+      }
+    },
+
+    // ---- Void (虚无: null_field / void_shield / purge_all) ----
+    // null_field 和 void_shield 是 passive，不需要决策
+    // 只有 purge_all (现实) 是 active
+    _decideVoid(difficulty, skill, owner, ctx, forces, mana) {
+      // 只有 purge_all 需要决策（其他是 passive）
+      if (skill.effect !== 'purge_all') return false;
+
+      var totalForces = forces.length;
+
+      switch (difficulty) {
+        case 'noob': {
+          // 不懂核弹级技能的价值，几乎不用
+          return totalForces >= 4 && Math.random() < 0.15;
+        }
+        case 'regular': {
+          // 场上 force ≥ 3 时才用（核弹不乱扔）
+          return totalForces >= 3 && Math.random() < 0.35;
+        }
+        case 'pro': {
+          // 精准时机：敌方刚释放 T1/T2 技能后立即清场
+          // 或者场上敌方 forces 对自己不利时
+          var enemyForces = forces.filter(function(f) { return f.ownerId !== owner.id; });
+          var allyForces = forces.filter(function(f) { return f.ownerId === owner.id; });
+          // 敌方力量远超己方时才用（净化对自己有利）
+          var enemyPower = enemyForces.reduce(function(s, f) { return s + (f.power || 0); }, 0);
+          var allyPower = allyForces.reduce(function(s, f) { return s + (f.power || 0); }, 0);
+          if (enemyPower <= allyPower) return false; // 己方优势不清场
+          // 敌方有 T1 技能时更积极
+          var hasEnemyT1 = enemyForces.some(function(f) { return f.tier === 1; });
+          return Math.random() < (hasEnemyT1 ? 0.6 : 0.3);
+        }
+        default: return false;
+      }
+    },
+
+    // ---- 工具函数 ----
+
+    /**
+     * 获取 NPC 当前手牌强度 (0-100)
+     * preflop 用 preflopStrength，flop+ 用 pokersolver
+     */
+    _getHandStrength(owner, ctx) {
+      if (!owner.cards || owner.cards.length < 2) return 30; // 默认中等
+      var board = ctx.board || [];
+      if (board.length === 0) {
+        return evaluatePreflopStrength(owner.cards);
+      }
+      var result = evaluateHandStrength(owner.cards, board);
+      return HAND_STRENGTH_MAP[result.rank] || 30;
+    },
+
+    // ================================================================
+    //  pickCurseTarget — Curse 选目标
+    // ================================================================
+
+    /**
+     * 为 Curse 选择最佳目标
+     *
+     * 策略由 difficulty 决定：
+     *   noob    → Chip Leader:      筹码最多的对手 + 随机性
+     *   regular → Pot Commitment:   诅咒投入底池最多的对手（沉没成本最大）
+     *   pro     → Threat Assessment: 综合下注量+筹码量评估威胁度
+     *
+     * @param {string} difficulty - 'noob' | 'regular' | 'pro'
+     * @param {number} casterId  - 施法者 ID
+     * @param {Array}  players   - gameContext.players
+     * @returns {number} targetId
+     */
+    pickCurseTarget(difficulty, casterId, players) {
+      if (!players || !players.length) {
+        return casterId === 0 ? 1 : 0;
+      }
+
+      var candidates = players.filter(function(p) {
+        return p.id !== casterId && !p.folded && p.chips > 0;
+      });
+
+      if (candidates.length === 0) {
+        return casterId === 0 ? 1 : 0;
+      }
+
+      switch (difficulty) {
+        case 'pro':     return SkillAI._targetByThreat(candidates);
+        case 'regular': return SkillAI._targetByPotCommitment(candidates);
+        default:        return SkillAI._targetByChips(candidates);
+      }
+    },
+
+    /**
+     * Chip Leader + Random — 筹码最多的对手，但有 30% 随机
+     * 适用：noob AI（直觉型，谁钱多打谁，但不精准）
+     */
+    _targetByChips(candidates) {
+      // 30% 纯随机
+      if (Math.random() < 0.3) {
+        return candidates[Math.floor(Math.random() * candidates.length)].id;
+      }
+      // 70% 选筹码最多的
+      candidates.sort(function(a, b) { return (b.chips || 0) - (a.chips || 0); });
+      return candidates[0].id;
+    },
+
+    /**
+     * Pot Commitment — 诅咒投入底池最多的对手（加权随机）
+     * 适用：regular AI
+     * 逻辑：投入越多权重越高，但不是100%确定性
+     */
+    _targetByPotCommitment(candidates) {
+      var weights = candidates.map(function(p) {
+        return Math.max(1, (p.totalBet || 0) + (p.currentBet || 0) + (p.chips || 0) * 0.1);
+      });
+      return SkillAI._weightedPick(candidates, weights);
+    },
+
+    /**
+     * Threat Assessment — 综合威胁度评估（加权随机）
+     * 适用：pro AI（"拥有魔力的高手能感知势头"）
+     * 逻辑：威胁分 = 下注量×0.7 + 筹码量×0.3，按威胁分加权随机
+     */
+    _targetByThreat(candidates) {
+      var maxInvested = Math.max(1, Math.max.apply(null, candidates.map(function(p) { return (p.totalBet || 0) + (p.currentBet || 0); })));
+      var maxChips = Math.max(1, Math.max.apply(null, candidates.map(function(p) { return p.chips || 0; })));
+
+      var weights = candidates.map(function(p) {
+        var invested = (p.totalBet || 0) + (p.currentBet || 0);
+        return Math.max(0.1, (invested / maxInvested) * 0.7 + ((p.chips || 0) / maxChips) * 0.3);
+      });
+      return SkillAI._weightedPick(candidates, weights);
+    },
+
+    /**
+     * 加权随机选择 — 权重越高被选中概率越大，但不是100%确定
+     */
+    _weightedPick(candidates, weights) {
+      var total = weights.reduce(function(s, w) { return s + w; }, 0);
+      var r = Math.random() * total;
+      var cumulative = 0;
+      for (var i = 0; i < candidates.length; i++) {
+        cumulative += weights[i];
+        if (r <= cumulative) return candidates[i].id;
+      }
+      return candidates[candidates.length - 1].id;
+    }
+  };
+
   // ========== 导出 ==========
   global.PokerAI = PokerAI;
   global.PokerAI.ACTIONS = ACTIONS;
@@ -729,5 +1060,6 @@
   global.PokerAI.evaluateHandStrength = evaluateHandStrength;
   global.PokerAI.evaluatePreflopStrength = evaluatePreflopStrength;
   global.PokerAI.cardToString = cardToString;
+  global.PokerAI.SkillAI = SkillAI;
 
 })(typeof window !== 'undefined' ? window : global);

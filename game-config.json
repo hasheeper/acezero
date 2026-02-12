@@ -7,38 +7,49 @@
     "rearguard": { "name": "RINO", "level": 5, "trait": "fate_weaver" },
     "attrs": { "moirai": 80, "chaos": 20, "psyche": 50, "void": 100 },
     "vanguardSkills": ["reality", "insulation", "static_field"],
-    "rearguardSkills": ["divine_order", "grand_wish", "minor_wish"]
+    "rearguardSkills": ["divine_order", "grand_wish", "clarity", "refraction"]
   },
 
   "seats": {
     "BTN": {
-      "vanguard": { "name": "ALPHA", "level": 0 },
-      "ai": "balanced",
+      "vanguard": { "name": "ALPHA", "level": 1 },
+      "attrs": { "moirai": 25, "chaos": 0, "psyche": 0, "void": 0 },
+      "skills": ["minor_wish"],
+      "ai": "passive",
+      "difficulty": "noob",
       "emotion": "calm"
     },
     "SB": {
-      "vanguard": { "name": "BETA", "level": 0 },
+      "vanguard": { "name": "BETA", "level": 2 },
+      "attrs": { "moirai": 0, "chaos": 0, "psyche": 30, "void": 25 },
+      "skills": ["clarity", "static_field"],
       "ai": "rock",
+      "difficulty": "regular",
       "emotion": "calm"
     },
     "BB": {
       "vanguard": { "name": "GAMMA_A", "level": 3, "trait": "iron_nerve" },
       "rearguard": { "name": "GAMMA_B", "level": 2, "trait": "hex_pulse" },
-      "attrs": { "moirai": 40, "chaos": 30, "psyche": 25, "void": 0 },
-      "skills": ["minor_wish", "hex", "grand_wish"],
+      "attrs": { "moirai": 45, "chaos": 35, "psyche": 10, "void": 0 },
+      "skills": ["grand_wish", "hex", "havoc"],
       "ai": "aggressive",
+      "difficulty": "regular",
       "emotion": "confident"
     },
     "UTG": {
-      "vanguard": { "name": "DELTA", "level": 0 },
-      "ai": "passive",
+      "vanguard": { "name": "DELTA", "level": 2 },
+      "attrs": { "moirai": 15, "chaos": 0, "psyche": 45, "void": 20 },
+      "skills": ["minor_wish", "refraction", "static_field"],
+      "ai": "balanced",
+      "difficulty": "regular",
       "emotion": "fearful"
     },
     "CO": {
-      "vanguard": { "name": "EPSILON", "level": 1, "trait": "wild_surge" },
-      "attrs": { "moirai": 10, "chaos": 60, "psyche": 5, "void": 0 },
-      "skills": ["hex", "havoc"],
+      "vanguard": { "name": "EPSILON", "level": 4, "trait": "wild_surge" },
+      "attrs": { "moirai": 10, "chaos": 65, "psyche": 5, "void": 0 },
+      "skills": ["hex", "havoc", "catastrophe"],
       "ai": "maniac",
+      "difficulty": "pro",
       "emotion": "tilt"
     }
   }

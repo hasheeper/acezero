@@ -58,11 +58,10 @@
     if (type === 'NPC_SKILL') {
       return { tier: 1, score: TIER_SCORES[1], action: 'keep' };
     }
-    // 感知提示 (T1)
-    if (type === 'SENSE') {
+    // Psyche 拦截事件 (T1)
+    if (type === 'PSYCHE_INTERCEPT') {
       return { tier: 1, score: TIER_SCORES[1], action: 'keep' };
     }
-
     // DELETE: 引擎内部噪音（具名列表）
     if (DELETE_TYPES.has(type)) {
       return { tier: -1, score: 0, action: 'delete' };
@@ -167,10 +166,13 @@
         var casterTag = entry.caster ? entry.caster + ': ' : '';
         return '[技能] ' + casterTag + (entry.skill || '未知') + (entry.manaRemaining != null ? ' (剩余魔力: ' + entry.manaRemaining + ')' : '');
       }
-      case 'SENSE':
-        return '[感知] ' + (entry.message || '');
       case 'NPC_SKILL':
-        return '[NPC技能] ' + entry.owner + ' 使用 ' + entry.skill + ' (' + entry.effect + (entry.tier != null ? ' T' + entry.tier : '') + ')';
+        var targetTag = entry.targetName ? ' → ' + entry.targetName : '';
+        return '[NPC技能] ' + entry.owner + ' 使用 ' + entry.skill + ' (' + entry.effect + (entry.tier != null ? ' T' + entry.tier : '') + ')' + targetTag;
+      case 'PSYCHE_INTERCEPT':
+        if (entry.action === 'convert') return '[灵视] ' + entry.arbiter + ' 拦截 ' + entry.target + ' 的诅咒 → 转化为幸运(P' + entry.power + ')';
+        if (entry.action === 'nullify') return '[灵视] ' + entry.arbiter + ' 消除 ' + entry.target + ' 的诅咒';
+        return '[灵视] ' + entry.arbiter + ' 空放 — 无敌方诅咒';
       default:
         return '[' + entry.type + '] ' + (entry.playerName || '');
     }

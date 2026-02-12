@@ -54,8 +54,8 @@
     hex:          { attr: 'chaos',  tier: 3, threshold: 20 },
     havoc:        { attr: 'chaos',  tier: 2, threshold: 40 },
     catastrophe:  { attr: 'chaos',  tier: 1, threshold: 60 },
-    insight:      { attr: 'psyche', tier: 3, threshold: 20 },
-    vision:       { attr: 'psyche', tier: 2, threshold: 40 },
+    clarity:      { attr: 'psyche', tier: 3, threshold: 20 },
+    refraction:   { attr: 'psyche', tier: 2, threshold: 40 },
     axiom:        { attr: 'psyche', tier: 1, threshold: 60 },
     static_field: { attr: 'void',   tier: 3, threshold: 20 },
     insulation:   { attr: 'void',   tier: 2, threshold: 40 },
@@ -123,6 +123,7 @@
     const available = [];
     for (const key in UNIVERSAL_SKILLS) {
       const def = UNIVERSAL_SKILLS[key];
+      if (!def.attr) continue;
       if ((attrs[def.attr] || 0) >= def.threshold) {
         available.push({ key, ...def });
       }
@@ -186,7 +187,7 @@
       attrs: { moirai: 0, chaos: 50, psyche: 0, void: 0 }
     },
     esper: {
-      desc: '灵能者 — 绝对资讯优势',
+      desc: '裁定者 — 解析混乱，逆转诅咒',
       level: 4,
       attrs: { moirai: 0, chaos: 0, psyche: 80, void: 0 }
     },

@@ -13,9 +13,9 @@
  *   Void 不参与克制，纯减伤
  *
  * 技能→属性映射：
- *   fortune              → Moirai
- *   curse                → Chaos
- *   sense / peek / reversal → Psyche
+ *   fortune                          → Moirai
+ *   curse                            → Chaos
+ *   clarity / refraction / reversal  → Psyche
  *   null_field / void_shield / purge_all → Void
  */
 
@@ -41,8 +41,8 @@ const NEUTRAL_MULT = 1.0;
 export const EFFECT_TO_ATTR = {
   fortune:     ATTR.MOIRAI,
   curse:       ATTR.CHAOS,
-  sense:       ATTR.PSYCHE,
-  peek:        ATTR.PSYCHE,
+  clarity:     ATTR.PSYCHE,
+  refraction:  ATTR.PSYCHE,
   reversal:    ATTR.PSYCHE,
   null_field:  ATTR.VOID,
   void_shield: ATTR.VOID,

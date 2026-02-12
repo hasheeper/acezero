@@ -78,12 +78,13 @@
       if (!s) continue;
       var aiStyle = s.ai || 'balanced';
       var aiEmotion = s.emotion || 'calm';
+      var aiDifficulty = s.difficulty || AI_DIFF_MAP[aiStyle] || 'regular';
       result.push({
         id: result.length,
         name: _charName(s),
         type: 'ai',
         chips: tableChips,
-        personality: { riskAppetite: aiStyle, difficulty: AI_DIFF_MAP[aiStyle] || 'regular', emotion: aiEmotion },
+        personality: { riskAppetite: aiStyle, difficulty: aiDifficulty, emotion: aiEmotion },
         seat: SEAT_ORDER[i]
       });
     }
@@ -223,8 +224,7 @@
     backlashIndicator: document.getElementById('backlash-indicator'),
     mozStatus: document.getElementById('moz-status'),
     forceBalance: document.getElementById('force-balance'),
-    foresightPanel: document.getElementById('foresight-panel'),
-    senseAlert: document.getElementById('sense-alert')
+    foresightPanel: document.getElementById('foresight-panel')
   });
 
   moz.onLog = function (type, data) { logEvent('MOZ_' + type, data); };
@@ -995,7 +995,11 @@
     if (result && result.card) {
       const picked = pickSpecificCard(result.card);
       // 展示力量对抗面板
-      if (result.meta) showForcePK(result.meta);
+      if (result.meta) {
+        showForcePK(result.meta);
+        // Psyche 拦截反馈：让玩家看到技能生效了
+        _showPsycheMessages(result.meta.psycheEvents);
+      }
       skillUI.updateDisplay();
       return picked;
     }
@@ -1008,6 +1012,8 @@
     fortune:  '<svg class="fpk-icon" viewBox="0 0 16 16"><path d="M8 1l2.2 4.5L15 6.3l-3.5 3.4.8 4.8L8 12.3 3.7 14.5l.8-4.8L1 6.3l4.8-.8z" fill="#9B59B6"/></svg>',
     curse:    '<svg class="fpk-icon" viewBox="0 0 16 16"><path d="M8 1C5.2 1 3 3.7 3 7c0 2.2 1 4 2.5 5h5C12 11 13 9.2 13 7c0-3.3-2.2-6-5-6zM6 12v1c0 .6.9 1 2 1s2-.4 2-1v-1H6z" fill="#e74c3c"/></svg>',
     backlash: '<svg class="fpk-icon" viewBox="0 0 16 16"><path d="M9 1L4 8h3l-2 7 7-8H9l2-6z" fill="#f39c12"/></svg>',
+    clarity:  '<svg class="fpk-icon" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5" fill="none" stroke="#74b9ff" stroke-width="1.5"/><circle cx="8" cy="8" r="2" fill="#74b9ff"/></svg>',
+    refraction:'<svg class="fpk-icon" viewBox="0 0 16 16"><path d="M3 13L8 3l5 10" fill="none" stroke="#a29bfe" stroke-width="1.5"/><line x1="5" y1="9" x2="11" y2="9" stroke="#a29bfe" stroke-width="1.2"/></svg>',
     reversal: '<svg class="fpk-icon" viewBox="0 0 16 16"><path d="M2 5h9l-3-3h2l4 4-4 4h-2l3-3H2V5zm12 6H5l3 3H6l-4-4 4-4h2L5 9h9v2z" fill="#1abc9c"/></svg>',
     null_field:'<svg class="fpk-icon" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="#95a5a6" stroke-width="1.5"/><line x1="4" y1="12" x2="12" y2="4" stroke="#95a5a6" stroke-width="1.5"/></svg>',
     void_shield:'<svg class="fpk-icon" viewBox="0 0 16 16"><path d="M8 1L2 4v4c0 3.3 2.6 6.4 6 7 3.4-.6 6-3.7 6-7V4L8 1z" fill="none" stroke="#7f8c8d" stroke-width="1.5"/></svg>',
@@ -1032,7 +1038,8 @@
     const _s = _svgIcons;
 
     const TYPE_CN = {
-      fortune: '幸运', curse: '凶', backlash: '反噬', reversal: '逆转',
+      fortune: '幸运', curse: '凶', backlash: '反噬',
+      clarity: '澄澈', refraction: '折射', reversal: '真理',
       null_field: '屏蔽', void_shield: '绝缘', purge_all: '现实'
     };
 
@@ -1045,9 +1052,45 @@
       for (const f of forces) {
         const typeCn = TYPE_CN[f.type] || f.type;
         const icon = _s[f.type] || '';
-        const cls = f.type === 'fortune' ? 'fpk-tag-good' :
-                    f.type === 'curse' || f.type === 'backlash' ? 'fpk-tag-bad' : 'fpk-tag-neutral';
-        html += '<span class="fpk-tag ' + cls + '">' + icon + ' ' + f.owner + ' ' + typeCn + '</span>';
+        const isPsyche = f.type === 'clarity' || f.type === 'refraction' || f.type === 'reversal';
+        let cls;
+        if (f.converted) {
+          cls = 'fpk-tag-converted';  // Psyche 转化的幸运
+        } else if (f.type === 'fortune') {
+          cls = 'fpk-tag-good';
+        } else if (f.type === 'curse' || f.type === 'backlash') {
+          cls = 'fpk-tag-bad';
+        } else if (isPsyche) {
+          cls = 'fpk-tag-psyche';
+        } else {
+          cls = 'fpk-tag-neutral';
+        }
+        const suppressed = f.suppressed ? ' fpk-tag-suppressed' : '';
+        html += '<span class="fpk-tag ' + cls + suppressed + '">' + icon + ' ' + f.owner + ' ' + typeCn + '</span>';
+      }
+      html += '</div>';
+    }
+
+    // Psyche 拦截结果
+    const psycheEvents = meta.psycheEvents || [];
+    if (psycheEvents.length > 0) {
+      html += '<div class="fpk-psyche-events">';
+      for (const ev of psycheEvents) {
+        const arbiterCn = TYPE_CN[ev.arbiterType] || ev.arbiterType;
+        if (ev.action === 'convert') {
+          html += '<div class="fpk-psyche-row fpk-psyche-convert">';
+          var beneficiary = ev.beneficiary || ev.arbiterOwner;
+          html += '✨ [' + arbiterCn + '] 拦截 ' + ev.targetOwner + ' 的' + (TYPE_CN[ev.targetType] || '凶') + '(P' + ev.originalPower + ') → ' + beneficiary + '的幸运(P' + ev.convertedPower + ')';
+          html += '</div>';
+        } else if (ev.action === 'nullify') {
+          html += '<div class="fpk-psyche-row fpk-psyche-nullify">';
+          html += '✨ [' + arbiterCn + '] 消除 ' + ev.targetOwner + ' 的' + (TYPE_CN[ev.targetType] || '凶') + '(P' + ev.originalPower + ')';
+          html += '</div>';
+        } else if (ev.action === 'whiff') {
+          html += '<div class="fpk-psyche-row fpk-psyche-whiff">';
+          html += '⚠ [' + arbiterCn + '] 空放 — 无敌方诅咒可拦截';
+          html += '</div>';
+        }
       }
       html += '</div>';
     }
@@ -1107,6 +1150,15 @@
           case 'REVERSAL_CONVERT':
             html += step.data.intercepted.owner + '.' + step.data.intercepted.type + '(P' + step.data.intercepted.originalPower + ')>fortune(P' + step.data.converted.power + ')';
             break;
+          case 'PSYCHE_CONVERT':
+            html += step.data.intercepted.owner + '.' + step.data.intercepted.type + '(P' + step.data.intercepted.originalPower + ')>' + step.data.converted.owner + '.fortune(P' + step.data.converted.power + ')';
+            break;
+          case 'PSYCHE_NULLIFY':
+            html += step.data.nullified.owner + '.' + step.data.nullified.type + '(P' + step.data.nullified.originalPower + ') NULLIFIED';
+            break;
+          case 'PSYCHE_WHIFF':
+            html += step.data.owner + '.' + step.data.arbiterType + ' WHIFF (no curse)';
+            break;
           case 'ATTR_COUNTER':
             for (const c of (step.data.countered || [])) {
               html += c.owner + '.' + c.type + ' EP=' + c.effectivePower;
@@ -1160,6 +1212,25 @@
     const suit = SUIT_SYMBOLS[suitChar] || suitChar;
     const color = SUIT_COLORS[suitChar] || '#fff';
     return '<span class="fpk-card" style="color:' + color + '">' + rank + suit + '</span>';
+  }
+
+  // Psyche 拦截事件 → 游戏消息（让玩家看到技能生效）
+  function _showPsycheMessages(events) {
+    if (!events || events.length === 0) return;
+    const TYPE_CN = { clarity: '澄澈', refraction: '折射', reversal: '真理', curse: '凶' };
+    for (const ev of events) {
+      const arbiterCn = TYPE_CN[ev.arbiterType] || ev.arbiterType;
+      if (ev.action === 'convert') {
+        updateMsg('[' + arbiterCn + '] 拦截了 ' + ev.targetOwner + ' 的诅咒并转化为幸运!');
+        logEvent('PSYCHE_INTERCEPT', { arbiter: arbiterCn, target: ev.targetOwner, action: 'convert', power: ev.convertedPower });
+      } else if (ev.action === 'nullify') {
+        updateMsg('[' + arbiterCn + '] 消除了 ' + ev.targetOwner + ' 的诅咒!');
+        logEvent('PSYCHE_INTERCEPT', { arbiter: arbiterCn, target: ev.targetOwner, action: 'nullify' });
+      } else if (ev.action === 'whiff') {
+        updateMsg('[' + arbiterCn + '] 未感知到敌方诅咒...');
+        logEvent('PSYCHE_INTERCEPT', { arbiter: arbiterCn, action: 'whiff' });
+      }
+    }
   }
 
   function hideForcePK() {
@@ -1414,7 +1485,8 @@
       players: gameState.players,
       pot: gameState.pot,
       phase: gameState.phase,
-      board: gameState.board
+      board: gameState.board,
+      blinds: getBigBlind()
     });
     
     setTimeout(() => {

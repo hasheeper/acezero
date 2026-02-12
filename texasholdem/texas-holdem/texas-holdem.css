@@ -1742,32 +1742,6 @@ body {
   transition: width 0.5s ease;
 }
 
-/* --- 感知提示 --- */
-#sense-alert {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  color: #a29bfe;
-  background: rgba(108, 92, 231, 0.12);
-  border: 1px solid rgba(108, 92, 231, 0.3);
-  border-radius: 6px;
-  padding: 6px 12px;
-  margin-top: 4px;
-  text-align: center;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-#sense-alert.sense-flash {
-  opacity: 1;
-  animation: senseFlash 0.6s ease-out;
-}
-
-@keyframes senseFlash {
-  0% { opacity: 0; transform: translateY(-4px); background: rgba(108, 92, 231, 0.3); }
-  30% { opacity: 1; transform: translateY(0); }
-  100% { opacity: 1; background: rgba(108, 92, 231, 0.12); }
-}
-
 /* =========================================================
    命运裁决 Overlay — 候选牌排行展示
 ========================================================= */
@@ -1822,6 +1796,21 @@ body {
 .fpk-tag-good    { color: #9B59B6; background: rgba(155, 89, 182, 0.12); }
 .fpk-tag-bad     { color: #e74c3c; background: rgba(231, 76, 60, 0.12); }
 .fpk-tag-neutral { color: #888;    background: rgba(255, 255, 255, 0.05); }
+.fpk-tag-psyche  { color: #74b9ff; background: rgba(116, 185, 255, 0.12); }
+.fpk-tag-converted { color: #00cec9; background: rgba(0, 206, 201, 0.15); border: 1px solid rgba(0, 206, 201, 0.3); }
+.fpk-tag-suppressed { text-decoration: line-through; opacity: 0.45; }
+
+/* ---- Psyche 拦截结果 ---- */
+.fpk-psyche-events {
+  padding: 4px 8px;
+  margin-bottom: 4px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.fpk-psyche-row { padding: 2px 0; }
+.fpk-psyche-convert { color: #74b9ff; }
+.fpk-psyche-nullify { color: #a29bfe; }
+.fpk-psyche-whiff   { color: #636e72; font-style: italic; }
 
 /* ---- 牌面通用 ---- */
 .fpk-card {
@@ -2407,3 +2396,44 @@ body {
   from { opacity: 0; transform: translateY(30px) scale(0.95); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
+
+/* =========================================================
+   Psyche — 胜率感知浮层
+========================================================= */
+.psyche-winrate-overlay {
+  position: fixed;
+  top: 8%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1250;
+  pointer-events: auto;
+  cursor: pointer;
+  animation: fpkAppear 0.3s ease-out;
+}
+
+.psyche-winrate-box {
+  background: rgba(10, 8, 20, 0.94);
+  border: 1px solid rgba(116, 185, 255, 0.5);
+  border-radius: 10px;
+  padding: 10px 28px;
+  text-align: center;
+  font-family: 'JetBrains Mono', monospace;
+  box-shadow: 0 0 30px rgba(116, 185, 255, 0.15), 0 0 60px rgba(0, 0, 0, 0.5);
+}
+
+.psyche-winrate-label {
+  font-size: 10px;
+  color: #74b9ff;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+
+.psyche-winrate-value {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+.winrate-good .psyche-winrate-value { color: #2ecc71; }
+.winrate-neutral .psyche-winrate-value { color: #f39c12; }
+.winrate-bad .psyche-winrate-value { color: #e74c3c; }

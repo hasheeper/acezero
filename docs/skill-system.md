@@ -77,19 +77,19 @@
 ### 克制环
 
 ```
-Chaos > Moirai > Psyche > Chaos
+Psyche (灵视) > Chaos (狂厄) > Moirai (天命) > Psyche (灵视)
 Void 不参与克制，纯消除
 ```
 
 **T1 对决：** 克制方获得 **1.5x** 力量加成。
 
-**T2/T3 克制机制（新）：**
+**克制机制：**
 
 | 克制关系 | 机制 | 效果 |
 |----------|------|------|
+| **Psyche > Chaos** | 解析混沌 | Psyche 技能拦截并转化敌方 Curse（澄澈=消除，折射=50%转化，真理=100%转化） |
 | **Chaos > Moirai** | 凶克吉 | curse 对抗 fortune 时获得 **+10%** 力量加成 |
-| **Moirai > Psyche** | 幸运迷雾 | 敌方 fortune 降低洞察检测率（每10点power -10%，最多-50%），降级透视精度（P15+ 降一级，P30+ 降两级） |
-| **Psyche > Chaos** | 灵视护盾 | 洞察在场时削弱敌方 curse **-15%**，透视已使用时削弱 **-25%** |
+| **Moirai > Psyche** | 反制空放 | 敌方无 Chaos 时反制效果空放，但信息效果（胜率/透视）仍触发 |
 
 ---
 
@@ -105,51 +105,97 @@ Void 不参与克制，纯消除
 
 ### 狂厄 (Chaos) — 凶系
 
+**单体指向**: Curse 针对一个目标生效。目标选择由 `PokerAI.SkillAI.pickCurseTarget` 决定，按 difficulty 分层：
+
+| Difficulty | 策略 | 逻辑 |
+|-----------|------|------|
+| noob | **Nemesis** (死磕) | 锁定主角(id=0)，主角弃牌才随机选 |
+| regular | **Pot Commitment** (沉没成本) | 诅咒投入底池最多的对手（不会弃牌，收益最大） |
+| pro | **Threat Assessment** (威胁评估) | 综合下注量×0.7 + 筹码量×0.3 评估威胁度 |
+
+架构：`skill-system.js` 通过 `curseTargetFn` 回调委托给 `poker-ai.js`，零耦合。
+
+引擎根据 `force.targetId` 计算目标的败率来打分。
+
 | 技能 | 阶级 | Mana | CD | Power | 效果 |
 |------|------|------|----|-------|------|
-| **小凶** `hex` | T3 | 10 | 0 | 15 | 概率污蚀：引擎稍微倾向让敌人拿烂牌（对抗幸运时+10%克制加成） |
-| **大凶** `havoc` | T2 | 20 | 0 | 30 | 恶意筛除：引擎明显倾向让敌人拿烂牌（对抗幸运时+10%克制加成） |
+| **小凶** `hex` | T3 | 10 | 0 | 15 | 概率污蚀：引擎稍微倾向让目标拿烂牌（对抗幸运时+10%克制加成） |
+| **大凶** `havoc` | T2 | 20 | 0 | 30 | 恶意筛除：引擎明显倾向让目标拿烂牌（对抗幸运时+10%克制加成） |
 | **灾变** `catastrophe` | T1 | 40 | 3 | 50 | 痛苦锁死：最强凶 + 压制同属性 T2/T3 |
 
-### 灵视 (Psyche) — 情报+逆转系
+### 灵视 (Psyche) — 裁定者 The Arbiter
+
+每个技能都有**双重效果**：信息效果（必须发挥）+ 拦截效果（仅对抗 Chaos 时发挥）。
+
+| 技能 | 阶级 | Mana | CD | 信息效果 | 拦截效果 |
+|------|------|------|----|-------------|--------------|
+| **澄澈** `clarity` | T3 | 10 | 0 | 显示牌堆胜率 (PokerSolver 计算) | 消除敌方 T3/T2 Curse。T1 豁免。 |
+| **折射** `refraction` | T2 | 25 | 0 | 透视目标手牌 (需选目标) | 消除敌方 T3/T2 Curse + **50%** 转化为己方 Fortune。T1 豁免。 |
+| **真理** `axiom` | T1 | 50 | 3 | 显示牌堆胜率 + 对手手牌信息 | 湮灭所有敌方 Curse（含 T1）+ **100%** 转化为己方 Fortune。 |
+
+#### 澄澈（T3）— 低成本解控
+
+```
+敌人使用小凶 (curse power=15)
+你使用澄澈 (clarity, 10 Mana)
+
+引擎处理：
+  1. 扫描敌方 Curse → 小凶 (T3, power=15)
+  2. T3 ≤ T2 → 可拦截
+  3. 小凶 effectivePower → 0
+  4. 转化率 0% → 无额外收益
+  结果：小凶被完全消除，但你也不获得任何加成
+```
+
+#### 折射（T2）— 透视 + 反制
+
+```
+敌人使用大凶 (curse power=30)
+你使用折射 (refraction, 25 Mana) → 选择目标
+
+信息效果 (必定): 透视目标手牌
+
+反制效果:
+  1. 扫描敌方 Curse → 大凶 (T2, power=30)
+  2. T2 ≤ T2 → 可拦截
+  3. 大凶 effectivePower → 0
+  4. 转化：30 × 50% = 15 Fortune
+  结果：敌凶失效 + 你获得 15 Fortune + 看到了敌人的牌！
+
+但如果敌人用的是灾变 (T1, power=50)：
+  T1 > T2 → T1 豁免，反制部分无效
+  结果：灾变完全生效，但你仍然看到了敌人的牌
+```
+
+#### 真理（T1）— 绝对反杀
+
+```
+敌人使用灾变 (curse T1, power=50) + 大凶 (curse T2, power=30)
+你使用真理 (axiom/reversal, 50 Mana)
+
+引擎处理：
+  1. 扫描所有敌方 Curse（含 T1）
+  2. 灾变 effectivePower → 0，转化 50 × 100% = 50 Fortune
+  3. 大凶 effectivePower → 0，转化 30 × 100% = 30 Fortune
+  结果：敌人全部凶归零 + 你获得 80 点 Fortune！
+```
+
+**Moirai > Psyche 克制：**
+- 敌方没有 Chaos 时，反制效果空放（无 Curse 可拦截）
+- 但信息效果仍然触发（胜率/透视），不是完全浪费
+- 这体现了“既定的命运无法被干涉，但可以被观测”的设计
+
+### 虚无 (Void) — 消除系
 
 | 技能 | 阶级 | Mana | CD | Power | 效果 |
 |------|------|------|----|-------|------|
-| **洞察** `insight` | T3 | 0 | 0 | 0 | 被动感知：敌方使用技能时有概率察觉 |
-| **透视** `vision` | T2 | 15 | 0 | 0 | 窥视底牌：选择一个对手，查看其手牌信息 |
-| **真理** `axiom` | T1 | 30 | 3 | 50 | **因果逆转**：拦截所有 Chaos 力并转化为己方 fortune |
-
-#### 真理·因果逆转（核心机制）
-
-这是 Psyche 的大招，不是简单的「净化」，而是**拦截 + 逆转**：
-
-```
-敌人使用大凶 (curse power=30, target=你)
-你使用真理 (reversal)
-
-引擎处理流程：
-  1. 检测到 reversal 存在
-  2. 找到所有 Chaos 属性的敌方力 → 大凶 (power=30)
-  3. 拦截：大凶 effectivePower → 0（被压制）
-  4. 逆转：创建新的 fortune force，归属于你
-     转化力量 = 30 × 0.7 = 21（70% 转化率）
-  5. 结果：敌人的凶不仅失效，还变成了你的幸运！
-```
-
-**对比其他 T1 技能：**
-- 天命(T1)：纯粹增加己方 fortune（power=50）
-- 灾变(T1)：纯粹增加敌方 curse（power=50）
-- 真理(T1)：不产生新力量，而是**偷取**敌方 Chaos 力量转为己方 fortune
-- 现实(T1)：清除所有力，回归纯随机
-
-**真理的价值取决于敌方 Chaos 力量的强度：**
-- 敌方用了灾变(50) → 真理转化 = 50 × 0.7 = 35 fortune（超值！）
-- 敌方用了小凶(15) → 真理转化 = 15 × 0.7 = 10.5 fortune（不如直接用大吉）
-- 敌方没用 Chaos → 真理无效（浪费 35 Mana）
+| **屏蔽** `static_field` | T3 | 0 | 0 | 8 | 被动：所有被动 fortune/curse 力量 -30% |
+| **绝缘** `insulation` | T2 | 0 | 0 | 15 | 被动：敌方 Moirai/Chaos 效果对己方减半 |
+| **现实** `reality` | T1 | 50 | 5 | 0 | 核弹：清除所有非 Void 效果，回归纯随机 |
 
 ---
 
-## T2/T3 属性克制详解
+## 属性克制详解
 
 ### Chaos > Moirai：凶克吉
 
@@ -165,40 +211,38 @@ BOSS 开大凶 (curse P30)
   3. 结果：BOSS 的凶略占优势（不再是完全抵消）
 ```
 
-### Moirai > Psyche：幸运迷雾
+### Psyche > Chaos：解析混沌
 
-敌方拥有活跃 fortune 力量时，会干扰 Psyche 信息技能：
-
-- **洞察检测率降低**：每 10 点 fortune power 降低 10% 检测率，最多 -50%
-- **透视精度降级**：
-  - 小吉(P15+)：透视降一级（T1→T2，T2→T3）
-  - 大吉(P30+)：透视降两级（T1→T3）
+Psyche 技能主动拦截敌方 Curse，三阶效果递进：
 
 ```
-你用透视(T2) 看 BOSS
-BOSS 已开大吉 (fortune P30)
+BOSS 开大凶 (curse T2, P30) + 小凶 (curse T3, P15)
+你开折射 (refraction T2, 25 Mana)
 
-引擎处理：
-  1. 透视原始 tier = 2（概率分析模式）
-  2. 幸运迷雾：P30 ≥ 30 → 降两级 → tier = 3+（模糊感知）
-  3. 结果：你只能看到“高牌/中牌/低牌”范围
+信息效果: 透视 BOSS 手牌
+
+反制效果:
+  1. 扫描敌方 Curse: 大凶(T2) + 小凶(T3)
+  2. 折射可拦截 T3/T2 → 两者都被拦截
+  3. 大凶: P30 → 0, 转化 30×50% = 15 Fortune
+  4. 小凶: P15 → 0, 转化 15×50% = 7.5 Fortune
+  结果: 敌方凶全灭 + 你获得 22.5 Fortune + 看到了敌人的牌
 ```
 
-### Psyche > Chaos：灵视护盾
+### Moirai > Psyche：反制空放
 
-拥有 Psyche 信息技能时，削弱敌方 curse 的 effectivePower：
-
-- **洞察在场**（被动）：敌方 curse **-15%**
-- **透视已使用**（主动）：敌方 curse **-25%**
+敌方只用天命不用 Chaos 时，Psyche 的反制部分无法生效，但信息效果仍然触发：
 
 ```
-BOSS 开大凶 (curse P30)
-你有洞察(被动) + 本回合用过透视
+BOSS 开大吉 (fortune P30)、不用任何 Chaos 技能
+你开折射 (refraction, 25 Mana) → 选择 BOSS
 
-引擎处理：
-  1. 检测到玩家有 peek 标记 → clarityReduction = 25%
-  2. 大凶 effectivePower = 30 × 0.75 = 22.5
-  3. 结果：BOSS 的凶被削弱了
+信息效果: 透视 BOSS 手牌 (仍然触发!)
+
+反制效果:
+  1. 扫描敌方 Curse → 无
+  2. 折射捕捉不到任何负面能量
+  结果: 反制空放，但你看到了敌人的牌，不是完全浪费
 ```
 
 ### 虚无 (Void) — 消除系
@@ -235,8 +279,11 @@ BOSS 开大凶 (curse P30)
 
 6. [屏蔽削弱]   null_field 削弱所有被动力量 30%
 
-7. [因果逆转]   reversal 拦截 Chaos 力并转化为 fortune
-   → 转化率 70%
+7. [Psyche裁定]  _applyPsycheArbiter()
+   → clarity: 消除敌方 T3/T2 Curse (0% 转化) + 显示牌堆胜率
+   → refraction: 消除敌方 T3/T2 Curse (50% 转化为 Fortune) + 透视目标手牌
+   → reversal: 湮灭所有敌方 Curse 含 T1 (100% 转化) + 显示牌堆胜率 + 对手手牌信息
+   → 无敌方 Curse 时空放 (Moirai > Psyche 克制)
 
 8. [Void 减伤]  CombatFormula.applyVoidReduction()
    → Kazu 前台时，敌方所有效果 ÷ voidDivisor
@@ -276,7 +323,9 @@ console.table(window.skillUI.moz.lastSelectionMeta.debugTimeline);
 | `ROUND_START` | 发牌开始 | phase, deckRemaining, inputForces |
 | `OPPOSITION_START` | 力量对抗开始 | 所有力的 owner/type/attr/tier/power |
 | `TIER_SUPPRESSION` | 阶级压制发生 | 被压制的力 + 压制者 |
-| `REVERSAL_CONVERT` | 因果逆转触发 | 被拦截的力 + 转化后的 fortune |
+| `PSYCHE_CONVERT` | Psyche 拦截+转化 | 被拦截的 Curse + 转化后的 Fortune |
+| `PSYCHE_NULLIFY` | Psyche 纯净化 | 被消除的 Curse（无转化） |
+| `PSYCHE_WHIFF` | Psyche 空放 | 无敌方 Curse，技能浪费 |
 | `OPPOSITION_RESULT` | 对抗结束 | 所有力的最终 effectivePower |
 | `UNIVERSES` | 平行宇宙生成 | 候选牌数量 |
 | `CARD_SELECTED` | 选牌完成 | 选中的牌 + 命运分 + top3/bottom3 |
@@ -313,12 +362,13 @@ ROUND_START     forces=[
 
 TIER_SUPPRESSION  axiom(T1) suppressAttr=chaos → catastrophe SUPPRESSED
 
-REVERSAL_CONVERT  intercepted: {BOSS, curse, power=50}
-                  converted:   {RINO, fortune, power=35}  (ratio=0.7)
+PSYCHE_CONVERT    arbiterType=reversal
+                  intercepted: {BOSS, curse, T1, power=50}
+                  converted:   {RINO, fortune, power=50}  (ratio=1.0)
 
 OPPOSITION_RESULT [
-  {BOSS, curse,   power=50 → effectivePower=0, suppressed by reversal}
-  {RINO, fortune, power=35 → effectivePower=35, converted from curse}
+  {BOSS, curse,   power=50 → effectivePower=0, suppressed by axiom}
+  {RINO, fortune, power=50 → effectivePower=50, converted from curse}
 ]
 ```
 
@@ -371,7 +421,7 @@ OPPOSITION_RESULT [
   "vanguard": { "name": "角色名", "level": 3, "trait": "特质key" },
   "rearguard": { "name": "角色名", "level": 5, "trait": "特质key" },
   "attrs": { "moirai": 80, "chaos": 20, "psyche": 50, "void": 100 },
-  "skills": ["grand_wish", "vision", "insulation", "reality"],
+  "skills": ["grand_wish", "refraction", "insulation", "reality"],
   "ai": "balanced"
 }
 ```
@@ -395,7 +445,7 @@ OPPOSITION_RESULT [
     "vanguard": { "name": "KAZU", "level": 3, "trait": "blank_body" },
     "rearguard": { "name": "RINO", "level": 5, "trait": "fate_weaver" },
     "attrs": { "moirai": 80, "chaos": 20, "psyche": 50, "void": 100 },
-    "skills": ["grand_wish", "minor_wish", "vision", "reality"]
+    "skills": ["grand_wish", "axiom", "refraction", "reality"]
   },
   "seats": {
     "BTN": { "vanguard": { "name": "路人A", "level": 0 }, "ai": "balanced" },
@@ -410,7 +460,7 @@ OPPOSITION_RESULT [
 }
 ```
 
-### 示例 2：因果逆转（真理 vs 灾变）
+### 示例 2：真理反杀（Psyche 裁定者 vs Chaos 全开）
 
 ```json
 {
@@ -420,7 +470,7 @@ OPPOSITION_RESULT [
     "vanguard": { "name": "KAZU", "level": 5 },
     "rearguard": { "name": "RINO", "level": 5 },
     "attrs": { "moirai": 40, "chaos": 10, "psyche": 70, "void": 30 },
-    "skills": ["axiom", "vision", "insight", "grand_wish"]
+    "skills": ["axiom", "refraction", "clarity", "grand_wish"]
   },
   "seats": {
     "BB": {
@@ -435,13 +485,16 @@ OPPOSITION_RESULT [
 
 **对局分析：**
 - BOSS 全 Chaos 配置：灾变(50) + 大凶(30) + 小凶(15) = 总 curse 95
-- 主角使用「真理」→ 拦截所有 Chaos 力
-  - 灾变 50 × 0.7 = 35 fortune
-  - 大凶 30 × 0.7 = 21 fortune
-  - 小凶 15 × 0.7 = 10.5 fortune
-  - **总转化 = 66.5 fortune！** 比直接用天命(50)还强
-- 主角再叠加「大吉」(30) → 总 fortune = 96.5
+- 主角使用「真理」→ 拦截所有 Chaos 力（含 T1）
+  - 灾变 50 × 100% = 50 fortune
+  - 大凶 30 × 100% = 30 fortune
+  - 小凶 15 × 100% = 15 fortune
+  - **总转化 = 95 fortune！** 比直接用天命(50)强得多
+- 主角再叠加「大吉」(30) → 总 fortune = 125
 - BOSS 的凶全部反弹，自己反而被命运抛弃
+
+**但如果 BOSS 只开 Fortune（不用 Chaos）：**
+- 真理空放，浪费 50 Mana，BOSS 的 Fortune 完全生效
 
 ### 示例 3：天命 vs 灾变（T1 正面碰撞）
 
@@ -453,7 +506,7 @@ OPPOSITION_RESULT [
     "vanguard": { "name": "KAZU", "level": 5 },
     "rearguard": { "name": "RINO", "level": 5 },
     "attrs": { "moirai": 80, "chaos": 10, "psyche": 30, "void": 60 },
-    "skills": ["divine_order", "minor_wish", "insight", "reality"]
+    "skills": ["divine_order", "minor_wish", "clarity", "reality"]
   },
   "seats": {
     "BB": {
@@ -496,10 +549,10 @@ OPPOSITION_RESULT [
 ## UI 行为分类
 
 | 行为 | 技能 | UI 表现 |
-|------|------|---------|
-| **FORCE** | 小吉、大吉、天命、小凶、大凶、灾变、真理、现实 | 点击按钮 → 注入力 |
-| **INFO** | 透视 | 点击按钮 → 选择目标 → 显示底牌信息 |
-| **PASSIVE** | 洞察、屏蔽、绝缘 | 无按钮，自动生效 |
+|------|------|----------|
+| **FORCE** | 小吉、大吉、天命、小凶、大凶、灾变、现实 | 点击按钮 → 注入力 |
+| **PSYCHE** | 澄澈、折射、真理 | 点击 → 信息效果(胜率/透视) + 注入反制力 |
+| **PASSIVE** | 屏蔽、绝缘 | 无按钮，自动生效 |
 
 ---
 
@@ -509,7 +562,7 @@ OPPOSITION_RESULT [
 |------|------|
 | `core/skill-system.js` | 技能注册、Mana、激活、NPC AI、力量收集 |
 | `core/monte-of-zero.js` | 引擎：力量对抗、阶级压制、选牌、调试时间线 |
-| `ui/skill-ui.js` | UI 按钮、激活路由、透视面板、感知提示 |
+| `ui/skill-ui.js` | UI 按钮、激活路由、Psyche透视/胜率、力量对抗展示 |
 | `rpg/attribute-system.js` | 四属性、克制环、属性加成 |
 | `rpg/combat-formula.js` | 属性增强、Void 减伤 |
 | `ST/acezero-tavern-plugin.js` | 酒馆中间件：ERA → 技能推导 |

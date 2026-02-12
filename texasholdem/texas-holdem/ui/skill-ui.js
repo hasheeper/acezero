@@ -33,14 +33,14 @@
   };
 
   var SVG_PATHS = {
-    fortune:  '<path d="M8 1l2.2 4.5L15 6.3l-3.5 3.4.8 4.8L8 12.3 3.7 14.5l.8-4.8L1 6.3l4.8-.8z"/>',
-    curse:    '<path d="M8 1C5.2 1 3 3.7 3 7c0 2.2 1 4 2.5 5h5C12 11 13 9.2 13 7c0-3.3-2.2-6-5-6zM6 12v1c0 .6.9 1 2 1s2-.4 2-1v-1H6z"/>',
-    sense:    '<circle cx="8" cy="8" r="3"/><circle cx="8" cy="8" r="6" fill="none" stroke-width="1.2"/>',
-    peek:     '<path d="M8 3C4.4 3 1.4 5.4 0 8c1.4 2.6 4.4 5 8 5s6.6-2.4 8-5c-1.4-2.6-4.4-5-8-5zm0 8.3c-1.8 0-3.3-1.5-3.3-3.3S6.2 4.7 8 4.7s3.3 1.5 3.3 3.3S9.8 11.3 8 11.3zM8 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>',
-    reversal: '<path d="M2 5h9l-3-3h2l4 4-4 4h-2l3-3H2V5zm12 6H5l3 3H6l-4-4 4-4h2L5 9h9v2z"/>',
-    null_field:'<circle cx="8" cy="8" r="6"/><line x1="4" y1="12" x2="12" y2="4"/>',
-    void_shield:'<path d="M8 1L2 4v4c0 3.3 2.6 6.4 6 7 3.4-.6 6-3.7 6-7V4L8 1z"/>',
-    purge_all:'<path d="M8 2L3 8l5 6 5-6-5-6z"/>'
+    fortune:    '<path d="M8 1l2.2 4.5L15 6.3l-3.5 3.4.8 4.8L8 12.3 3.7 14.5l.8-4.8L1 6.3l4.8-.8z"/>',
+    curse:      '<path d="M8 1C5.2 1 3 3.7 3 7c0 2.2 1 4 2.5 5h5C12 11 13 9.2 13 7c0-3.3-2.2-6-5-6zM6 12v1c0 .6.9 1 2 1s2-.4 2-1v-1H6z"/>',
+    clarity:    '<path d="M8 1.5l1.5 3 3.5.5-2.5 2.5.5 3.5L8 9.5 4.5 11l.5-3.5L2.5 5l3.5-.5z"/><line x1="3" y1="13" x2="13" y2="13" stroke-width="1.5"/>',
+    refraction: '<path d="M4 3c2 3 6-1 8 2s-4 5-2 8"/><path d="M12 3c-2 3-6-1-8 2s4 5 2 8"/>',
+    reversal:   '<path d="M2 5h9l-3-3h2l4 4-4 4h-2l3-3H2V5zm12 6H5l3 3H6l-4-4 4-4h2L5 9h9v2z"/>',
+    null_field:  '<circle cx="8" cy="8" r="6"/><line x1="4" y1="12" x2="12" y2="4"/>',
+    void_shield: '<path d="M8 1L2 4v4c0 3.3 2.6 6.4 6 7 3.4-.6 6-3.7 6-7V4L8 1z"/>',
+    purge_all:   '<path d="M8 2L3 8l5 6 5-6-5-6z"/>'
   };
 
   // attr → hero-card skin class
@@ -55,7 +55,8 @@
   var BG_SVG_PATHS = {
     fortune:    '<path d="M12 2l2.4 7.2h7.6l-6 4.8 2.4 7.2-6-4.8-6 4.8 2.4-7.2-6-4.8h7.6z"/>',
     curse:      '<path d="M12 2C8.1 2 5 6 5 10.5c0 3 1.5 5.5 3.5 7h7c2-1.5 3.5-4 3.5-7C19 6 15.9 2 12 2zM9 19v1.5c0 .8 1.3 1.5 3 1.5s3-.7 3-1.5V19H9z"/>',
-    peek:       '<path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>',
+    clarity:    '<path d="M12 2l2 5 5.5 1-4 4 1 5.5L12 15l-4.5 2.5 1-5.5-4-4 5.5-1z"/><line x1="4" y1="21" x2="20" y2="21" stroke-width="2"/>',
+    refraction: '<path d="M5 4c3 5 9-2 12 3s-6 8-3 13"/><path d="M19 4c-3 5-9-2-12 3s6 8 3 13"/>',
     reversal:   '<path d="M3 7h13l-4-4h3l5 5.5-5 5.5h-3l4-4H3V7zm18 10H8l4 4H9l-5-5.5L9 10h3l-4 4h13v3z"/>',
     purge_all:  '<path d="M12 2L2 12l10 10 10-10L12 2z"/>',
     null_field:  '<circle cx="12" cy="12" r="9"/><line x1="6" y1="18" x2="18" y2="6"/>',
@@ -65,8 +66,8 @@
   var EFFECT_VISUALS = {
     fortune:     { icon: _svg(SVG_PATHS.fortune, '#9B59B6'),   cssClass: 'moirai-skill', color: '#9B59B6', attr: 'moirai' },
     curse:       { icon: _svg(SVG_PATHS.curse, '#e74c3c'),     cssClass: 'chaos-skill',  color: '#e74c3c', attr: 'chaos' },
-    sense:       { icon: _svg(SVG_PATHS.sense, '#a29bfe'),     cssClass: 'psyche-skill', color: '#a29bfe', attr: 'psyche' },
-    peek:        { icon: _svg(SVG_PATHS.peek, '#3498db'),      cssClass: 'psyche-skill', color: '#3498db', attr: 'psyche' },
+    clarity:     { icon: _svgS(SVG_PATHS.clarity, '#74b9ff'),  cssClass: 'psyche-skill', color: '#74b9ff', attr: 'psyche' },
+    refraction:  { icon: _svgS(SVG_PATHS.refraction, '#a29bfe'), cssClass: 'psyche-skill', color: '#a29bfe', attr: 'psyche' },
     reversal:    { icon: _svg(SVG_PATHS.reversal, '#1abc9c'),  cssClass: 'psyche-skill', color: '#1abc9c', attr: 'psyche' },
     null_field:  { icon: _svgS(SVG_PATHS.null_field, '#95a5a6'), cssClass: 'void-skill', color: '#95a5a6', attr: 'void' },
     void_shield: { icon: _svgS(SVG_PATHS.void_shield, '#7f8c8d'), cssClass: 'void-skill', color: '#7f8c8d', attr: 'void' },
@@ -81,8 +82,8 @@
     hex:          '小凶',
     havoc:        '大凶',
     catastrophe:  '灾变',
-    insight:      '洞察',
-    vision:       '透视',
+    clarity:      '澄澈',
+    refraction:   '折射',
     axiom:        '真理',
     static_field: '屏蔽',
     insulation:   '绝缘',
@@ -91,15 +92,16 @@
 
   // 行为分类（决定按钮逻辑和 UI 交互方式）
   const BEHAVIOR = {
-    FORCE:   'force',    // 影响发牌的力量型技能 (fortune, curse, reversal, purge_all)
-    INFO:    'info',     // 信息型技能 (peek — 需要选目标)
-    PASSIVE: 'passive'   // 被动技能 (sense, null_field, void_shield — 不生成按钮)
+    FORCE:   'force',    // 影响发牌的力量型技能 (fortune, curse, purge_all)
+    PSYCHE:  'psyche',   // Psyche 双重效果技能 (clarity, refraction, reversal — 信息+反制)
+    PASSIVE: 'passive'   // 被动技能 (null_field, void_shield — 不生成按钮)
   };
 
   // effect → behavior 映射
   function effectToBehavior(effect, activation) {
     if (activation === 'passive') return BEHAVIOR.PASSIVE;
-    if (effect === 'peek') return BEHAVIOR.INFO;
+    // Psyche 技能: 双重效果 (信息必定触发 + 反制vs Chaos)
+    if (effect === 'clarity' || effect === 'refraction' || effect === 'reversal') return BEHAVIOR.PSYCHE;
     return BEHAVIOR.FORCE;
   }
 
@@ -119,8 +121,7 @@
         backlashIndicator: null,
         mozStatus: null,      // 状态文字
         forceBalance: null,   // 力量对比条
-        foresightPanel: null, // 先知预览面板
-        senseAlert: null      // 感知提示
+        foresightPanel: null  // 先知预览面板
       };
 
       // 生成的按钮映射 { uniqueId → buttonElement }
@@ -160,6 +161,27 @@
         if (containers[key]) this.containers[key] = containers[key];
       });
 
+      // 注入 curse 目标选择回调（委托给 PokerAI.SkillAI）
+      var self = this;
+      if (typeof PokerAI !== 'undefined' && PokerAI.SkillAI) {
+        skillSystem.curseTargetFn = function(casterId, players) {
+          // players 可能来自 _skillToForce 的 gameContext，也可能为 null
+          var pList = players || (self._gameCtx && self._gameCtx.players) || [];
+          // 查找施法者的 difficulty
+          var caster = pList.find(function(p) { return p.id === casterId; });
+          var difficulty = (caster && caster.personality && caster.personality.difficulty) || 'noob';
+          return PokerAI.SkillAI.pickCurseTarget(difficulty, casterId, pList);
+        };
+
+        // 注入技能使用决策回调（委托给 PokerAI.SkillAI）
+        skillSystem.skillDecideFn = function(skill, owner, gameContext, pendingForces, mana) {
+          var pList = gameContext.players || (self._gameCtx && self._gameCtx.players) || [];
+          var caster = pList.find(function(p) { return p.id === skill.ownerId; });
+          var difficulty = (caster && caster.personality && caster.personality.difficulty) || 'noob';
+          return PokerAI.SkillAI.shouldUseSkill(difficulty, skill, owner, gameContext, pendingForces, mana);
+        };
+      }
+
       // 监听 skillSystem 事件
       this._wireHooks();
     }
@@ -180,7 +202,6 @@
      */
     onNewHand() {
       if (this.skillSystem) this.skillSystem.onNewHand();
-      this._hideSenseAlert();
     }
 
     /**
@@ -356,15 +377,17 @@
         switch (behavior) {
           case BEHAVIOR.FORCE:
             // 力量型：river 无意义，同 effect 不能重复激活，需要 mana
-            var isForceEffect = (skill.effect === 'fortune' || skill.effect === 'curse' || skill.effect === 'purge_all');
             disabled = !canUse || mana.current < cost || skill.currentCooldown > 0;
-            if (isRiver && isForceEffect) disabled = true;
+            if (isRiver) disabled = true;
             if (queuedEffects[skill.effect]) disabled = true;
             btn.classList.toggle('skill-active', !!queuedEffects[skill.effect]);
             break;
-          case BEHAVIOR.INFO:
-            // 信息型（透视）：需要 mana，不受 river 限制
+          case BEHAVIOR.PSYCHE:
+            // Psyche 双重效果: river 无意义(反制部分影响发牌)，同 effect 不能重复
             disabled = !canUse || mana.current < cost || skill.currentCooldown > 0;
+            if (isRiver) disabled = true;
+            if (queuedEffects[skill.effect]) disabled = true;
+            btn.classList.toggle('skill-active', !!queuedEffects[skill.effect]);
             break;
         }
 
@@ -386,8 +409,8 @@
         case BEHAVIOR.FORCE:
           this._activateForce(skill);
           break;
-        case BEHAVIOR.INFO:
-          this._activateInfo(skill);
+        case BEHAVIOR.PSYCHE:
+          this._activatePsyche(skill);
           break;
       }
 
@@ -427,22 +450,46 @@
     }
 
     /**
-     * 信息型技能激活（peek/vision — 透视）
-     * 需要选择目标，然后根据技能等级决定透视精度
+     * Psyche 双重效果技能激活
+     * 每个 Psyche 技能都有: 信息效果(必定触发) + 反制效果(注入 pendingForces 供 MoZ 处理)
+     *
+     * T3 Clarity 澄澈: 信息=胜率显示, 反制=消除敌方 T3/T2 Curse
+     * T2 Refraction 折射: 信息=透视手牌(需选目标), 反制=消除+50%转化
+     * T1 Axiom 真理: 信息=胜率+透视(继承), 反制=湮灭所有Curse+100%转化
      */
-    _activateInfo(skill) {
-      if (skill.effect === 'peek') {
-        this._activatePeek(skill);
+    _activatePsyche(skill) {
+      var self = this;
+      var effect = skill.effect;
+
+      // 折射/真理 需要选目标（透视部分），澄澈 直接激活
+      if (effect === 'clarity') {
+        // T3 澄澈: 立即激活 — 胜率显示 + 注入反制力
+        var result = this.skillSystem.activatePlayerSkill(skill.uniqueId);
+        if (!result.success) {
+          this._showSkillError(result);
+          return;
+        }
+        // 信息效果: 计算并显示胜率
+        this._showWinRate(skill);
+        var name = SKILL_NAMES[skill.skillKey] || skill.skillKey;
+        if (this.onMessage) this.onMessage('[' + name + '] 概率感知已启动');
+      } else {
+        // T2 折射 / T1 真理: 需要选目标（透视部分）
+        this._activatePsychePeek(skill);
       }
     }
 
-    _activatePeek(skill) {
+    /**
+     * Psyche T2/T1 透视选目标流程
+     * 选中目标后: 扣mana + 注入反制力 + 执行透视 + (T1额外显示胜率)
+     */
+    _activatePsychePeek(skill) {
       var self = this;
 
-      // 再次点击取消透视瞄准
+      // 再次点击取消瞄准
       if (self._peekHandlers) {
         self._peekCleanup();
-        if (self.onMessage) self.onMessage('透视已取消');
+        if (self.onMessage) self.onMessage('已取消');
         return;
       }
 
@@ -455,15 +502,12 @@
         return;
       }
 
-      var cost = skill.manaCost || 15;
       var tier = skill.tier || 3;
+      self._peekCleanup();
 
-      // 高亮所有可透视的座位，点击座位选择目标
-      self._peekCleanup(); // 清除之前的状态
+      var name = SKILL_NAMES[skill.skillKey] || skill.skillKey;
+      if (this.onMessage) this.onMessage('[' + name + '] 选择透视目标 -- 点击对手座位 (再次点击取消)');
 
-      if (this.onMessage) this.onMessage('选择透视目标 -- 点击对手座位 (再次点击技能取消)');
-
-      // 给每个可透视目标的座位加高亮 + 点击事件
       self._peekHandlers = [];
       for (var t = 0; t < targets.length; t++) {
         (function (target) {
@@ -473,43 +517,180 @@
           seatEl.classList.add('peek-targetable');
 
           var handler = function () {
-            // 扣 mana
-            if (!self.skillSystem.spendMana(self.humanPlayerId, cost)) {
-              if (self.onMessage) self.onMessage('魔运不足');
-              self._peekCleanup();
+            self._peekCleanup();
+            // 通过 skillSystem 统一激活（扣 mana + 注入反制力到 pendingForces）
+            var result = self.skillSystem.activatePlayerSkill(skill.uniqueId);
+            if (!result.success) {
+              self._showSkillError(result);
               return;
             }
-            self._peekCleanup();
-            // 注入 peek 标记到 pendingForces（用于 Psyche > Chaos 克制）
-            if (self.skillSystem && self.skillSystem.pendingForces) {
-              self.skillSystem.pendingForces.push({
-                ownerId: self.humanPlayerId,
-                ownerName: 'RINO',
-                type: 'peek',
-                attr: 'psyche',
-                tier: skill.tier,
-                power: 0,
-                activation: 'active',
-                skillKey: skill.skillKey,
-                _infoMarker: true
-              });
-            }
+            // 信息效果: 执行透视
             self._executePeek(skill, target, tier);
+            // T1 真理额外继承: 胜率显示
+            if (skill.effect === 'reversal') {
+              self._showWinRate(skill);
+            }
+            if (self.onMessage) self.onMessage('[' + name + '] 透视 ' + target.name);
           };
           seatEl.addEventListener('click', handler);
           self._peekHandlers.push({ el: seatEl, handler: handler });
         })(targets[t]);
       }
 
-      // ESC 或点击空白取消
       self._peekEscHandler = function (e) {
         if (e.key === 'Escape') self._peekCleanup();
       };
       document.addEventListener('keydown', self._peekEscHandler);
 
-      // 隐藏旧面板
       var panel = document.getElementById('peek-panel');
       if (panel) panel.style.display = 'none';
+    }
+
+    /**
+     * 显示技能激活失败原因
+     */
+    _showSkillError(result) {
+      var reasons = {
+        SKILL_NOT_FOUND: '技能不存在',
+        NOT_ACTIVE_TYPE: '被动技能无法手动激活',
+        BACKLASH_ACTIVE: '魔运反噬中',
+        ON_COOLDOWN: '冷却中 (' + (result.cooldown || 0) + '轮)',
+        INSUFFICIENT_MANA: '魔运不足 (需要 ' + (result.cost || 0) + ')'
+      };
+      if (this.onMessage) this.onMessage(reasons[result.reason] || '技能不可用');
+    }
+
+    /**
+     * 计算并显示当前裸牌胜率 (Psyche 信息效果核心)
+     * 使用 PokerSolver 蒙特卡洛模拟计算真实胜率
+     */
+    _showWinRate(skill) {
+      var ctx = this._gameCtx;
+      var hero = (ctx.players || []).find(function (p) { return p.type === 'human'; });
+      if (!hero || !hero.cards || hero.cards.length < 2) return;
+
+      var board = ctx.board || [];
+      var activePlayers = (ctx.players || []).filter(function (p) { return !p.folded && p.cards && p.cards.length >= 2; });
+      if (activePlayers.length < 2) return;
+
+      // 使用蒙特卡洛模拟计算胜率
+      var winPct = this._monteCarloEquity(hero.cards, board, activePlayers.length);
+
+      // 在屏幕上方显示胜率
+      this._displayWinRate(winPct, skill);
+    }
+
+    /**
+     * 蒙特卡洛胜率计算
+     * @param {Array} holeCards - 玩家手牌 [{rank, suit}, ...]
+     * @param {Array} board - 当前公共牌
+     * @param {number} numPlayers - 活跃玩家数
+     * @returns {number} 胜率百分比 (0-100)
+     */
+    _monteCarloEquity(holeCards, board, numPlayers) {
+      var SUIT_MAP = { 0: 's', 1: 'h', 2: 'c', 3: 'd' };
+      var RANK_MAP = { 1: 'A', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '8', 9: '9', 10: 'T', 11: 'J', 12: 'Q', 13: 'K' };
+
+      function cardStr(c) { return (RANK_MAP[c.rank] || '?') + (SUIT_MAP[c.suit] || 's'); }
+
+      var heroStrs = holeCards.map(cardStr);
+      var boardStrs = board.map(cardStr);
+
+      // 构建剩余牌堆
+      var usedSet = {};
+      heroStrs.forEach(function (s) { usedSet[s] = true; });
+      boardStrs.forEach(function (s) { usedSet[s] = true; });
+
+      var remaining = [];
+      for (var r = 1; r <= 13; r++) {
+        for (var s = 0; s <= 3; s++) {
+          var cs = (RANK_MAP[r] || '?') + (SUIT_MAP[s] || 's');
+          if (!usedSet[cs]) remaining.push(cs);
+        }
+      }
+
+      var SIMS = 200;
+      var wins = 0;
+      var ties = 0;
+      var boardNeeded = 5 - boardStrs.length;
+      var opponentCount = numPlayers - 1;
+      var cardsNeeded = boardNeeded + opponentCount * 2;
+
+      for (var sim = 0; sim < SIMS; sim++) {
+        // Fisher-Yates 部分洗牌
+        var deck = remaining.slice();
+        for (var i = deck.length - 1; i > deck.length - 1 - cardsNeeded && i > 0; i--) {
+          var j = Math.floor(Math.random() * (i + 1));
+          var tmp = deck[i]; deck[i] = deck[j]; deck[j] = tmp;
+        }
+
+        var drawn = deck.slice(deck.length - cardsNeeded);
+        var simBoard = boardStrs.concat(drawn.slice(0, boardNeeded));
+        var heroAll = heroStrs.concat(simBoard);
+
+        try {
+          var heroHand = Hand.solve(heroAll);
+          var heroWins = true;
+          var heroTie = false;
+
+          for (var opp = 0; opp < opponentCount; opp++) {
+            var oppCards = drawn.slice(boardNeeded + opp * 2, boardNeeded + opp * 2 + 2);
+            var oppAll = oppCards.concat(simBoard);
+            var oppHand = Hand.solve(oppAll);
+            var winners = Hand.winners([heroHand, oppHand]);
+            if (winners.length === 2) {
+              heroTie = true;
+            } else if (!winners.includes(heroHand)) {
+              heroWins = false;
+              break;
+            }
+          }
+
+          if (heroWins && !heroTie) wins++;
+          else if (heroWins && heroTie) ties++;
+        } catch (e) {
+          // PokerSolver 错误，跳过此模拟
+        }
+      }
+
+      return Math.round((wins + ties * 0.5) / SIMS * 100);
+    }
+
+    /**
+     * 在屏幕上方显示胜率浮层
+     */
+    _displayWinRate(winPct, skill) {
+      // 移除旧的
+      var existing = document.querySelector('.psyche-winrate-overlay');
+      if (existing) existing.remove();
+
+      var overlay = document.createElement('div');
+      overlay.className = 'psyche-winrate-overlay';
+
+      var colorClass = winPct >= 60 ? 'winrate-good' : winPct >= 40 ? 'winrate-neutral' : 'winrate-bad';
+      var name = SKILL_NAMES[skill.skillKey] || skill.skillKey;
+
+      overlay.innerHTML =
+        '<div class="psyche-winrate-box ' + colorClass + '">' +
+          '<div class="psyche-winrate-label">[' + name + '] 裸牌胜率</div>' +
+          '<div class="psyche-winrate-value">' + winPct + '%</div>' +
+        '</div>';
+
+      overlay.addEventListener('click', function () {
+        overlay.style.opacity = '0';
+        overlay.style.transition = 'opacity 0.3s';
+        setTimeout(function () { overlay.remove(); }, 300);
+      });
+      document.body.appendChild(overlay);
+
+      // 自动消失
+      setTimeout(function () {
+        if (overlay.parentNode) {
+          overlay.style.opacity = '0';
+          overlay.style.transition = 'opacity 0.5s';
+          setTimeout(function () { if (overlay.parentNode) overlay.remove(); }, 500);
+        }
+      }, 5000);
     }
 
     _peekCleanup() {
@@ -817,21 +998,18 @@
       if (!this.skillSystem) return;
       var self = this;
 
-      // 感知事件
-      this.skillSystem.on('sense:detected', function (data) {
-        self._showSenseAlert(data.detail.message);
-      });
-      this.skillSystem.on('sense:vague', function (data) {
-        self._showSenseAlert(data.message);
-      });
-
       // NPC 技能使用
       this.skillSystem.on('npc:skill_used', function (data) {
         if (self.onLog) {
           self.onLog('NPC_SKILL', {
             owner: data.ownerName, skill: data.skillKey,
-            effect: data.effect, tier: data.tier
+            effect: data.effect, tier: data.tier,
+            targetId: data.targetId, targetName: data.targetName
           });
+        }
+        // 如果是 curse，显示目标信息
+        if (data.effect === 'curse' && data.targetName && self.onMessage) {
+          self.onMessage('[' + data.ownerName + '] 对 ' + data.targetName + ' 施放了诅咒');
         }
       });
 
@@ -845,31 +1023,6 @@
         self.updateDisplay();
         self.updateButtons();
       });
-    }
-
-    // ========== 子面板 ==========
-
-    _showSenseAlert(message) {
-      if (!message) return;
-      var el = this.containers.senseAlert;
-      if (el) {
-        el.textContent = message;
-        el.style.display = 'block';
-        el.classList.add('sense-flash');
-        setTimeout(function () {
-          el.style.display = 'none';
-          el.classList.remove('sense-flash');
-        }, 4000);
-      }
-      if (this.onMessage) this.onMessage('[感知] ' + message);
-      if (this.onLog) this.onLog('SENSE', { message: message });
-    }
-
-    _hideSenseAlert() {
-      if (this.containers.senseAlert) {
-        this.containers.senseAlert.style.display = 'none';
-        this.containers.senseAlert.classList.remove('sense-flash');
-      }
     }
 
     // ========== 状态查询 ==========
