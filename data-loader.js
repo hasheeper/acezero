@@ -59,6 +59,11 @@
    */
   function applyInjectedConfig(data) {
     if (!data) return;
+    // 已有配置 → 忽略重复投递
+    if (_injectedConfig) {
+      console.log('[DATA-LOADER] 配置已加载，忽略重复投递');
+      return;
+    }
 
     _injectedConfig = data;
     const heroName = (data.hero && data.hero.vanguard && data.hero.vanguard.name) || '(none)';

@@ -160,6 +160,7 @@
       let _currentConfig = null;
 
       let _configSource = null; // 'injected' | 'static'
+      let _configSentToGame = false;
 
       // 1. 确定配置来源（外部注入 or 本地 JSON）
       async function resolveConfig() {
@@ -207,9 +208,14 @@
         return base + route;
       }
 
-      // 3. 向游戏 iframe 发送配置（附带来源标记）
+      // 3. 向游戏 iframe 发送配置（附带来源标记，仅首次生效）
       function sendConfigToGame(config, source) {
         if (!frame || !frame.contentWindow) return;
+        if (_configSentToGame) {
+          console.log('[ENGINE] 配置已发送，忽略重复');
+          return;
+        }
+        _configSentToGame = true;
         frame.contentWindow.postMessage({
           type: 'acezero-game-data',
           payload: config,
@@ -240,14 +246,19 @@
         });
       }
 
-      // 5. 监听游戏主动请求配置
+      // 5. 监听游戏主动请求配置（绕过 _configSentToGame 防重复）
       window.addEventListener('message', async (event) => {
         const msg = event?.data;
         if (!msg) return;
 
         if (msg.type === 'acezero-data-request') {
           const config = await resolveConfig();
-          sendConfigToGame(config, _configSource);
+          if (!frame || !frame.contentWindow) return;
+          frame.contentWindow.postMessage({
+            type: 'acezero-game-data',
+            payload: config,
+            source: _configSource || 'static'
+          }, '*');
         }
       });
 

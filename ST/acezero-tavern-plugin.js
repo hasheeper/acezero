@@ -246,6 +246,7 @@
     const result = {
       vanguard: { name: name || '???', level: archetype.level || 0 },
       ai: kernel.ai,
+      difficulty: kernel.difficulty || 'regular',
       emotion: mood.emotion
     };
 

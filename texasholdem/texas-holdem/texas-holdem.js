@@ -2127,9 +2127,9 @@
   function applyExternalConfig(config, source) {
     if (!config) return;
     source = source || 'static';
-    // 如果已有 injected 配置，拒绝 static 配置覆盖
-    if (_configSource === 'injected' && source === 'static') {
-      console.log('[CONFIG] 已有注入配置，拒绝静态配置覆盖');
+    // 已有配置 → 拒绝重复应用（无论来源）
+    if (_externalConfigApplied) {
+      console.log('[CONFIG] 配置已应用，忽略重复 [' + source + ']');
       return;
     }
     gameConfig = config;

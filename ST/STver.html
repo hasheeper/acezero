@@ -182,11 +182,15 @@
       }
 
       // ============================================
-      // postMessage 数据传递
+      // postMessage 数据传递（仅首次生效，防重复）
       // ============================================
+      let _dataSent = false;
+
       function postGameData() {
+        if (_dataSent) return;
         if (!frame || !frame.contentWindow) return;
         if (!injectedData) return;
+        _dataSent = true;
         frame.contentWindow.postMessage(
           {
             type: 'acezero-game-data',
@@ -203,14 +207,7 @@
       window.addEventListener('message', (event) => {
         const payload = event?.data;
         if (!payload || payload.type !== 'acezero-data-request') return;
-        if (!injectedData || !frame || !frame.contentWindow) return;
-        frame.contentWindow.postMessage(
-          {
-            type: 'acezero-game-data',
-            payload: injectedData,
-          },
-          '*'
-        );
+        postGameData();
       });
 
       // ============================================
