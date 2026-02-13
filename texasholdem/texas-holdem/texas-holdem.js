@@ -838,6 +838,7 @@
     const maxMagicLevel = playerSkills.reduce((max, s) => Math.max(max, s.level || 0), 0);
 
     const context = {
+      playerName: player.name,
       holeCards: player.cards,
       boardCards: gameState.board,
       pot: gameState.pot + gameState.players.reduce((sum, p) => sum + p.currentBet, 0),

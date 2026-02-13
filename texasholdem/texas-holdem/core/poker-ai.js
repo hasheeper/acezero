@@ -294,11 +294,13 @@
     _applyEmotionDifficulty(base, emo) {
       return {
         description: base.description,
-        noiseRange:        Math.max(0, base.noiseRange + (emo.noiseDelta || 0)),
+        // 🔧 理性上限：noiseRange 最高 35（防止 noob+tilt=40 导致完全随机）
+        noiseRange:        Math.min(35, Math.max(0, base.noiseRange + (emo.noiseDelta || 0))),
         potOddsAwareness:  Math.max(0, Math.min(1, base.potOddsAwareness - (emo.noiseDelta || 0) * 0.01)),
         positionAwareness: base.positionAwareness,
         valueBetAwareness: Math.max(0, Math.min(1, base.valueBetAwareness - (emo.noiseDelta || 0) * 0.02)),
-        optimism:          Math.max(0, base.optimism + (emo.optimismDelta || 0))
+        // 🔧 理性上限：optimism 最高 25（防止 noob+tilt=35 让垃圾牌看起来像中等牌）
+        optimism:          Math.min(25, Math.max(0, base.optimism + (emo.optimismDelta || 0)))
       };
     }
 
@@ -308,12 +310,22 @@
      */
     decide(context) {
       const { holeCards, boardCards, pot, toCall, aiStack, phase, minRaise, activeOpponentCount } = context;
+      const playerName = context.playerName || '?';
       
       // 魔运等级：有魔运的高手更自信，不容易弃牌
       const magicLevel = context.magicLevel || 0;
       
       // 1. 计算原始手牌强度
       let rawStrength = this.calculateRawStrength(holeCards, boardCards, phase);
+      
+      // 1.5 获取手牌名称（用于日志）
+      let handName = phase === 'preflop' ? 'Preflop' : '?';
+      if (phase !== 'preflop' && boardCards && boardCards.length > 0) {
+        try {
+          const hr = evaluateHandStrength(holeCards, boardCards);
+          handName = hr.name || '?';
+        } catch (e) { handName = '?'; }
+      }
       
       // 2. 添加难度噪音 + 盲目乐观值（只影响感知，不影响 rawStrength）
       const noise = (Math.random() - 0.5) * this.difficulty.noiseRange;
@@ -344,7 +356,28 @@
       const isBluffing = Math.random() < effectiveBluffFreq && rawStrength <= 20;
       
       // 5. 决策逻辑
-      return this.makeDecision(context, adjustedStrength, rawStrength, potOdds, isBluffing, opponents, magicLevel);
+      const decision = this.makeDecision(context, adjustedStrength, rawStrength, potOdds, isBluffing, opponents, magicLevel);
+      
+      // 6. 详细日志
+      const holeStr = holeCards.map(cardToString).join(' ');
+      const tag = this.riskType + '/' + this.difficultyType + '/' + this.emotionType;
+      console.log(
+        '[AI] ' + playerName + ' (' + tag + ') ' + phase +
+        ' | 手牌: ' + holeStr + ' [' + handName + ']' +
+        ' | raw=' + rawStrength +
+        ' adj=' + Math.round(adjustedStrength) +
+        (noise !== 0 ? ' noise=' + (noise > 0 ? '+' : '') + Math.round(noise) : '') +
+        (optimism > 0 ? ' opt=+' + Math.round(optimism) : '') +
+        (magicLevel > 0 ? ' magic=+' + (magicLevel * 5) : '') +
+        (isBluffing ? ' BLUFF' : '') +
+        ' | pot=' + pot + ' toCall=' + toCall + ' stack=' + aiStack +
+        ' opp=' + opponents +
+        ' → ' + decision.action.toUpperCase() +
+        (decision.amount > 0 ? ' ' + decision.amount : '') +
+        (decision.reason ? ' (' + decision.reason + ')' : '')
+      );
+      
+      return decision;
     }
 
     calculateRawStrength(holeCards, boardCards, phase) {
@@ -368,12 +401,17 @@
       // 检测手牌是否自带对子
       const holePocket = holeRanks[0] === holeRanks[1];
       
+      // 统计公共牌对子数量
+      const boardCounts = {};
+      for (const r of boardRanks) boardCounts[r] = (boardCounts[r] || 0) + 1;
+      const boardPairCount = Object.values(boardCounts).filter(c => c >= 2).length;
+      const boardHasTrips = Object.values(boardCounts).some(c => c >= 3);
+      
       if (handResult.rank === 2) { // Pair
         if (boardPair && !holeConnectsToBoard && !holePocket) {
           // 🚨 公共牌对子，手牌没贡献 = 实际上是高牌！
-          strength = 18; // 比 High Card 稍高，因为至少有公共对子保底
+          strength = 18;
         } else if (holeConnectsToBoard) {
-          // 手牌与公共牌配对
           const pairRank = Math.max(...holeRanks.filter(hr => boardRanks.includes(hr)));
           const boardHighCard = Math.max(...boardRanks);
           if (pairRank >= boardHighCard) {
@@ -386,15 +424,42 @@
       }
       
       if (handResult.rank === 3) { // Two Pair
-        if (boardPair && !holePocket) {
-          // 公共牌有对子，我只配了一对
+        if (boardPairCount >= 2 && !holeConnectsToBoard && !holePocket) {
+          // 🚨 两对都在公共牌上！手牌只是踢脚
+          strength = 22;
+        } else if (boardPair && !holePocket) {
           const myPairRank = Math.max(...holeRanks.filter(hr => boardRanks.includes(hr)), 0);
           if (myPairRank === 0) {
-            // 两对都是公共牌的！我只是高牌
-            strength = 20;
+            // 两对都是公共牌的（另一种检测路径）
+            strength = 22;
           } else if (myPairRank < Math.max(...boardRanks)) {
-            // 我的对子比公共牌小
             strength -= 10;
+          }
+        }
+      }
+      
+      if (handResult.rank === 4) { // Three of a Kind
+        if (boardHasTrips && !holeConnectsToBoard) {
+          // 🚨 三条全在公共牌上，手牌没贡献
+          strength = 30;
+        } else if (boardPair && holeConnectsToBoard && !holePocket) {
+          // 公共牌对子 + 手牌配对 = 真三条，但不如口袋对子强
+          strength -= 5;
+        }
+        // 口袋对子 + 公共牌 = 暗三条，最强，保持原分
+      }
+      
+      if (handResult.rank === 7) { // Full House
+        if (boardHasTrips && !holePocket) {
+          // 公共牌三条 + 手牌没配对 = 公共葫芦，大家都有
+          const myContribution = holeRanks.some(hr => boardRanks.includes(hr));
+          if (!myContribution) {
+            strength = 40; // 大幅降低：公共葫芦谁都有
+          }
+        } else if (boardPairCount >= 2) {
+          // 公共牌两对 + 手牌配了一张 = 弱葫芦
+          if (!holeConnectsToBoard && !holePocket) {
+            strength = 42; // 公共牌两对 + 踢脚 = 谁都有
           }
         }
       }
@@ -502,19 +567,14 @@
       const shouldValueBet = Math.random() < valueBetAwareness;
       
       // 强牌必须下注（价值下注）
-      // 三条以上(rawStrength >= 75)几乎必须下注
-      // 两对(rawStrength >= 60)应该下注
-      // 顶对(rawStrength >= 55)经常下注
       if (rawStrength >= 75 && shouldValueBet) {
-        // 超强牌：必须下注榨取价值
         const raiseAmount = this.calculateRaiseAmount(rawStrength, pot, aiStack, minRaise);
-        return { action: ACTIONS.RAISE, amount: raiseAmount };
+        return { action: ACTIONS.RAISE, amount: raiseAmount, reason: '超强牌价值下注 raw≥75' };
       }
       
       if (rawStrength >= this.risk.valueBetThreshold && shouldValueBet) {
-        // 强牌：下注榨取价值
         const raiseAmount = this.calculateRaiseAmount(rawStrength, pot, aiStack, minRaise);
-        return { action: ACTIONS.RAISE, amount: raiseAmount };
+        return { action: ACTIONS.RAISE, amount: raiseAmount, reason: '强牌价值下注 raw≥' + this.risk.valueBetThreshold };
       }
       
       // 诈唬下注（不能超过 40% 筹码，防止意外全押诈唬）
@@ -524,21 +584,20 @@
           Math.floor(aiStack * 0.4)
         );
         if (bluffAmount >= minRaise) {
-          return { action: ACTIONS.RAISE, amount: bluffAmount };
+          return { action: ACTIONS.RAISE, amount: bluffAmount, reason: '诈唬下注 cap40%' };
         }
-        return { action: ACTIONS.CHECK, amount: 0 };
+        return { action: ACTIONS.CHECK, amount: 0, reason: '诈唬但金额不足' };
       }
       
       // 中等牌力：根据风险喜好决定
       // 🔧 安全阀：rawStrength < 25 = 垃圾牌，不走价值下注路径
-      //    垃圾牌只能通过上面的 bluff 路径下注（有 40% 筹码上限）
       if (rawStrength >= 25 && adjustedStrength >= this.risk.raiseThreshold) {
         const raiseAmount = this.calculateRaiseAmount(adjustedStrength, pot, aiStack, minRaise);
-        return { action: ACTIONS.RAISE, amount: raiseAmount };
+        return { action: ACTIONS.RAISE, amount: raiseAmount, reason: '中等牌力下注 adj≥' + this.risk.raiseThreshold };
       }
       
       // 弱牌：过牌
-      return { action: ACTIONS.CHECK, amount: 0 };
+      return { action: ACTIONS.CHECK, amount: 0, reason: rawStrength < 25 ? '垃圾牌过牌 raw<25' : '牌力不足过牌' };
     }
 
     /**
@@ -546,120 +605,96 @@
      */
     decideWhenFacingBet(adjustedStrength, rawStrength, pot, toCall, aiStack, minRaise, potOdds, isBluffing, phase, opponents, magicLevel) {
       // 底池承诺快速通道：筹码极少且底池巨大时，跳过所有恐惧逻辑直接跟
-      // 例：6银 vs 20金底池 → 弃牌是数学错误
       const potCommitRatio = pot / (toCall + 0.01);
       if (toCall >= aiStack * 0.8 && potCommitRatio >= 5) {
-        return { action: ACTIONS.ALL_IN, amount: aiStack };
+        return { action: ACTIONS.ALL_IN, amount: aiStack, reason: '底池承诺 pot/call=' + Math.round(potCommitRatio) };
       }
 
       // 生存本能 v2：多层次恐惧机制
-      const betRatio = toCall / (pot + 0.01);        // 下注占底池比例
-      const stackRatio = toCall / (aiStack + 0.01); // 下注占筹码比例
+      const betRatio = toCall / (pot + 0.01);
+      const stackRatio = toCall / (aiStack + 0.01);
       
-      // 计算压力等级 (0-4)
       let pressureLevel = 0;
-      if (betRatio > 0.3) pressureLevel++;   // 超过 30% pot
-      if (betRatio > 0.6) pressureLevel++;   // 超过 60% pot  
-      if (stackRatio > 0.4) pressureLevel++; // 超过 40% 筹码
-      if (stackRatio > 0.7) pressureLevel++; // 超过 70% 筹码
+      if (betRatio > 0.3) pressureLevel++;
+      if (betRatio > 0.6) pressureLevel++;
+      if (stackRatio > 0.4) pressureLevel++;
+      if (stackRatio > 0.7) pressureLevel++;
       
-      // 翻牌前只需跟大盲 = 零压力（大盲本身不算加注压力）
-      // 只有面对 3-bet 以上才算真正的翻牌前压力
       if (phase === 'preflop' && stackRatio < 0.05) {
         pressureLevel = 0;
       }
       
-      // 根据压力等级和牌力决定是否触发生存本能
-      // 压力越大，需要的牌力越高才能继续
-      // 魔运加成：有魔运的高手生存阈值更低（更不容易恐惧）
-      // magicLevel 1~5 → 阈值降低 5~25
       const magicReduction = (magicLevel || 0) * 5;
-      // 翻牌前生存阈值大幅降低：便宜的跟注不应触发恐惧
       const preflopDiscount = phase === 'preflop' ? 30 : 0;
       const survivalThreshold = Math.max(5, 30 + pressureLevel * 15 - magicReduction - preflopDiscount);
       
       if (rawStrength < survivalThreshold && pressureLevel >= 1) {
-        // 生存本能触发！
-        // 根据玩家类型决定逃跑概率
-        let foldChance = 0.95; // 默认 95% 弃牌
+        let foldChance = 0.95;
         
         if (this.riskType === 'rock') {
-          foldChance = 0.99; // Rock 几乎必弃
+          foldChance = 0.99;
         } else if (this.riskType === 'passive') {
-          foldChance = 0.85; // Passive 稍微犹豫（鱼会送钱）
+          foldChance = 0.85;
         } else if (this.riskType === 'maniac') {
-          foldChance = 0.70; // Maniac 有 30% 概率疯狗反打
+          foldChance = 0.70;
         } else if (this.riskType === 'aggressive') {
-          foldChance = 0.80; // Aggressive 有 20% 概率反打
+          foldChance = 0.80;
         }
         
-        // Pro 玩家更理性，但也不会拿空气跟巨注
         if (this.difficultyType === 'pro') {
-          foldChance *= 0.9; // Pro 稍微降低弃牌率，但仍然会弃
+          foldChance *= 0.9;
         }
         
-        // 魔运降低弃牌率：有魔运的高手感知到命运偏向自己
-        // magicLevel 1~5 → foldChance × 0.75~0.25
         if (magicLevel > 0) {
           foldChance *= Math.max(0.2, 1 - magicLevel * 0.15);
         }
         
-        // 如果正在诈唬，降低弃牌率（但诈唬面对巨注也应该放弃）
         if (isBluffing && pressureLevel <= 1) {
           foldChance *= 0.5;
         }
         
-        // 翻牌前面对小注时大幅降低弃牌率（便宜的跟注应该看翻牌）
         if (phase === 'preflop' && pressureLevel <= 1) {
           foldChance *= 0.12;
         } else if (phase === 'preflop' && pressureLevel <= 2) {
           foldChance *= 0.4;
         }
         
-        // 情绪修正弃牌率：tilt/confident → 更不容易弃, fearful → 更容易弃
         const foldResist = this.emotion.foldResistDelta || 0;
         if (foldResist !== 0) {
           foldChance = Math.max(0.05, Math.min(0.99, foldChance + foldResist));
         }
         
         if (Math.random() < foldChance) {
-          return { action: ACTIONS.FOLD, amount: 0 };
+          return { action: ACTIONS.FOLD, amount: 0, reason: '生存本能 pressure=' + pressureLevel + ' threshold=' + survivalThreshold + ' fold%=' + Math.round(foldChance * 100) };
         }
       }
       
       // 需要全押才能跟
       if (toCall >= aiStack) {
-        // 底池承诺：底池远大于跟注额时，弃牌是数学错误
-        // 例：底池 20金，跟注 6银 → potOddsRatio ≈ 33 → 必须跟
         const potOddsRatio = pot / (aiStack + 0.01);
         if (potOddsRatio >= 3) {
-          // 底池 ≥ 3倍跟注额：任何两张牌都应该跟（底池赔率太好）
-          return { action: ACTIONS.ALL_IN, amount: aiStack };
+          return { action: ACTIONS.ALL_IN, amount: aiStack, reason: '底池承诺allin pot/stack=' + Math.round(potOddsRatio) };
         }
         if (potOddsRatio >= 1.5 && adjustedStrength >= 15) {
-          // 底池 ≥ 1.5倍：只要不是纯空气就跟
-          return { action: ACTIONS.ALL_IN, amount: aiStack };
+          return { action: ACTIONS.ALL_IN, amount: aiStack, reason: '赔率allin pot/stack=' + Math.round(potOddsRatio * 10) / 10 };
         }
-        // 正常 All-in 门槛：必须有真货
         if (rawStrength >= 60) {
-          return { action: ACTIONS.ALL_IN, amount: aiStack };
+          return { action: ACTIONS.ALL_IN, amount: aiStack, reason: '强牌allin raw≥60' };
         }
-        // 疯子有小概率乱推
         if (this.riskType === 'maniac' && adjustedStrength >= 45 && Math.random() < 0.2) {
-          return { action: ACTIONS.ALL_IN, amount: aiStack };
+          return { action: ACTIONS.ALL_IN, amount: aiStack, reason: '疯子乱推' };
         }
-        return { action: ACTIONS.FOLD, amount: 0 };
+        return { action: ACTIONS.FOLD, amount: 0, reason: 'allin弃牌 raw=' + rawStrength + ' potRatio=' + Math.round(potOddsRatio * 10) / 10 };
       }
       
-      // 底池赔率检查（专家更会利用）
+      // 底池赔率检查
       const potOddsCheck = this.difficulty.potOddsAwareness;
       const isPotOddsFavorable = potOdds < (adjustedStrength / 100) * potOddsCheck + (1 - potOddsCheck) * 0.5;
       
       // 河牌圈特殊处理：弱牌面对下注几乎必弃
       if (phase === 'river' && rawStrength <= 20 && toCall > pot * 0.25) {
-        // High Card 或弱对子面对超过 1/4 pot 的下注，弃牌
         if (this.riskType !== 'passive' || Math.random() > 0.2) {
-          return { action: ACTIONS.FOLD, amount: 0 };
+          return { action: ACTIONS.FOLD, amount: 0, reason: '河牌弱牌弃 raw≤20' };
         }
       }
       
@@ -667,54 +702,53 @@
       if (rawStrength >= 75) {
         const raiseAmount = this.calculateRaiseAmount(rawStrength, pot, aiStack, minRaise);
         if (raiseAmount > toCall * 2) {
-          return { action: ACTIONS.RAISE, amount: raiseAmount };
+          return { action: ACTIONS.RAISE, amount: raiseAmount, reason: '超强牌加注 raw≥75' };
         }
-        return { action: ACTIONS.CALL, amount: toCall };
+        return { action: ACTIONS.CALL, amount: toCall, reason: '超强牌跟注(加注不够大)' };
       }
       
       // 强牌：跟注或加注
-      // 🔧 安全阀：rawStrength < 25 = 垃圾牌，不走加注路径（防止 tilt 乱加注）
       if (adjustedStrength >= this.risk.raiseThreshold) {
         if (rawStrength >= 25) {
           const raiseAmount = this.calculateRaiseAmount(adjustedStrength, pot, aiStack, minRaise);
           if (raiseAmount > toCall * 2) {
-            return { action: ACTIONS.RAISE, amount: raiseAmount };
+            return { action: ACTIONS.RAISE, amount: raiseAmount, reason: '强牌加注 adj≥' + this.risk.raiseThreshold };
           }
         }
-        return { action: ACTIONS.CALL, amount: toCall };
+        return { action: ACTIONS.CALL, amount: toCall, reason: '强牌跟注 adj≥' + this.risk.raiseThreshold };
       }
       
       // 中等牌力：根据赔率和风险喜好决定
       if (adjustedStrength >= this.risk.callDownThreshold) {
         if (isPotOddsFavorable || this.riskType === 'passive') {
-          return { action: ACTIONS.CALL, amount: toCall };
+          return { action: ACTIONS.CALL, amount: toCall, reason: '中等跟注 adj≥' + this.risk.callDownThreshold + (isPotOddsFavorable ? ' 赔率好' : ' passive') };
         }
       }
       
-      // 诈唬加注 - 只在小注时才考虑，且不超过 40% 筹码
+      // 诈唬加注
       if (isBluffing && pressureLevel === 0 && Math.random() < 0.4) {
         const bluffAmount = Math.min(
           this.calculateRaiseAmount(55, pot, aiStack, minRaise),
           Math.floor(aiStack * 0.4)
         );
         if (bluffAmount >= minRaise) {
-          return { action: ACTIONS.RAISE, amount: bluffAmount };
+          return { action: ACTIONS.RAISE, amount: bluffAmount, reason: '诈唬加注 cap40%' };
         }
       }
       
       // 弱牌但赔率合适：跟注站会跟
       if (this.riskType === 'passive' && adjustedStrength >= 15) {
-        return { action: ACTIONS.CALL, amount: toCall };
+        return { action: ACTIONS.CALL, amount: toCall, reason: 'passive跟注站' };
       }
       
-      // 弱牌：弃牌（翻牌前门槛降低，鼓励看翻牌）
+      // 弱牌：弃牌
       const effectiveEntry = phase === 'preflop' ? Math.max(10, this.risk.entryThreshold - 15) : this.risk.entryThreshold;
       if (adjustedStrength < effectiveEntry && !isBluffing) {
-        return { action: ACTIONS.FOLD, amount: 0 };
+        return { action: ACTIONS.FOLD, amount: 0, reason: '弱牌弃 adj<' + effectiveEntry };
       }
       
       // 默认跟注
-      return { action: ACTIONS.CALL, amount: toCall };
+      return { action: ACTIONS.CALL, amount: toCall, reason: '默认跟注' };
     }
 
     calculateRaiseAmount(strength, pot, stack, minRaise) {
