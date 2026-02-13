@@ -94,12 +94,14 @@
   const BEHAVIOR = {
     FORCE:   'force',    // 影响发牌的力量型技能 (fortune, curse, purge_all)
     PSYCHE:  'psyche',   // Psyche 双重效果技能 (clarity, refraction, reversal — 信息+反制)
-    PASSIVE: 'passive'   // 被动技能 (null_field, void_shield — 不生成按钮)
+    TOGGLE:  'toggle',   // 开关型技能 (void_shield 绝缘 — 0 mana, 手动切换)
+    PASSIVE: 'passive'   // 被动技能 (null_field — 不生成按钮)
   };
 
   // effect → behavior 映射
   function effectToBehavior(effect, activation) {
     if (activation === 'passive') return BEHAVIOR.PASSIVE;
+    if (activation === 'toggle') return BEHAVIOR.TOGGLE;
     // Psyche 技能: 双重效果 (信息必定触发 + 反制vs Chaos)
     if (effect === 'clarity' || effect === 'refraction' || effect === 'reversal') return BEHAVIOR.PSYCHE;
     return BEHAVIOR.FORCE;
@@ -381,13 +383,18 @@
         var cost = skill.manaCost || 0;
         var disabled = true;
 
+        // 整局使用次数限制
+        var noUsesLeft = skill.usesPerGame > 0 && skill.gameUsesRemaining <= 0;
+
         switch (behavior) {
           case BEHAVIOR.FORCE:
             // 力量型：river 无意义，同 effect 不能重复激活，需要 mana
-            disabled = !canUse || mana.current < cost || skill.currentCooldown > 0;
+            disabled = !canUse || mana.current < cost || skill.currentCooldown > 0 || noUsesLeft;
             if (isRiver) disabled = true;
             if (queuedEffects[skill.effect]) disabled = true;
             btn.classList.toggle('skill-active', !!queuedEffects[skill.effect]);
+            // 整局已用完：特殊样式
+            btn.classList.toggle('skill-exhausted', noUsesLeft);
             break;
           case BEHAVIOR.PSYCHE:
             // Psyche 双重效果: river 无意义(反制部分影响发牌)，同 effect 不能重复
@@ -395,6 +402,12 @@
             if (isRiver) disabled = true;
             if (queuedEffects[skill.effect]) disabled = true;
             btn.classList.toggle('skill-active', !!queuedEffects[skill.effect]);
+            break;
+          case BEHAVIOR.TOGGLE:
+            // Toggle 型（绝缘）：无 mana 消耗，在下注阶段可随时切换
+            disabled = !isBettingPhase;
+            btn.classList.toggle('skill-active', !!skill.active);
+            btn.classList.toggle('toggle-on', !!skill.active);
             break;
         }
 
@@ -419,10 +432,32 @@
         case BEHAVIOR.PSYCHE:
           this._activatePsyche(skill);
           break;
+        case BEHAVIOR.TOGGLE:
+          this._activateToggle(skill);
+          break;
       }
 
       this.updateDisplay();
       this.updateButtons();
+    }
+
+    /**
+     * Toggle 型技能切换（绝缘）
+     * 零 Mana 消耗，手动切换开/关
+     */
+    _activateToggle(skill) {
+      var result = this.skillSystem.activatePlayerSkill(skill.uniqueId);
+      if (!result.success) {
+        if (this.onMessage) this.onMessage('无法切换');
+        return;
+      }
+
+      var name = SKILL_NAMES[skill.skillKey] || skill.skillKey;
+      var state = skill.active ? '开启' : '关闭';
+      if (this.onMessage) this.onMessage('[' + name + '] ' + state + ' — ' + (skill.description || ''));
+      if (this.onLog) this.onLog('SKILL_TOGGLE', {
+        skill: name, skillKey: skill.skillKey, active: skill.active
+      });
     }
 
     /**
@@ -437,7 +472,8 @@
           NOT_ACTIVE_TYPE: '被动技能无法手动激活',
           BACKLASH_ACTIVE: '魔运反噬中',
           ON_COOLDOWN: '冷却中 (' + (result.cooldown || 0) + '轮)',
-          INSUFFICIENT_MANA: '魔运不足 (需要 ' + (result.cost || 0) + ')'
+          INSUFFICIENT_MANA: '魔运不足 (需要 ' + (result.cost || 0) + ')',
+          NO_USES_REMAINING: '本局已使用完毕'
         };
         if (this.onMessage) this.onMessage(reasons[result.reason] || '技能不可用');
         return;
@@ -721,6 +757,18 @@
       var SUIT_SYMBOLS = { 0: '♠', 1: '♥', 2: '♣', 3: '♦' };
       var SUIT_COLORS = { 0: '#ecf0f1', 1: '#e74c3c', 2: '#2ecc71', 3: '#3498db' };
 
+      // ---- Void T3 反侦察：null_field 阻断透视信息效果 ----
+      if (this.skillSystem) {
+        var targetSkills = this.skillSystem.getPlayerSkills(target.id);
+        var hasNullField = targetSkills.some(function(s) {
+          return s.effect === 'null_field' && s.active;
+        });
+        if (hasNullField) {
+          if (this.onMessage) this.onMessage('[屏蔽] ' + target.name + ' 的虚无力场阻断了透视!');
+          return; // 透视完全失效
+        }
+      }
+
       // ---- Moirai > Psyche 克制：幸运迷雾降低透视精度 ----
       // 目标拥有活跃 fortune forces 时，tier 被降级
       var effectiveTier = tier;
@@ -969,9 +1017,16 @@
       var bgSvg = '<svg class="bg-icon-layer" viewBox="0 0 24 24" ' + bgFillOrStroke + '>' + bgPath + '</svg>';
 
       // Cost badge
-      var costHtml = visual.cost
-        ? '<div class="cost-badge">' + visual.cost + ' MP</div>'
-        : '<div class="cost-badge">--</div>';
+      var costHtml;
+      if (visual.cost) {
+        costHtml = '<div class="cost-badge">' + visual.cost + ' MP</div>';
+      } else if (skill.usesPerGame > 0) {
+        costHtml = '<div class="cost-badge uses-badge">限' + skill.usesPerGame + '次</div>';
+      } else if (skill.activation === 'toggle') {
+        costHtml = '<div class="cost-badge toggle-badge">开关</div>';
+      } else {
+        costHtml = '<div class="cost-badge">--</div>';
+      }
 
       var casterTag = skill.casterName ? '<span class="meta-caster">' + skill.casterName + '</span>' : '';
 

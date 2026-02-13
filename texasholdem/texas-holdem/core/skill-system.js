@@ -66,10 +66,10 @@
     refraction:   { attr: 'psyche', tier: 2, threshold: 40, effect: 'refraction',  activation: 'active',  manaCost: 25, cooldown: 0, power: 0,  description: '折射 — 透视手牌 + 消除敌方T3/T2 Curse并50%转化' },
     axiom:        { attr: 'psyche', tier: 1, threshold: 60, effect: 'reversal',    activation: 'active',  manaCost: 50, cooldown: 3, power: 0,  suppressAttr: 'chaos', description: '真理 — 胜率+透视 + 湮灭所有Curse并100%转化' },
 
-    // ===== Void (虚无) =====
-    static_field: { attr: 'void',   tier: 3, threshold: 20, effect: 'null_field',  activation: 'passive', manaCost: 0,  cooldown: 0, power: 8,  description: '屏蔽 — 信息干涉' },
-    insulation:   { attr: 'void',   tier: 2, threshold: 40, effect: 'void_shield', activation: 'passive', manaCost: 0,  cooldown: 0, power: 15, description: '绝缘 — 数值衰减' },
-    reality:      { attr: 'void',   tier: 1, threshold: 60, effect: 'purge_all',   activation: 'active',  manaCost: 50, cooldown: 5, power: 0,  suppressAll: true, description: '现实 — 物理回滚' }
+    // ===== Void (虚无) — 反魔法系，零 Mana 消耗，代价是策略成本 =====
+    static_field: { attr: 'void',   tier: 3, threshold: 20, effect: 'null_field',  activation: 'passive', manaCost: 0,  cooldown: 0, power: 8,  description: '屏蔽 — 反侦察：敌方信息类技能对己方失效' },
+    insulation:   { attr: 'void',   tier: 2, threshold: 40, effect: 'void_shield', activation: 'toggle',  manaCost: 0,  cooldown: 0, power: 15, description: '绝缘 — 全场魔法效果减半（敌我不分）' },
+    reality:      { attr: 'void',   tier: 1, threshold: 60, effect: 'purge_all',   activation: 'active',  manaCost: 0,  cooldown: 0, power: 0,  suppressAll: true, usesPerGame: 1, description: '现实 — 物理回滚（整局限1次）' }
   };
 
   /**
@@ -396,7 +396,10 @@
         suppressTiers: catalog.suppressTiers || null,
         suppressAttr: catalog.suppressAttr || null,
         suppressAll: catalog.suppressAll || false,
-        cannotAffect: catalog.cannotAffect || null
+        cannotAffect: catalog.cannotAffect || null,
+        // 整局使用次数限制
+        usesPerGame: catalog.usesPerGame || 0,  // 0 = 无限制
+        gameUsesRemaining: catalog.usesPerGame || 0  // 剩余可用次数
       };
 
       this.skills.set(skill.uniqueId, skill);
@@ -454,12 +457,23 @@
     activatePlayerSkill(uniqueId) {
       const skill = this.skills.get(uniqueId);
       if (!skill) return { success: false, reason: 'SKILL_NOT_FOUND' };
+
+      // Toggle 类型：切换开/关状态
+      if (skill.activation === ACTIVATION.TOGGLE) {
+        return this._toggleSkill(skill);
+      }
+
       if (skill.activation !== ACTIVATION.ACTIVE) return { success: false, reason: 'NOT_ACTIVE_TYPE' };
 
       // 反噬检查（仅 hero）
       const hid2 = this._heroId != null ? this._heroId : 0;
       if (skill.ownerId === hid2 && this.backlash.active) {
         return { success: false, reason: 'BACKLASH_ACTIVE', counter: this.backlash.counter };
+      }
+
+      // 整局使用次数检查
+      if (skill.usesPerGame > 0 && skill.gameUsesRemaining <= 0) {
+        return { success: false, reason: 'NO_USES_REMAINING', usesPerGame: skill.usesPerGame };
       }
 
       // 冷却检查
@@ -474,6 +488,11 @@
 
       // 激活
       skill.currentCooldown = skill.cooldown;
+
+      // 扣减整局使用次数
+      if (skill.usesPerGame > 0) {
+        skill.gameUsesRemaining--;
+      }
 
       // 根据 effect 类型处理
       // Psyche 技能都是双重效果: 信息(必定) + 反制(vs Chaos)
@@ -512,6 +531,36 @@
       });
 
       return { success: true, skill };
+    }
+
+    // ========== Toggle 技能切换 ==========
+
+    /**
+     * 切换 toggle 类型技能的开/关状态
+     * Toggle 技能特性：
+     *   - 不消耗 Mana
+     *   - 开启后持续生效直到手动关闭
+     *   - 效果对敌我双方都生效（如绝缘的全场减半）
+     * @param {object} skill
+     * @returns {{ success, reason?, skill? }}
+     */
+    _toggleSkill(skill) {
+      // 切换状态
+      skill.active = !skill.active;
+
+      if (skill.active) {
+        this._log('SKILL_TOGGLE_ON', {
+          owner: skill.ownerName, key: skill.skillKey, effect: skill.effect
+        });
+        this.emit('skill:toggle_on', { skill });
+      } else {
+        this._log('SKILL_TOGGLE_OFF', {
+          owner: skill.ownerName, key: skill.skillKey, effect: skill.effect
+        });
+        this.emit('skill:toggle_off', { skill });
+      }
+
+      return { success: true, skill, toggled: skill.active };
     }
 
     // ========== NPC AI 技能决策 ==========
@@ -757,13 +806,8 @@
       // 恢复所有 mana
       this.regenAllMana();
 
-      // 重置 toggle 技能
-      for (const [, skill] of this.skills) {
-        if (skill.activation === ACTIVATION.TOGGLE && skill.active) {
-          skill.active = false;
-          this.emit('skill:toggle_reset', { skill });
-        }
-      }
+      // 注意：toggle 技能（如绝缘）不在回合结束时重置
+      // 它们由玩家手动切换开/关，跨手牌保持状态
 
       // 冷却递减
       for (const [, skill] of this.skills) {
@@ -781,9 +825,10 @@
     onNewHand() {
       this.pendingForces = [];
 
-      // 重置所有非 passive 技能状态
+      // 重置所有非 passive/toggle 技能状态
+      // Toggle 技能跨手牌保持状态，由玩家手动切换
       for (const [, skill] of this.skills) {
-        if (skill.activation !== ACTIVATION.PASSIVE) {
+        if (skill.activation !== ACTIVATION.PASSIVE && skill.activation !== ACTIVATION.TOGGLE) {
           skill.active = false;
         }
         skill.currentCooldown = 0;
@@ -806,6 +851,10 @@
       for (const [, skill] of this.skills) {
         skill.active = (skill.activation === ACTIVATION.PASSIVE);
         skill.currentCooldown = 0;
+        // 重置整局使用次数
+        if (skill.usesPerGame > 0) {
+          skill.gameUsesRemaining = skill.usesPerGame;
+        }
       }
 
       this.emit('system:reset', {});
@@ -833,7 +882,9 @@
           activation: s.activation,
           active: s.active,
           manaCost: s.manaCost,
-          cooldown: s.currentCooldown
+          cooldown: s.currentCooldown,
+          usesPerGame: s.usesPerGame || 0,
+          gameUsesRemaining: s.gameUsesRemaining != null ? s.gameUsesRemaining : 0
         })),
       };
     }

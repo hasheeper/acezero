@@ -1,19 +1,23 @@
-/* global Hand */
+/* global Hand, EquityEstimator */
 
 /**
- * Poker AI - 德州扑克AI决策系统
+ * Poker AI - 德州扑克AI决策系统 (v2 — 效用函数架构)
  * 
- * 支持三个维度的个性配置：
- * 1. 风险喜好 (Risk Appetite): rock, balanced, aggressive, maniac, passive
- * 2. 难度等级 (Difficulty): noob, regular, pro
- * 3. 情绪状态 (Emotion): calm, confident, tilt, fearful, desperate, euphoric
+ * 三层架构：
+ *   第 2 层 (底层): 胜率评估 — noob 查表 / regular+ 蒙特卡洛 / pro+ 魔运修正
+ *   第 1 层 (中层): 效用函数 — 6 维权重打分 + Softmax 加权随机选择
+ *   第 3 层 (顶层): 情绪修正 — 温度 delta 影响理性程度
  * 
- * AI决策基于：
- * - 当前手牌强度（使用pokersolver评估）
- * - 底池赔率 (Pot Odds)
- * - 个性化阈值和噪音
- * - 价值下注逻辑（强牌必须下注榨取价值）
- * - 情绪修正（影响噪音、诈唬、下注尺度等）
+ * 四档质变：
+ *   noob    — 查表胜率 + 高温度(随机) + 二极化下注 + 只看自己牌
+ *   regular — 蒙特卡洛 + 标准温度 + 线性泄露下注 + 多因素均衡
+ *   pro     — MC+魔运修正 + 低温度(理性) + 固定比例下注 + 魔运权重最高
+ *   boss    — 同pro + 极低温度 + 反向欺骗下注 + 攻击倾向最高
+ * 
+ * 三维个性配置：
+ *   1. 风险喜好 (Risk Appetite): rock, balanced, aggressive, maniac, passive
+ *   2. 难度等级 (Difficulty): noob, regular, pro, boss
+ *   3. 情绪状态 (Emotion): calm, confident, tilt, fearful, desperate, euphoric
  */
 
 (function(global) {
@@ -97,6 +101,14 @@
       positionAwareness: 1.0,
       valueBetAwareness: 1.0,
       optimism: 0               // 理性，不幻想
+    },
+    boss: {
+      description: 'Boss级，碾压+剧本',
+      noiseRange: 3,
+      potOddsAwareness: 1.0,
+      positionAwareness: 1.0,
+      valueBetAwareness: 1.0,
+      optimism: 0
     }
   };
 
@@ -243,12 +255,646 @@
     9: 100   // Straight Flush - 无敌
   };
 
+  // ========== 效用函数系统 (Utility System) ==========
+  // 替代 if-else 瀑布，所有因素同时参与打分
+
+  // 候选动作模板
+  const ACTION_CANDIDATES = [
+    { action: ACTIONS.FOLD,  sizing: null },
+    { action: ACTIONS.CHECK, sizing: null },
+    { action: ACTIONS.CALL,  sizing: null },
+    { action: ACTIONS.RAISE, sizing: 'small'  },  // ~33% pot
+    { action: ACTIONS.RAISE, sizing: 'medium' },  // ~66% pot
+    { action: ACTIONS.RAISE, sizing: 'large'  },  // ~100% pot
+    { action: ACTIONS.RAISE, sizing: 'allin'  }   // all-in
+  ];
+
+  // 四档权重向量: [手牌, 赔率, 位置, 对手, 魔运, 攻击]
+  const UTILITY_WEIGHTS = {
+    noob:    { hand: 0.70, potOdds: 0.05, position: 0.00, opponent: 0.00, magic: 0.05, aggro: 0.20 },
+    regular: { hand: 0.40, potOdds: 0.20, position: 0.10, opponent: 0.00, magic: 0.15, aggro: 0.15 },
+    pro:     { hand: 0.20, potOdds: 0.15, position: 0.10, opponent: 0.15, magic: 0.30, aggro: 0.10 },
+    boss:    { hand: 0.15, potOdds: 0.10, position: 0.05, opponent: 0.10, magic: 0.35, aggro: 0.25 }
+  };
+
+  // Softmax 温度：越低越理性（几乎总选最优），越高越随机
+  const TEMPERATURE = {
+    noob:    2.0,
+    regular: 1.0,
+    pro:     0.5,
+    boss:    0.3
+  };
+
+  // 风险喜好对攻击倾向的修正
+  const RISK_AGGRO_DELTA = {
+    rock:       -0.10,
+    balanced:    0.00,
+    aggressive:  0.10,
+    maniac:      0.20,
+    passive:    -0.15
+  };
+
+  // 情绪对温度的修正
+  const EMOTION_TEMP_DELTA = {
+    calm: 0, confident: -0.1, tilt: 0.8, fearful: 0.3, desperate: 0.3, euphoric: 0.2
+  };
+
+  // ---- 评分函数 ----
+
+  /**
+   * 手牌评分：equity 越高，raise/call 越好；equity 低时 fold 好
+   * @param {number} equity - 0~1 胜率
+   * @param {string} action - 动作类型
+   * @returns {number} -1 ~ +1
+   */
+  function scoreHand(equity, action) {
+    if (action === ACTIONS.FOLD) {
+      // equity 低时 fold 得分高，equity 高时 fold 得分极低
+      return (1 - equity) * 0.6 - 0.3; // equity=0 → +0.3, equity=0.5 → 0, equity=1 → -0.3
+    }
+    if (action === ACTIONS.CHECK) {
+      // check 是中性选择，弱牌时略好
+      return 0.1 - equity * 0.15; // equity=0 → +0.1, equity=1 → -0.05
+    }
+    // call / raise: equity 越高越好
+    const base = equity * 1.5 - 0.4; // equity=0 → -0.4, equity=0.5 → +0.35, equity=1 → +1.1
+    return Math.max(-1, Math.min(1, base));
+  }
+
+  /**
+   * 底池赔率评分：call 时赔率好=正分，赔率差=负分
+   * @param {number} equity   - 0~1
+   * @param {number} potOdds  - toCall / (pot + toCall)
+   * @param {string} action
+   * @param {number} toCall
+   * @param {number} pot
+   * @returns {number}
+   */
+  function scorePotOdds(equity, potOdds, action, toCall, pot) {
+    if (action === ACTIONS.FOLD || action === ACTIONS.CHECK) return 0;
+    if (action === ACTIONS.CALL) {
+      // 赔率好 = equity > potOdds → 正分
+      const edge = equity - potOdds;
+      return Math.max(-1, Math.min(1, edge * 3));
+    }
+    // raise: 只有 equity 足够时才奖励加注，否则惩罚
+    // equity < 0.35 时加注是负分（别用垃圾牌加注）
+    const raiseEdge = equity - 0.35;
+    return Math.max(-0.5, Math.min(0.5, raiseEdge * 2));
+  }
+
+  /**
+   * 位置评分：后位 raise 加分，前位 raise 减分
+   * @param {string} action
+   * @param {number} opponents - 剩余对手数
+   * @param {string} phase
+   * @returns {number}
+   */
+  function scorePosition(action, opponents, phase) {
+    if (action === ACTIONS.FOLD || action === ACTIONS.CHECK) return 0;
+    // 简化：对手越少 = 位置越好（接近按钮位）
+    // 多人局 raise 风险大
+    const posBonus = Math.max(-0.3, 0.3 - opponents * 0.15);
+    if (action === ACTIONS.CALL) return posBonus * 0.3;
+    return posBonus; // raise 受位置影响更大
+  }
+
+  /**
+   * 对手建模评分（pro/boss 专用，其他档位权重=0 所以不影响）
+   * @param {object} ctx - 决策上下文
+   * @param {string} action
+   * @returns {number}
+   */
+  function scoreOpponent(ctx, action) {
+    // 对手 mana 低 → raise 加分（没魔运反制）
+    const oppManaRatio = ctx.opponentManaRatio != null ? ctx.opponentManaRatio : 0.5;
+    if (action === ACTIONS.FOLD || action === ACTIONS.CHECK) return 0;
+    if (action === ACTIONS.CALL) return 0;
+    // raise 时，对手 mana 越低越好
+    return (1 - oppManaRatio) * 0.5;
+  }
+
+  /**
+   * 魔运态势评分：己方魔运优势 → raise 加分，劣势 → fold 加分
+   * @param {number} magicLevel - 己方最高魔运等级 0~5
+   * @param {number} netForce   - 净魔运力量（可为负）
+   * @param {string} action
+   * @returns {number}
+   */
+  function scoreMagic(magicLevel, netForce, action) {
+    // 归一化到 -1 ~ +1
+    const advantage = Math.tanh((netForce || 0) * 0.02 + (magicLevel || 0) * 0.1);
+    if (action === ACTIONS.FOLD) {
+      return -advantage * 0.5; // 魔运优势时 fold 得分低
+    }
+    if (action === ACTIONS.CHECK) {
+      return -advantage * 0.2;
+    }
+    // call/raise: 魔运优势越大越好
+    return advantage * 0.6;
+  }
+
+  /**
+   * 攻击倾向评分：raise/allin 固定加分
+   * @param {string} action
+   * @param {string} sizing
+   * @returns {number}
+   */
+  function scoreAggro(action, sizing) {
+    if (action === ACTIONS.FOLD) return -0.3;
+    if (action === ACTIONS.CHECK) return -0.1;
+    if (action === ACTIONS.CALL) return 0;
+    // raise 越大分越高
+    if (sizing === 'small') return 0.2;
+    if (sizing === 'medium') return 0.35;
+    if (sizing === 'large') return 0.45;
+    if (sizing === 'allin') return 0.55;
+    return 0.3;
+  }
+
+  // ---- Softmax ----
+
+  function softmaxSelect(utilities, temperature) {
+    const t = Math.max(0.1, temperature);
+    const maxU = Math.max(...utilities);
+    const exps = utilities.map(u => Math.exp((u - maxU) / t));
+    const sumExp = exps.reduce((s, e) => s + e, 0);
+    const probs = exps.map(e => e / sumExp);
+
+    const r = Math.random();
+    let cumulative = 0;
+    for (let i = 0; i < probs.length; i++) {
+      cumulative += probs[i];
+      if (r <= cumulative) return { index: i, probs };
+    }
+    return { index: probs.length - 1, probs };
+  }
+
+  // ---- 下注尺度分档 ----
+
+  /**
+   * 根据难度档位计算下注金额
+   * noob:    二极化（min-raise 或 all-in）
+   * regular: 线性泄露（强牌大注弱牌小注）
+   * pro:     固定比例 60-75% pot
+   * boss:    反向欺骗（20% 概率强牌小注、弱牌大注）
+   */
+  function calculateBetSize(difficulty, sizing, equity, pot, stack, minRaise) {
+    let amount;
+
+    if (difficulty === 'noob') {
+      // 二极化：min-raise 或随机大注，但不会随机梭哈
+      if (sizing === 'allin') {
+        amount = stack;
+      } else if (Math.random() < 0.35) {
+        // 偶尔下大注（2-3x pot），但不是 all-in
+        amount = Math.floor(pot * (1.5 + Math.random() * 1.5));
+      } else {
+        amount = minRaise;
+      }
+    } else if (difficulty === 'regular') {
+      // 线性泄露：equity 直接映射到下注比例（可被读）
+      // equity 0.3 → 30% pot, equity 0.8 → 80% pot
+      const sizingMap = { small: 0.33, medium: 0.66, large: 1.0, allin: 999 };
+      const targetRatio = sizingMap[sizing] || 0.5;
+      // 牌力修正：强牌自然下大注（泄露线索）
+      const leakRatio = 0.3 + equity * 0.7;
+      const finalRatio = Math.min(targetRatio, leakRatio);
+      amount = sizing === 'allin' ? stack : Math.floor(pot * finalRatio);
+    } else if (difficulty === 'pro') {
+      // 固定比例：不泄露信息
+      const fixedRatio = 0.60 + Math.random() * 0.15; // 60-75% pot
+      if (sizing === 'allin') {
+        amount = stack;
+      } else {
+        amount = Math.floor(pot * fixedRatio);
+      }
+    } else {
+      // boss: 反向欺骗
+      const invert = Math.random() < 0.20;
+      const base = invert ? (1 - equity) : equity;
+      const ratio = 0.4 + base * 0.6;
+      if (sizing === 'allin') {
+        amount = stack;
+      } else {
+        amount = Math.floor(pot * ratio);
+      }
+    }
+
+    amount = Math.max(amount, minRaise);
+    amount = Math.min(amount, stack);
+    return amount;
+  }
+
+  // ========== 行为状态机 (Behavior FSM) ==========
+  // 驱动效用权重和温度的动态变化
+  // 状态由局中事件自动触发转移，不同难度有不同的状态集和衰减速度
+
+  const FSM_STATES = {
+    CAUTIOUS: 'cautious',   // 谨慎：基准状态
+    HUNTING:  'hunting',    // 狩猎：赢了大锅后激进
+    TILTED:   'tilted',     // 上头：被 Bad Beat 后混乱
+    CORNERED: 'cornered'    // 被逼：筹码见底，孤注一掷
+  };
+
+  // 状态对效用权重和温度的修正
+  const FSM_MODIFIERS = {
+    cautious: { aggroDelta: 0,     tempDelta: 0,    label: '谨慎' },
+    hunting:  { aggroDelta: 0.15,  tempDelta: -0.1, label: '狩猎' },
+    tilted:   { aggroDelta: 0.35,  tempDelta: 0.8,  label: '上头' },
+    cornered: { aggroDelta: 0.25,  tempDelta: 0.3,  label: '被逼' }
+  };
+
+  // 上头持续手数（按难度）
+  const TILT_DURATION = {
+    noob:    5,
+    regular: 3,
+    pro:     1,
+    boss:    0   // boss 不会上头（用阶段脚本替代）
+  };
+
+  // 各难度可用的状态集
+  const DIFFICULTY_STATES = {
+    noob:    [FSM_STATES.CAUTIOUS, FSM_STATES.TILTED],                                          // 只有 2 态
+    regular: [FSM_STATES.CAUTIOUS, FSM_STATES.HUNTING, FSM_STATES.TILTED, FSM_STATES.CORNERED], // 完整 4 态
+    pro:     [FSM_STATES.CAUTIOUS, FSM_STATES.HUNTING, FSM_STATES.TILTED, FSM_STATES.CORNERED], // 完整 4 态
+    boss:    [FSM_STATES.CAUTIOUS, FSM_STATES.HUNTING, FSM_STATES.CORNERED]                     // 3 态，无 tilt
+  };
+
+  class BehaviorFSM {
+    /**
+     * @param {string} difficulty - noob/regular/pro/boss
+     * @param {number} initialChips - 起始筹码（用于判断 CORNERED）
+     */
+    constructor(difficulty, initialChips) {
+      this.difficulty = difficulty || 'regular';
+      this.state = FSM_STATES.CAUTIOUS;
+      this.initialChips = initialChips || 1000;
+      this.tiltCounter = 0;       // 上头剩余手数
+      this.foldStreak = 0;        // 连续弃牌计数
+      this.availableStates = DIFFICULTY_STATES[this.difficulty] || DIFFICULTY_STATES.regular;
+    }
+
+    /**
+     * 获取当前状态的修正值
+     * @returns {{ aggroDelta: number, tempDelta: number, state: string, label: string }}
+     */
+    getModifiers() {
+      const mod = FSM_MODIFIERS[this.state] || FSM_MODIFIERS.cautious;
+      return {
+        aggroDelta: mod.aggroDelta,
+        tempDelta: mod.tempDelta,
+        state: this.state,
+        label: mod.label
+      };
+    }
+
+    /**
+     * 手牌结束后触发事件，驱动状态转移
+     * @param {string} event - 事件类型
+     * @param {object} data  - 事件数据
+     *
+     * 事件类型:
+     *   'win_big'    — 赢了大锅 (pot > 10×BB)        data: { pot, bb }
+     *   'bad_beat'   — 被 Bad Beat (翻前领先但输)     data: {}
+     *   'win_normal' — 普通赢                         data: {}
+     *   'lose'       — 输了                           data: {}
+     *   'fold'       — 弃牌                           data: {}
+     *   'chip_check' — 每手结束检查筹码               data: { chips }
+     */
+    onEvent(event, data) {
+      const prev = this.state;
+      data = data || {};
+
+      // 1. 上头衰减（每手 -1）
+      if (this.tiltCounter > 0) {
+        this.tiltCounter--;
+        if (this.tiltCounter <= 0 && this.state === FSM_STATES.TILTED) {
+          this.state = FSM_STATES.CAUTIOUS;
+        }
+      }
+
+      // 2. 事件驱动转移
+      switch (event) {
+        case 'win_big':
+          if (this._canEnter(FSM_STATES.HUNTING)) {
+            this.state = FSM_STATES.HUNTING;
+            this.foldStreak = 0;
+          }
+          break;
+
+        case 'bad_beat':
+          if (this._canEnter(FSM_STATES.TILTED)) {
+            this.state = FSM_STATES.TILTED;
+            this.tiltCounter = TILT_DURATION[this.difficulty] || 3;
+            this.foldStreak = 0;
+          }
+          break;
+
+        case 'win_normal':
+          this.foldStreak = 0;
+          // 赢了就从 CORNERED 恢复
+          if (this.state === FSM_STATES.CORNERED) {
+            this.state = FSM_STATES.CAUTIOUS;
+          }
+          // 赢了就从 HUNTING 回到 CAUTIOUS（一次性）
+          // 不做：让 HUNTING 持续到下次输
+          break;
+
+        case 'lose':
+          this.foldStreak = 0;
+          // 输了就从 HUNTING 回到 CAUTIOUS
+          if (this.state === FSM_STATES.HUNTING) {
+            this.state = FSM_STATES.CAUTIOUS;
+          }
+          break;
+
+        case 'fold':
+          this.foldStreak++;
+          // 连续弃牌 3 手 → 从 CAUTIOUS 切到 HUNTING（不耐烦）
+          if (this.foldStreak >= 3 && this.state === FSM_STATES.CAUTIOUS) {
+            if (this._canEnter(FSM_STATES.HUNTING)) {
+              this.state = FSM_STATES.HUNTING;
+              this.foldStreak = 0;
+            }
+          }
+          break;
+
+        case 'chip_check':
+          // 筹码 < 30% 起始值 → CORNERED
+          if (data.chips != null && data.chips < this.initialChips * 0.3) {
+            if (this._canEnter(FSM_STATES.CORNERED) && this.state !== FSM_STATES.TILTED) {
+              this.state = FSM_STATES.CORNERED;
+            }
+          }
+          // 筹码恢复 > 50% → 脱离 CORNERED
+          if (data.chips != null && data.chips >= this.initialChips * 0.5) {
+            if (this.state === FSM_STATES.CORNERED) {
+              this.state = FSM_STATES.CAUTIOUS;
+            }
+          }
+          break;
+      }
+
+      // 3. 日志
+      if (this.state !== prev) {
+        console.log('[FSM] ' + prev + ' → ' + this.state +
+          ' (event=' + event + ' diff=' + this.difficulty + ')');
+      }
+    }
+
+    /**
+     * 检查该难度是否可以进入某状态
+     */
+    _canEnter(state) {
+      return this.availableStates.indexOf(state) !== -1;
+    }
+
+    /**
+     * 重置（新一局）
+     */
+    reset(initialChips) {
+      this.state = FSM_STATES.CAUTIOUS;
+      this.tiltCounter = 0;
+      this.foldStreak = 0;
+      if (initialChips != null) this.initialChips = initialChips;
+    }
+  }
+
+  // ========== Boss 阶段脚本 (Phase 6) ==========
+  // Boss 不用通用 FSM，而是按筹码阶段执行预设脚本
+  // 三阶段：从容(>70%) → 认真(30-70%) → 狂暴(<30%)
+
+  const BOSS_PHASES = {
+    COMPOSED: 'composed',   // 从容：像 pro 一样精准
+    SERIOUS:  'serious',    // 认真：加大魔运投入
+    ENRAGED:  'enraged'     // 狂暴：全力输出
+  };
+
+  const BOSS_PHASE_MODIFIERS = {
+    composed: { aggroDelta: 0,    tempDelta: 0,    magicDelta: 0,    handFloor: 45, label: '从容' },
+    serious:  { aggroDelta: 0.15, tempDelta: -0.05, magicDelta: 0.10, handFloor: 50, label: '认真' },
+    enraged:  { aggroDelta: 0.30, tempDelta: -0.15, magicDelta: 0.20, handFloor: 60, label: '狂暴' }
+  };
+
+  class BossScript {
+    constructor(initialChips) {
+      this.initialChips = initialChips || 1000;
+      this.phase = BOSS_PHASES.COMPOSED;
+      this.weaknessTiltCounter = 0; // 弱点触发后的 tilt 手数
+    }
+
+    /**
+     * 根据当前筹码更新阶段
+     * @param {number} chips - 当前筹码
+     */
+    updatePhase(chips) {
+      const prev = this.phase;
+      const ratio = chips / Math.max(1, this.initialChips);
+
+      if (ratio > 0.70) {
+        this.phase = BOSS_PHASES.COMPOSED;
+      } else if (ratio > 0.30) {
+        this.phase = BOSS_PHASES.SERIOUS;
+      } else {
+        this.phase = BOSS_PHASES.ENRAGED;
+      }
+
+      // 弱点 tilt 衰减
+      if (this.weaknessTiltCounter > 0) {
+        this.weaknessTiltCounter--;
+      }
+
+      if (this.phase !== prev) {
+        console.log('[BossScript] ' + prev + ' → ' + this.phase +
+          ' (chips=' + chips + ' ratio=' + (ratio * 100).toFixed(0) + '%)');
+      }
+    }
+
+    /**
+     * 弱点触发：Boss 被特定技能反制后陷入动摇
+     * @param {number} duration - 动摇持续手数
+     */
+    triggerWeakness(duration) {
+      this.weaknessTiltCounter = duration || 2;
+      console.log('[BossScript] WEAKNESS TRIGGERED! tilt for ' + this.weaknessTiltCounter + ' hands');
+    }
+
+    /**
+     * 获取当前阶段的修正值
+     * 弱点触发时覆盖为 tilt 模式
+     */
+    getModifiers() {
+      // 弱点 tilt 覆盖一切
+      if (this.weaknessTiltCounter > 0) {
+        return {
+          aggroDelta: 0.30,
+          tempDelta: 1.5,       // 温度暴涨 → 随机
+          magicDelta: -0.20,    // 魔运权重暴跌
+          handFloor: 30,        // 手牌保底降低
+          phase: 'weakness',
+          label: '动摇'
+        };
+      }
+
+      const mod = BOSS_PHASE_MODIFIERS[this.phase] || BOSS_PHASE_MODIFIERS.composed;
+      return {
+        aggroDelta: mod.aggroDelta,
+        tempDelta: mod.tempDelta,
+        magicDelta: mod.magicDelta,
+        handFloor: mod.handFloor,
+        phase: this.phase,
+        label: mod.label
+      };
+    }
+
+    reset(initialChips) {
+      this.phase = BOSS_PHASES.COMPOSED;
+      this.weaknessTiltCounter = 0;
+      if (initialChips != null) this.initialChips = initialChips;
+    }
+  }
+
+  // ========== 对手建模 (Phase 7) ==========
+  // pro/boss 专用：追踪对手行为模式，影响 scoreOpponent 评分
+  // 注意：1-3 手对局中数据极少，权重本身就低 (pro:0.15, boss:0.10)
+  // 更多是"感觉 AI 在观察你"的叙事工具
+
+  class OpponentModel {
+    constructor() {
+      // 每个对手的统计数据，按 playerId 索引
+      this.stats = {};
+    }
+
+    /**
+     * 获取或初始化某对手的统计
+     */
+    _getStats(playerId) {
+      if (!this.stats[playerId]) {
+        this.stats[playerId] = {
+          handsPlayed: 0,
+          vpipCount: 0,       // 主动入池次数
+          pfrCount: 0,        // 翻前加注次数
+          aggActions: 0,      // 攻击性动作（raise/allin）
+          totalActions: 0,    // 总动作数
+          foldToBetCount: 0,  // 面对下注弃牌次数
+          facedBetCount: 0,   // 面对下注次数
+          lastAction: null,
+          lastBetSize: 0
+        };
+      }
+      return this.stats[playerId];
+    }
+
+    /**
+     * 记录对手的一个动作
+     * @param {number} playerId
+     * @param {string} action - fold/check/call/raise/allin
+     * @param {object} ctx - { phase, toCall, amount, pot }
+     */
+    recordAction(playerId, action, ctx) {
+      const s = this._getStats(playerId);
+      s.totalActions++;
+      s.lastAction = action;
+
+      if (ctx && ctx.phase === 'preflop') {
+        if (action === 'call' || action === 'raise' || action === 'allin') {
+          s.vpipCount++;
+        }
+        if (action === 'raise' || action === 'allin') {
+          s.pfrCount++;
+        }
+      }
+
+      if (action === 'raise' || action === 'allin') {
+        s.aggActions++;
+        s.lastBetSize = ctx ? ctx.amount || 0 : 0;
+      }
+
+      if (ctx && ctx.toCall > 0) {
+        s.facedBetCount++;
+        if (action === 'fold') {
+          s.foldToBetCount++;
+        }
+      }
+    }
+
+    /**
+     * 记录一手结束（增加 handsPlayed）
+     */
+    recordHandEnd(playerId) {
+      const s = this._getStats(playerId);
+      s.handsPlayed++;
+    }
+
+    /**
+     * 获取对手的行为画像
+     * @param {number} playerId
+     * @returns {{ vpip, pfr, aggFreq, foldToBet, handsPlayed }}
+     */
+    getProfile(playerId) {
+      const s = this._getStats(playerId);
+      const hands = Math.max(1, s.handsPlayed);
+      const actions = Math.max(1, s.totalActions);
+      const faced = Math.max(1, s.facedBetCount);
+
+      return {
+        vpip:       s.vpipCount / hands,
+        pfr:        s.pfrCount / hands,
+        aggFreq:    s.aggActions / actions,
+        foldToBet:  s.foldToBetCount / faced,
+        handsPlayed: s.handsPlayed,
+        lastAction: s.lastAction,
+        lastBetSize: s.lastBetSize
+      };
+    }
+
+    /**
+     * 计算对手建模评分（替代原来的静态 scoreOpponent）
+     * @param {number} playerId - 主要对手 ID（筹码最多的活跃对手）
+     * @param {number} oppManaRatio - 对手平均 mana 百分比
+     * @param {string} action - 候选动作
+     * @returns {number} -1 ~ +1
+     */
+    score(playerId, oppManaRatio, action) {
+      if (action === ACTIONS.FOLD || action === ACTIONS.CHECK) return 0;
+
+      const profile = this.getProfile(playerId);
+      let bonus = 0;
+
+      // 对手容易弃牌 → raise 加分
+      if (profile.foldToBet > 0.5 && profile.handsPlayed >= 2) {
+        bonus += (profile.foldToBet - 0.3) * 0.6;
+      }
+
+      // 对手很激进 → call 加分（让他犯错），raise 减分
+      if (profile.aggFreq > 0.5 && profile.handsPlayed >= 2) {
+        if (action === ACTIONS.CALL) {
+          bonus += (profile.aggFreq - 0.3) * 0.4;
+        } else {
+          bonus -= 0.1; // 对激进对手 raise 风险高
+        }
+      }
+
+      // 对手 mana 低 → raise 加分（没魔运反制）
+      if (oppManaRatio != null) {
+        bonus += (1 - oppManaRatio) * 0.3;
+      }
+
+      return Math.max(-1, Math.min(1, bonus));
+    }
+
+    reset() {
+      this.stats = {};
+    }
+  }
+
   // ========== PokerAI 类 ==========
   class PokerAI {
     /**
      * @param {Object} personality - 个性配置
      * @param {string} personality.riskAppetite - 风险喜好: rock/balanced/aggressive/maniac/passive
-     * @param {string} personality.difficulty - 难度等级: noob/regular/pro
+     * @param {string} personality.difficulty - 难度等级: noob/regular/pro/boss
      * @param {string} personality.emotion - 情绪状态: calm/confident/tilt/fearful/desperate/euphoric
      */
     constructor(personality = {}) {
@@ -266,6 +912,16 @@
       // 合并：基础 profile + 情绪 delta
       this.risk = this._applyEmotion(this.riskBase, this.emotion);
       this.difficulty = this._applyEmotionDifficulty(this.difficultyBase, this.emotion);
+
+      // 行为状态机（Phase 4）
+      this.fsm = new BehaviorFSM(difficultyType);
+
+      // Boss 阶段脚本（Phase 6）— 仅 boss 难度
+      this.bossScript = difficultyType === 'boss' ? new BossScript() : null;
+
+      // 对手建模（Phase 7）— pro/boss 专用
+      this.opponentModel = (difficultyType === 'pro' || difficultyType === 'boss')
+        ? new OpponentModel() : null;
     }
 
     /**
@@ -305,19 +961,38 @@
     }
 
     /**
-     * 做出决策
+     * 做出决策 — 效用函数版
      * @param {Object} context - 决策上下文
      */
     decide(context) {
       const { holeCards, boardCards, pot, toCall, aiStack, phase, minRaise, activeOpponentCount } = context;
       const playerName = context.playerName || '?';
-      
-      // 魔运等级：有魔运的高手更自信，不容易弃牌
       const magicLevel = context.magicLevel || 0;
-      
-      // 1. 计算原始手牌强度
-      let rawStrength = this.calculateRawStrength(holeCards, boardCards, phase);
-      
+      const netForce = context.netForce || 0;
+      const opponents = activeOpponentCount || 1;
+      const raiseCount = context.raiseCount || 0;
+
+      // 1. 胜率评估 — 分档
+      let equity;
+      const rawStrength = this.calculateRawStrength(holeCards, boardCards, phase);
+
+      if (this.difficultyType === 'noob') {
+        // noob: 查表（只看自己牌，不懂公共牌纹理的精确影响）
+        equity = rawStrength / 100;
+      } else if (typeof EquityEstimator !== 'undefined') {
+        // regular+: 蒙特卡洛
+        if (this.difficultyType === 'pro' || this.difficultyType === 'boss') {
+          const mc = EquityEstimator.estimateWithMagic(holeCards, boardCards || [], opponents, netForce, 200);
+          equity = mc.perceivedEquity;
+        } else {
+          const mc = EquityEstimator.estimate(holeCards, boardCards || [], opponents, 200);
+          equity = mc.equity;
+        }
+      } else {
+        // fallback: 查表
+        equity = rawStrength / 100;
+      }
+
       // 1.5 获取手牌名称（用于日志）
       let handName = phase === 'preflop' ? 'Preflop' : '?';
       if (phase !== 'preflop' && boardCards && boardCards.length > 0) {
@@ -326,58 +1001,219 @@
           handName = hr.name || '?';
         } catch (e) { handName = '?'; }
       }
-      
-      // 2. 添加难度噪音 + 盲目乐观值（只影响感知，不影响 rawStrength）
-      const noise = (Math.random() - 0.5) * this.difficulty.noiseRange;
-      const optimism = (this.difficulty.optimism || 0) * 0.5;
-      let adjustedStrength = Math.max(0, Math.min(100, rawStrength + noise + optimism));
-      
-      // 2.5 魔运自信加成：有魔运的AI感知到命运偏向自己，更不容易弃牌
-      // magicLevel 1~5 → +5~+25 的心理加成
-      if (magicLevel > 0) {
-        adjustedStrength += magicLevel * 5;
-        adjustedStrength = Math.min(100, adjustedStrength);
-      }
-      
-      // 3. 计算底池赔率
+
+      // 2. 构建可用候选动作（equity 用于硬性门控 all-in）
+      const candidates = this._buildCandidates(toCall, aiStack, minRaise, pot, equity, phase);
+
+      // 3. 计算每个候选动作的效用分
       const potOdds = toCall > 0 ? toCall / (pot + toCall) : 0;
-      
-      // 4. 检查是否诈唱 - 🎯 多人局禁止乱诈唱
-      const opponents = activeOpponentCount || 1;
-      let effectiveBluffFreq = this.risk.bluffFrequency;
-      
-      // 多人局大幅降低诈唱频率（诈唱成功率极低）
-      if (opponents > 2) {
-        effectiveBluffFreq *= 0.3; // 降到 30%
-      } else if (opponents > 1) {
-        effectiveBluffFreq *= 0.6; // 降到 60%
+      const w = Object.assign({}, UTILITY_WEIGHTS[this.difficultyType] || UTILITY_WEIGHTS.regular);
+      const riskAggroDelta = RISK_AGGRO_DELTA[this.riskType] || 0;
+
+      // FSM 状态修正
+      const fsmMod = this.fsm.getModifiers();
+      let aggroDelta = riskAggroDelta + fsmMod.aggroDelta;
+      let extraTempDelta = fsmMod.tempDelta;
+
+      // Boss 阶段脚本修正（覆盖 FSM 的部分效果）
+      let bossLabel = '';
+      if (this.bossScript) {
+        this.bossScript.updatePhase(aiStack);
+        const bossMod = this.bossScript.getModifiers();
+        aggroDelta += bossMod.aggroDelta;
+        extraTempDelta += bossMod.tempDelta;
+        // 魔运权重动态调整
+        w.magic = Math.max(0, Math.min(1, w.magic + bossMod.magicDelta));
+        bossLabel = bossMod.label;
       }
-      
-      const isBluffing = Math.random() < effectiveBluffFreq && rawStrength <= 20;
-      
-      // 5. 决策逻辑
-      const decision = this.makeDecision(context, adjustedStrength, rawStrength, potOdds, isBluffing, opponents, magicLevel);
-      
-      // 6. 详细日志
+
+      // 对手建模：pro/boss 用 OpponentModel 替代静态 scoreOpponent
+      const heroId = context.heroId != null ? context.heroId : 0;
+      const oppManaRatio = context.opponentManaRatio != null ? context.opponentManaRatio : 0.5;
+
+      // Pot-committed 快速通道：剩余筹码极少，toCall 几乎等于全部身家时直接 call
+      // 条件：pot odds < 5% 且 toCall >= 80% 剩余筹码（真正的 pot-committed）
+      // 例：投了 8.3金，只剩 42银，再跟 42银 看 30金底池 → 必须 call
+      // 反例：20银 bet into 400 pot，手里还有 900 → 不触发，走正常决策（可能 raise）
+      const potOddsRatio = toCall > 0 ? toCall / (pot + toCall) : 0;
+      const stackCommit = toCall > 0 ? toCall / Math.max(1, aiStack) : 0;
+      if (toCall > 0 && potOddsRatio < 0.05 && stackCommit >= 0.8 && equity > 0.08) {
+        console.log('[AI] ' + playerName + ' pot-committed: toCall=' + toCall +
+          ' pot=' + pot + ' odds=' + (potOddsRatio * 100).toFixed(1) + '% stack=' + (stackCommit * 100).toFixed(0) + '% → auto CALL');
+        return { action: ACTIONS.CALL, amount: toCall };
+      }
+
+      // 筹码承诺惩罚：toCall 占 stack 比例越高，call/raise 需要越高 equity 才值得
+      // commitRatio: 0 = 免费, 0.5 = 半个筹码, 1.0 = 全押
+      const commitRatio = toCall > 0 ? Math.min(1, toCall / Math.max(1, aiStack)) : 0;
+      // 当 pot odds 很好时（toCall << pot），减轻惩罚
+      const potOddsFactor = potOddsRatio < 0.15 ? potOddsRatio / 0.15 : 1.0;
+      // 软惩罚：equity 足够高时不惩罚，低时才惩罚
+      const commitPenalty = commitRatio > 0.15
+        ? Math.max(-0.5, (equity - 0.35) - commitRatio * 0.4) * potOddsFactor
+        : 0;
+
+      const utilities = candidates.map(c => {
+        const a = c.action;
+        const s = c.sizing;
+        const uHand     = scoreHand(equity, a);
+        const uPotOdds  = scorePotOdds(equity, potOdds, a, toCall, pot);
+        const uPosition = scorePosition(a, opponents, phase);
+        const uOpponent = this.opponentModel
+          ? this.opponentModel.score(heroId, oppManaRatio, a)
+          : scoreOpponent(context, a);
+        const uMagic    = scoreMagic(magicLevel, netForce, a);
+        const uAggro    = scoreAggro(a, s) + aggroDelta;
+
+        let u = w.hand * uHand
+              + w.potOdds * uPotOdds
+              + w.position * uPosition
+              + w.opponent * uOpponent
+              + w.magic * uMagic
+              + w.aggro * uAggro;
+
+        // 筹码承诺惩罚：call/raise 在高承诺时被惩罚
+        if (commitPenalty < 0 && (a === ACTIONS.CALL || a === ACTIONS.RAISE)) {
+          u += commitPenalty;
+          // raise 额外惩罚（比 call 更危险）
+          if (a === ACTIONS.RAISE) u += commitPenalty * 0.5;
+        }
+
+        // 弱牌加注抑制：equity < 0.25 时 raise 大幅惩罚（垃圾牌别加注）
+        // eq=0.02 → penalty = -1.38, eq=0.15 → -0.50, eq=0.24 → -0.05
+        if (a === ACTIONS.RAISE && equity < 0.25) {
+          u -= (0.25 - equity) * 6.0;
+        }
+
+        // 3-bet cap：本轮已有多次加注时，再加注需要更强的牌
+        // raiseCount=0(首次下注) → 无惩罚
+        // raiseCount=1(3-bet) → 轻微惩罚
+        // raiseCount=2(4-bet) → 重惩罚
+        // raiseCount>=3(5-bet+) → 极重惩罚
+        if (a === ACTIONS.RAISE && raiseCount >= 1) {
+          const reraiseThreshold = 0.30 + raiseCount * 0.10; // 1→0.40, 2→0.50, 3→0.60
+          if (equity < reraiseThreshold) {
+            u -= (reraiseThreshold - equity) * (2.0 + raiseCount);
+          }
+        }
+
+        // All-in 惩罚：需要极强牌力才合理
+        // eq=0.28 → penalty = -1.08, eq=0.50 → -0.20, eq=0.60 → 0
+        if (a === ACTIONS.RAISE && s === 'allin' && equity < 0.60) {
+          u -= (0.60 - equity) * 4.0;
+        }
+
+        // Overbet 惩罚：非 all-in 的 raise 金额远超底池时惩罚
+        if (a === ACTIONS.RAISE && s !== 'allin') {
+          const sizingMap = { small: 0.33, medium: 0.66, large: 1.0 };
+          const estBet = pot * (sizingMap[s] || 0.5);
+          if (estBet > pot * 2) {
+            u -= Math.min(0.5, (estBet / pot - 2) * 0.15);
+          }
+        }
+
+        return u;
+      });
+
+      // 4. Softmax 选择（FSM + Boss脚本 + 情绪修正温度）
+      const baseTemp = TEMPERATURE[this.difficultyType] || 1.0;
+      const emotionTempDelta = EMOTION_TEMP_DELTA[this.emotionType] || 0;
+      const temperature = Math.max(0.1, baseTemp + emotionTempDelta + extraTempDelta);
+
+      const { index: chosenIdx, probs } = softmaxSelect(utilities, temperature);
+      const chosen = candidates[chosenIdx];
+
+      // 5. 计算下注金额
+      let amount = 0;
+      if (chosen.action === ACTIONS.CALL) {
+        amount = Math.min(toCall, aiStack);
+      } else if (chosen.action === ACTIONS.RAISE) {
+        amount = calculateBetSize(this.difficultyType, chosen.sizing, equity, pot, aiStack, minRaise);
+        // 如果 raise sizing 是 allin，标记为 allin
+        if (amount >= aiStack) {
+          amount = aiStack;
+        }
+      }
+
+      // 6. 构建 reason
+      const topUtils = candidates.map((c, i) => {
+        const label = c.action === ACTIONS.RAISE ? c.action + '_' + c.sizing : c.action;
+        return label + ':' + utilities[i].toFixed(2);
+      });
+      const fsmTag = fsmMod.state !== 'cautious' ? ' fsm=' + fsmMod.label : '';
+      const bossTag = bossLabel ? ' boss=' + bossLabel : '';
+      const reason = 'eq=' + (equity * 100).toFixed(0) + ' T=' + temperature.toFixed(1) +
+        fsmTag + bossTag +
+        ' [' + topUtils.join(' ') + ']' +
+        ' p=' + (probs[chosenIdx] * 100).toFixed(0) + '%';
+
+      const decision = { action: chosen.action, amount, reason };
+
+      // 7. 详细日志
       const holeStr = holeCards.map(cardToString).join(' ');
       const tag = this.riskType + '/' + this.difficultyType + '/' + this.emotionType;
+      const stateTag =
+        (bossLabel ? '/' + bossLabel : '') +
+        (fsmMod.state !== 'cautious' ? '/' + fsmMod.label : '');
       console.log(
-        '[AI] ' + playerName + ' (' + tag + ') ' + phase +
+        '[AI] ' + playerName + ' (' + tag + stateTag + ') ' + phase +
         ' | 手牌: ' + holeStr + ' [' + handName + ']' +
-        ' | raw=' + rawStrength +
-        ' adj=' + Math.round(adjustedStrength) +
-        (noise !== 0 ? ' noise=' + (noise > 0 ? '+' : '') + Math.round(noise) : '') +
-        (optimism > 0 ? ' opt=+' + Math.round(optimism) : '') +
-        (magicLevel > 0 ? ' magic=+' + (magicLevel * 5) : '') +
-        (isBluffing ? ' BLUFF' : '') +
+        ' | eq=' + (equity * 100).toFixed(0) + ' raw=' + rawStrength +
+        ' magic=' + magicLevel + ' net=' + netForce +
         ' | pot=' + pot + ' toCall=' + toCall + ' stack=' + aiStack +
         ' opp=' + opponents +
+        ' T=' + temperature.toFixed(1) +
         ' → ' + decision.action.toUpperCase() +
         (decision.amount > 0 ? ' ' + decision.amount : '') +
-        (decision.reason ? ' (' + decision.reason + ')' : '')
+        ' (p=' + (probs[chosenIdx] * 100).toFixed(0) + '%)'
       );
-      
+
       return decision;
+    }
+
+    /**
+     * 构建当前局面下的合法候选动作
+     */
+    _buildCandidates(toCall, stack, minRaise, pot, equity, phase) {
+      const candidates = [];
+
+      // 硬性门控：equity 不够时直接移除 all-in 选项
+      // 高温度 noob 无法通过 softmax 随机选到 all-in
+      const allinThreshold = phase === 'preflop'
+        ? (this.difficultyType === 'noob' ? 0.40 : 0.50)
+        : 0.45;
+      const allowAllin = (equity || 0) >= allinThreshold;
+
+      if (toCall > 0) {
+        // 面对下注：可以 fold / call / raise
+        candidates.push({ action: ACTIONS.FOLD, sizing: null });
+        if (toCall < stack) {
+          candidates.push({ action: ACTIONS.CALL, sizing: null });
+        }
+        // raise 选项（只有筹码够时）
+        if (stack > toCall + minRaise) {
+          candidates.push({ action: ACTIONS.RAISE, sizing: 'small' });
+          candidates.push({ action: ACTIONS.RAISE, sizing: 'medium' });
+          if (pot > 0) candidates.push({ action: ACTIONS.RAISE, sizing: 'large' });
+        }
+        // all-in 需要足够牌力
+        if (allowAllin) {
+          candidates.push({ action: ACTIONS.RAISE, sizing: 'allin' });
+        }
+      } else {
+        // 无人下注：可以 check / raise
+        candidates.push({ action: ACTIONS.CHECK, sizing: null });
+        if (stack > minRaise) {
+          candidates.push({ action: ACTIONS.RAISE, sizing: 'small' });
+          candidates.push({ action: ACTIONS.RAISE, sizing: 'medium' });
+          if (pot > 0) candidates.push({ action: ACTIONS.RAISE, sizing: 'large' });
+        }
+        if (allowAllin) {
+          candidates.push({ action: ACTIONS.RAISE, sizing: 'allin' });
+        }
+      }
+
+      return candidates;
     }
 
     calculateRawStrength(holeCards, boardCards, phase) {
@@ -546,232 +1382,6 @@
       return Math.max(...ranks);
     }
 
-    makeDecision(context, adjustedStrength, rawStrength, potOdds, isBluffing, opponents, magicLevel) {
-      const { pot, toCall, aiStack, minRaise, phase } = context;
-      
-      // ========== 无人下注时的决策 ==========
-      if (toCall === 0) {
-        return this.decideWhenCheckedTo(adjustedStrength, rawStrength, pot, aiStack, minRaise, phase, isBluffing, opponents);
-      }
-      
-      // ========== 面对下注时的决策 ==========
-      return this.decideWhenFacingBet(adjustedStrength, rawStrength, pot, toCall, aiStack, minRaise, potOdds, isBluffing, phase, opponents, magicLevel);
-    }
-
-    /**
-     * 无人下注时的决策 - 关键修复：强牌必须下注榨取价值
-     */
-    decideWhenCheckedTo(adjustedStrength, rawStrength, pot, aiStack, minRaise, phase, isBluffing, opponents) {
-      // 价值下注意识：专家更懂得用强牌下注
-      const valueBetAwareness = this.difficulty.valueBetAwareness;
-      const shouldValueBet = Math.random() < valueBetAwareness;
-      
-      // 强牌必须下注（价值下注）
-      if (rawStrength >= 75 && shouldValueBet) {
-        const raiseAmount = this.calculateRaiseAmount(rawStrength, pot, aiStack, minRaise);
-        return { action: ACTIONS.RAISE, amount: raiseAmount, reason: '超强牌价值下注 raw≥75' };
-      }
-      
-      if (rawStrength >= this.risk.valueBetThreshold && shouldValueBet) {
-        const raiseAmount = this.calculateRaiseAmount(rawStrength, pot, aiStack, minRaise);
-        return { action: ACTIONS.RAISE, amount: raiseAmount, reason: '强牌价值下注 raw≥' + this.risk.valueBetThreshold };
-      }
-      
-      // 诈唬下注（不能超过 40% 筹码，防止意外全押诈唬）
-      if (isBluffing && phase !== 'preflop') {
-        const bluffAmount = Math.min(
-          this.calculateRaiseAmount(50, pot, aiStack, minRaise),
-          Math.floor(aiStack * 0.4)
-        );
-        if (bluffAmount >= minRaise) {
-          return { action: ACTIONS.RAISE, amount: bluffAmount, reason: '诈唬下注 cap40%' };
-        }
-        return { action: ACTIONS.CHECK, amount: 0, reason: '诈唬但金额不足' };
-      }
-      
-      // 中等牌力：根据风险喜好决定
-      // 🔧 安全阀：rawStrength < 25 = 垃圾牌，不走价值下注路径
-      if (rawStrength >= 25 && adjustedStrength >= this.risk.raiseThreshold) {
-        const raiseAmount = this.calculateRaiseAmount(adjustedStrength, pot, aiStack, minRaise);
-        return { action: ACTIONS.RAISE, amount: raiseAmount, reason: '中等牌力下注 adj≥' + this.risk.raiseThreshold };
-      }
-      
-      // 弱牌：过牌
-      return { action: ACTIONS.CHECK, amount: 0, reason: rawStrength < 25 ? '垃圾牌过牌 raw<25' : '牌力不足过牌' };
-    }
-
-    /**
-     * 面对下注时的决策
-     */
-    decideWhenFacingBet(adjustedStrength, rawStrength, pot, toCall, aiStack, minRaise, potOdds, isBluffing, phase, opponents, magicLevel) {
-      // 底池承诺快速通道：筹码极少且底池巨大时，跳过所有恐惧逻辑直接跟
-      const potCommitRatio = pot / (toCall + 0.01);
-      if (toCall >= aiStack * 0.8 && potCommitRatio >= 5) {
-        return { action: ACTIONS.ALL_IN, amount: aiStack, reason: '底池承诺 pot/call=' + Math.round(potCommitRatio) };
-      }
-
-      // 生存本能 v2：多层次恐惧机制
-      const betRatio = toCall / (pot + 0.01);
-      const stackRatio = toCall / (aiStack + 0.01);
-      
-      let pressureLevel = 0;
-      if (betRatio > 0.3) pressureLevel++;
-      if (betRatio > 0.6) pressureLevel++;
-      if (stackRatio > 0.4) pressureLevel++;
-      if (stackRatio > 0.7) pressureLevel++;
-      
-      if (phase === 'preflop' && stackRatio < 0.05) {
-        pressureLevel = 0;
-      }
-      
-      const magicReduction = (magicLevel || 0) * 5;
-      const preflopDiscount = phase === 'preflop' ? 30 : 0;
-      const survivalThreshold = Math.max(5, 30 + pressureLevel * 15 - magicReduction - preflopDiscount);
-      
-      if (rawStrength < survivalThreshold && pressureLevel >= 1) {
-        let foldChance = 0.95;
-        
-        if (this.riskType === 'rock') {
-          foldChance = 0.99;
-        } else if (this.riskType === 'passive') {
-          foldChance = 0.85;
-        } else if (this.riskType === 'maniac') {
-          foldChance = 0.70;
-        } else if (this.riskType === 'aggressive') {
-          foldChance = 0.80;
-        }
-        
-        if (this.difficultyType === 'pro') {
-          foldChance *= 0.9;
-        }
-        
-        if (magicLevel > 0) {
-          foldChance *= Math.max(0.2, 1 - magicLevel * 0.15);
-        }
-        
-        if (isBluffing && pressureLevel <= 1) {
-          foldChance *= 0.5;
-        }
-        
-        if (phase === 'preflop' && pressureLevel <= 1) {
-          foldChance *= 0.12;
-        } else if (phase === 'preflop' && pressureLevel <= 2) {
-          foldChance *= 0.4;
-        }
-        
-        const foldResist = this.emotion.foldResistDelta || 0;
-        if (foldResist !== 0) {
-          foldChance = Math.max(0.05, Math.min(0.99, foldChance + foldResist));
-        }
-        
-        if (Math.random() < foldChance) {
-          return { action: ACTIONS.FOLD, amount: 0, reason: '生存本能 pressure=' + pressureLevel + ' threshold=' + survivalThreshold + ' fold%=' + Math.round(foldChance * 100) };
-        }
-      }
-      
-      // 需要全押才能跟
-      if (toCall >= aiStack) {
-        const potOddsRatio = pot / (aiStack + 0.01);
-        if (potOddsRatio >= 3) {
-          return { action: ACTIONS.ALL_IN, amount: aiStack, reason: '底池承诺allin pot/stack=' + Math.round(potOddsRatio) };
-        }
-        if (potOddsRatio >= 1.5 && adjustedStrength >= 15) {
-          return { action: ACTIONS.ALL_IN, amount: aiStack, reason: '赔率allin pot/stack=' + Math.round(potOddsRatio * 10) / 10 };
-        }
-        if (rawStrength >= 60) {
-          return { action: ACTIONS.ALL_IN, amount: aiStack, reason: '强牌allin raw≥60' };
-        }
-        if (this.riskType === 'maniac' && adjustedStrength >= 45 && Math.random() < 0.2) {
-          return { action: ACTIONS.ALL_IN, amount: aiStack, reason: '疯子乱推' };
-        }
-        return { action: ACTIONS.FOLD, amount: 0, reason: 'allin弃牌 raw=' + rawStrength + ' potRatio=' + Math.round(potOddsRatio * 10) / 10 };
-      }
-      
-      // 底池赔率检查
-      const potOddsCheck = this.difficulty.potOddsAwareness;
-      const isPotOddsFavorable = potOdds < (adjustedStrength / 100) * potOddsCheck + (1 - potOddsCheck) * 0.5;
-      
-      // 河牌圈特殊处理：弱牌面对下注几乎必弃
-      if (phase === 'river' && rawStrength <= 20 && toCall > pot * 0.25) {
-        if (this.riskType !== 'passive' || Math.random() > 0.2) {
-          return { action: ACTIONS.FOLD, amount: 0, reason: '河牌弱牌弃 raw≤20' };
-        }
-      }
-      
-      // 超强牌：加注
-      if (rawStrength >= 75) {
-        const raiseAmount = this.calculateRaiseAmount(rawStrength, pot, aiStack, minRaise);
-        if (raiseAmount > toCall * 2) {
-          return { action: ACTIONS.RAISE, amount: raiseAmount, reason: '超强牌加注 raw≥75' };
-        }
-        return { action: ACTIONS.CALL, amount: toCall, reason: '超强牌跟注(加注不够大)' };
-      }
-      
-      // 强牌：跟注或加注
-      if (adjustedStrength >= this.risk.raiseThreshold) {
-        if (rawStrength >= 25) {
-          const raiseAmount = this.calculateRaiseAmount(adjustedStrength, pot, aiStack, minRaise);
-          if (raiseAmount > toCall * 2) {
-            return { action: ACTIONS.RAISE, amount: raiseAmount, reason: '强牌加注 adj≥' + this.risk.raiseThreshold };
-          }
-        }
-        return { action: ACTIONS.CALL, amount: toCall, reason: '强牌跟注 adj≥' + this.risk.raiseThreshold };
-      }
-      
-      // 中等牌力：根据赔率和风险喜好决定
-      if (adjustedStrength >= this.risk.callDownThreshold) {
-        if (isPotOddsFavorable || this.riskType === 'passive') {
-          return { action: ACTIONS.CALL, amount: toCall, reason: '中等跟注 adj≥' + this.risk.callDownThreshold + (isPotOddsFavorable ? ' 赔率好' : ' passive') };
-        }
-      }
-      
-      // 诈唬加注
-      if (isBluffing && pressureLevel === 0 && Math.random() < 0.4) {
-        const bluffAmount = Math.min(
-          this.calculateRaiseAmount(55, pot, aiStack, minRaise),
-          Math.floor(aiStack * 0.4)
-        );
-        if (bluffAmount >= minRaise) {
-          return { action: ACTIONS.RAISE, amount: bluffAmount, reason: '诈唬加注 cap40%' };
-        }
-      }
-      
-      // 弱牌但赔率合适：跟注站会跟
-      if (this.riskType === 'passive' && adjustedStrength >= 15) {
-        return { action: ACTIONS.CALL, amount: toCall, reason: 'passive跟注站' };
-      }
-      
-      // 弱牌：弃牌
-      const effectiveEntry = phase === 'preflop' ? Math.max(10, this.risk.entryThreshold - 15) : this.risk.entryThreshold;
-      if (adjustedStrength < effectiveEntry && !isBluffing) {
-        return { action: ACTIONS.FOLD, amount: 0, reason: '弱牌弃 adj<' + effectiveEntry };
-      }
-      
-      // 默认跟注
-      return { action: ACTIONS.CALL, amount: toCall, reason: '默认跟注' };
-    }
-
-    calculateRaiseAmount(strength, pot, stack, minRaise) {
-      let multiplier;
-      if (strength >= 90) {
-        multiplier = 0.8 + Math.random() * 0.4; // 80-120% pot
-      } else if (strength >= 70) {
-        multiplier = 0.5 + Math.random() * 0.3; // 50-80% pot
-      } else if (strength >= 50) {
-        multiplier = 0.4 + Math.random() * 0.2; // 40-60% pot
-      } else {
-        multiplier = 0.3 + Math.random() * 0.2; // 30-50% pot (bluff)
-      }
-      
-      // 应用风险喜好的下注尺度倍数
-      multiplier *= this.risk.betSizeMultiplier;
-      
-      let amount = Math.floor(pot * multiplier);
-      amount = Math.max(amount, minRaise);
-      amount = Math.min(amount, stack);
-      
-      return amount;
-    }
   }
 
   // ========== SkillAI — 技能决策模块 ==========
@@ -815,86 +1425,70 @@
     },
 
     // ---- Moirai (天命: fortune) ----
-    // 核心问题：什么时候用大吉 vs 小吉？什么阶段用？
+    // 核心逻辑：技能概率与筹码投入挂钩，投入越多越需要技能保护/提升
     _decideMoirai(difficulty, skill, owner, ctx, forces, mana) {
       const pi = PHASE_INDEX[ctx.phase] || 0;
       const pot = ctx.pot || 0;
+      const commit = SkillAI._getCommitRatio(owner);
 
       switch (difficulty) {
         case 'noob': {
-          // 本能型：有就用，不区分大小，不看局势
-          // preflop 也可能用（浪费），概率随阶段略增
-          return Math.random() < (0.25 + pi * 0.12);
+          // 本能型：有就用，不区分大小，投入多时更积极
+          return Math.random() < (0.15 + commit * 0.3 + pi * 0.08);
         }
         case 'regular': {
-          // 底池感知：底池大用大吉，底池小用小吉省 mana
-          // preflop: T3 有一定概率，T2 低概率（赌一把的心态）
+          // 底池+投入感知：投入多或底池大时积极
           if (pi === 0) {
-            if (skill.tier === 3) return Math.random() < 0.2;
-            if (skill.tier === 2) return Math.random() < 0.1;
-            return false; // T1 preflop 不用
+            if (skill.tier === 3) return Math.random() < 0.15;
+            if (skill.tier === 2) return Math.random() < 0.08;
+            return false;
           }
-          // mana 紧张时只用 T3
           if (mana && mana.current < mana.max * 0.3 && skill.tier !== 3) return false;
-          // 底池越大越积极（相对于盲注，而非固定值）
           var blinds = ctx.blinds || 20;
-          var potFactor = Math.min(1, pot / (blinds * 12));
-          var tierBoost = skill.tier === 1 ? 0.18 : skill.tier === 2 ? 0.12 : 0;
-          return Math.random() < (0.25 + potFactor * 0.35 + tierBoost);
+          var potFactor = Math.min(1, pot / (blinds * 15));
+          // 投入占比是主要驱动力
+          return Math.random() < (0.10 + commit * 0.45 + potFactor * 0.20 + pi * 0.05);
         }
+        case 'boss':
         case 'pro': {
-          // 手牌感知：强牌才用大吉（放大优势），弱牌不浪费
-          // turn/river 优先（信息更完整）
           if (pi === 0) return false;
-          // 评估手牌强度
-          var strength = SkillAI._getHandStrength(owner, ctx);
-          // 弱牌（<40）不用 T1/T2，省 mana 弃牌
-          if (strength < 40 && skill.tier <= 2) return false;
-          // mana 管理：预留 mana 给高价值技能
           if (mana && mana.current < skill.manaCost * 1.5 && skill.tier !== 1) return false;
-          // 强牌 + 后期 = 积极使用
-          var strengthFactor = Math.min(1, strength / 80);
-          var phaseFactor = pi * 0.12;
-          return Math.random() < (strengthFactor * 0.5 + phaseFactor);
+          // 投入越多越积极，手牌强度作为次要参考
+          var strength = SkillAI._getHandStrength(owner, ctx);
+          var strengthMod = strength >= 50 ? 0.15 : 0; // 强牌额外加成
+          return Math.random() < (0.08 + commit * 0.50 + strengthMod + pi * 0.08);
         }
         default: return false;
       }
     },
 
     // ---- Chaos (狂厄: curse) ----
-    // 核心问题：诅咒谁？什么时候诅咒？
+    // 核心逻辑：投入越多越需要诅咒对手来保护自己的投资
     _decideChaos(difficulty, skill, owner, ctx, forces, mana) {
       var pi = PHASE_INDEX[ctx.phase] || 0;
       var pot = ctx.pot || 0;
+      var commit = SkillAI._getCommitRatio(owner);
 
       switch (difficulty) {
         case 'noob': {
-          // 筹码导向 + 随机：谁筹码多打谁，但有随机性
-          // 不管 mana，有就花
-          return Math.random() < (0.25 + pi * 0.1);
+          // 本能型：投入多时更积极
+          return Math.random() < (0.15 + commit * 0.25 + pi * 0.08);
         }
         case 'regular': {
-          // 底池感知：底池大时更积极（收益高）
-          if (pi === 0) return Math.random() < 0.12; // preflop 偶尔
+          if (pi === 0) return Math.random() < 0.08;
           if (mana && mana.current < mana.max * 0.3 && skill.tier !== 3) return false;
           var blinds2 = ctx.blinds || 20;
-          var potFactor = Math.min(1, pot / (blinds2 * 12));
-          return Math.random() < (0.2 + potFactor * 0.45);
+          var potFactor = Math.min(1, pot / (blinds2 * 15));
+          return Math.random() < (0.10 + commit * 0.40 + potFactor * 0.20);
         }
+        case 'boss':
         case 'pro': {
-          // 战术型：自己牌力中等时用（弱牌弃牌更好，强牌不需要）
           if (pi === 0) return false;
-          var strength = SkillAI._getHandStrength(owner, ctx);
-          // 太弱（<25）不值得投入 mana，弃牌更好
-          if (strength < 25) return false;
-          // 太强（>75）不需要诅咒，自己赢面够大
-          if (strength > 75 && skill.tier >= 2) return false;
-          // mana 管理
           if (mana && mana.current < skill.manaCost * 1.5 && skill.tier !== 1) return false;
-          // 中等牌力 + 后期 = 最佳诅咒时机
-          var midStrengthBonus = (strength >= 30 && strength <= 65) ? 0.2 : 0;
-          var phaseFactor = pi * 0.1;
-          return Math.random() < (0.15 + midStrengthBonus + phaseFactor);
+          // 投入多时积极诅咒，太强不需要
+          var strength = SkillAI._getHandStrength(owner, ctx);
+          if (strength > 80) return false; // 碾压局不浪费 mana
+          return Math.random() < (0.10 + commit * 0.45 + pi * 0.08);
         }
         default: return false;
       }
@@ -932,6 +1526,7 @@
           // T1 只在 Chaos power 很高时用
           return Math.random() < (chaosPower >= 25 ? 0.55 : 0.15);
         }
+        case 'boss':
         case 'pro': {
           // 预判式：即使没 Chaos 也会在关键轮次预防性使用
           // 优先高阶（折射/真理 > 澄澈，信息+反制双重价值）
@@ -978,6 +1573,7 @@
           // 场上 force ≥ 3 时才用（核弹不乱扔）
           return totalForces >= 3 && Math.random() < 0.35;
         }
+        case 'boss':
         case 'pro': {
           // 精准时机：敌方刚释放 T1/T2 技能后立即清场
           // 或者场上敌方 forces 对自己不利时
@@ -996,6 +1592,17 @@
     },
 
     // ---- 工具函数 ----
+
+    /**
+     * 筹码投入比：已投入筹码 / 初始筹码 (0~1)
+     * commit=0: 还没投入, commit=0.5: 投了一半, commit=1.0: 全押
+     * 注意：totalBet 已包含 currentBet，不要重复计算
+     */
+    _getCommitRatio(owner) {
+      var invested = Math.max(owner.totalBet || 0, owner.currentBet || 0);
+      var startStack = invested + (owner.chips || 0);
+      return startStack > 0 ? Math.min(1, invested / startStack) : 0;
+    },
 
     /**
      * 获取 NPC 当前手牌强度 (0-100)
@@ -1033,15 +1640,19 @@
         return casterId === 0 ? 1 : 0;
       }
 
+      // all-in 玩家仍是有效目标（chips===0 但未弃牌）
       var candidates = players.filter(function(p) {
-        return p.id !== casterId && !p.folded && p.chips > 0;
+        return p.id !== casterId && !p.folded;
       });
 
       if (candidates.length === 0) {
-        return casterId === 0 ? 1 : 0;
+        // 无有效目标时，选任意非施法者
+        var fallback = players.filter(function(p) { return p.id !== casterId; });
+        return fallback.length > 0 ? fallback[0].id : (casterId === 0 ? 1 : 0);
       }
 
       switch (difficulty) {
+        case 'boss':
         case 'pro':     return SkillAI._targetByThreat(candidates);
         case 'regular': return SkillAI._targetByPotCommitment(candidates);
         default:        return SkillAI._targetByChips(candidates);
@@ -1115,5 +1726,10 @@
   global.PokerAI.evaluatePreflopStrength = evaluatePreflopStrength;
   global.PokerAI.cardToString = cardToString;
   global.PokerAI.SkillAI = SkillAI;
+  global.PokerAI.BehaviorFSM = BehaviorFSM;
+  global.PokerAI.FSM_STATES = FSM_STATES;
+  global.PokerAI.BossScript = BossScript;
+  global.PokerAI.BOSS_PHASES = BOSS_PHASES;
+  global.PokerAI.OpponentModel = OpponentModel;
 
 })(typeof window !== 'undefined' ? window : global);

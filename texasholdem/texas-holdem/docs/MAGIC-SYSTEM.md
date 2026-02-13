@@ -156,12 +156,13 @@ Void 减伤: 12.0 ÷ 2.0 = 6.0
 | **命运之锚** ⚓ | 被动 fortune_anchor | Moirai | — | — | 削弱敌方被动（-15%/级） |
 | **感知** 🔮 | 被动 sense | Psyche | — | — | 探测敌方魔力波动 |
 
-### KAZU — 不参与牌局
+### KAZU — Void 消除系（零 Mana 消耗，代价是策略成本）
 
 | 技能 | 类型 | 属性 | Mana | CD | 说明 |
 |---|---|---|---|---|---|
-| **空白因子** ◇ | 主动 blank | Void | 0 | 3轮 | 打碎一切命运 |
-| **概率死角** ∅ | 被动 null_field | Void | — | — | 削弱所有被动力（-20%/级） |
+| **屏蔽** ∅ | 被动 null_field | Void | — | — | 反侦察：敌方信息类技能对己方失效 + 削弱所有被动力 -30% |
+| **绝缘** ◈ | 开关 void_shield | Void | 0 | — | 全场魔法效果减半（敌我不分），手动开/关 |
+| **现实** ◇ | 主动 purge_all | Void | 0 | 整局限1次 | 清除所有非 Void 效果，回归纯随机 |
 
 ### TARGET_GAMMA — Mana 80
 
@@ -237,23 +238,25 @@ Mana 降至 **0** 时触发：
 每次发牌前的完整处理流程：
 
 ```
-1. 收集所有 forces（被动 + pendingForces）
+1. 收集所有 forces（被动 + toggle + pendingForces）
    ↓
 2. CombatFormula.enhanceForces()  ← 注入属性加成 + 克制倍率
    ↓
-3. 空白因子检查（有则直接纯随机，跳过后续）
+3. 现实检查（有则直接纯随机，跳过后续）
    ↓
-4. 同类型力量互相抵消（fortune vs fortune, curse vs curse）
+4. 绝缘检查（toggle 开启时，全场所有魔法效果减半，敌我不分）
    ↓
-5. 主动压制被动（等级差额外削弱）
+5. 同类型力量互相抵消（fortune vs fortune, curse vs curse）
    ↓
-6. 命运之锚削弱敌方被动
+6. 主动压制被动（等级差额外削弱）
    ↓
-7. 概率死角削弱所有被动
+7. 屏蔽削弱所有被动力 -30% + 阻断敌方信息探测
    ↓
-8. Void 减伤（CombatFormula.applyVoidReduction）
+8. Psyche 裁定（clarity/refraction/reversal 拦截 Curse）
    ↓
-9. 计算命运分 → 选牌
+9. Void 减伤（CombatFormula.applyVoidReduction）
+   ↓
+10. 计算命运分 → 选牌
 ```
 
 ### Power 基础公式

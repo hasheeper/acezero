@@ -283,7 +283,8 @@
     dealerIndex: 0,       // 庄家位置
     turnIndex: 0,         // 当前行动玩家
     lastRaiserIndex: -1,  // 最后加注者
-    actionCount: 0        // 本轮行动计数
+    actionCount: 0,       // 本轮行动计数
+    raiseCount: 0         // 本轮加注次数（用于 3-bet cap）
   };
 
   // 保存最近一手的结果文字（供 endGame modal 使用）
@@ -570,6 +571,8 @@
       // 为 AI 玩家创建个性化 AI 实例
       if (!isHuman) {
         player.ai = new PokerAI(config.personality || { riskAppetite: 'balanced', difficulty: 'regular' });
+        // FSM 初始筹码（用于 CORNERED 判定）
+        player.ai.fsm.initialChips = player.chips;
       }
       
       players.push(player);
@@ -622,6 +625,38 @@
     
     // 如果只有 0 或 1 个人还有筹码，说明其他人都 All-in 了
     return playersWithChips.length <= 1;
+  }
+
+  // 🎯 All-in 后暂停：让玩家有时间用技能，点击"继续"后发下一街
+  let _allinAdvanceFn = null;
+  function waitForPlayerThenAdvance(nextFn, label) {
+    // 1. NPC 技能决策
+    skillUI.onRoundEnd({
+      players: gameState.players, pot: gameState.pot,
+      phase: gameState.phase, board: gameState.board, blinds: getBigBlind()
+    });
+
+    // 2. 启用玩家技能面板
+    skillUI.update({
+      phase: gameState.phase, isPlayerTurn: true,
+      deckCards: deckLib ? deckLib.cards : [],
+      board: gameState.board, players: gameState.players
+    });
+
+    // 3. 显示"继续"按钮（复用 Check/Call 按钮）
+    updateMsg('All-in! 可使用技能，准备好后点击继续');
+    UI.btnFold.disabled = true;
+    UI.btnRaise.disabled = true;
+    UI.btnCheckCall.disabled = false;
+    UI.btnCheckCall.textContent = '继续 → ' + label;
+    UI.raiseControls.style.display = 'none';
+
+    // 4. 存储回调，点击时触发
+    _allinAdvanceFn = function() {
+      _allinAdvanceFn = null;
+      enablePlayerControls(false);
+      setTimeout(nextFn, 300);
+    };
   }
 
   function isRoundComplete() {
@@ -736,6 +771,7 @@
     player.hasActedThisRound = true;
     updateSeatDisplay(player);
     
+    broadcastActionToModels(player.id, 'fold', { phase: gameState.phase, toCall: gameState.currentBet - player.currentBet });
     logEvent('PLAYER_FOLD', { playerId: player.id, playerName: player.name });
     updateMsg('You folded.');
     
@@ -752,6 +788,12 @@
   }
 
   function playerCheckCall() {
+    // All-in 暂停：点击"继续"按钮时触发下一街
+    if (_allinAdvanceFn) {
+      _allinAdvanceFn();
+      return;
+    }
+
     UI.raiseControls.style.display = 'none';
     const player = getHeroPlayer();
     const toCall = gameState.currentBet - player.currentBet;
@@ -761,9 +803,11 @@
       player.chips -= callAmount;
       player.currentBet += callAmount;
       player.totalBet += callAmount;
+      broadcastActionToModels(player.id, 'call', { phase: gameState.phase, toCall: toCall, amount: callAmount });
       logEvent('PLAYER_CALL', { playerId: player.id, playerName: player.name, amount: callAmount });
       updateMsg(`You call ${Currency.htmlAmount(callAmount)}`);
     } else {
+      broadcastActionToModels(player.id, 'check', { phase: gameState.phase, toCall: 0 });
       logEvent('PLAYER_CHECK', { playerId: player.id, playerName: player.name });
       updateMsg('You check');
     }
@@ -800,10 +844,12 @@
     player.totalBet += actualRaise;
     gameState.currentBet = player.currentBet;
     gameState.lastRaiserIndex = getHeroIndex();
+    gameState.raiseCount = (gameState.raiseCount || 0) + 1;
     
     // 区分 BET 和 RAISE：当前轮无人下注时是 BET，否则是 RAISE
     // 注意：此时 gameState.currentBet 已更新，需要用 toCall 判断之前状态
     const isBet = toCall === 0;
+    broadcastActionToModels(player.id, 'raise', { phase: gameState.phase, toCall: toCall, amount: actualRaise, pot: gameState.pot });
     logEvent(isBet ? 'PLAYER_BET' : 'PLAYER_RAISE', { 
       playerId: player.id, 
       playerName: player.name, 
@@ -837,6 +883,32 @@
     const playerSkills = skillSystem.getPlayerSkills(player.id);
     const maxMagicLevel = playerSkills.reduce((max, s) => Math.max(max, s.level || 0), 0);
 
+    // 计算净魔运力量（己方 fortune - 敌方 curse）用于 pro/boss 魔运感知
+    let netForce = 0;
+    let opponentManaRatio = 0.5;
+    if (typeof skillSystem !== 'undefined') {
+      try {
+        const pf = skillSystem.pendingForces || [];
+        const myFortune = pf.filter(f => f.ownerId === player.id && f.type === 'fortune')
+          .reduce((s, f) => s + (f.power || 0), 0);
+        const enemyCurse = pf.filter(f => f.ownerId !== player.id && f.type === 'curse' &&
+          (f.targetId == null || f.targetId === player.id))
+          .reduce((s, f) => s + (f.power || 0), 0);
+        netForce = myFortune - enemyCurse;
+      } catch (e) { /* ignore */ }
+      // 对手平均 mana 百分比（pro/boss 用于对手建模）
+      try {
+        const opps = getActivePlayers().filter(p => p.id !== player.id);
+        if (opps.length > 0) {
+          const totalRatio = opps.reduce((sum, opp) => {
+            const mana = skillSystem.getMana(opp.id);
+            return sum + (mana ? mana.current / Math.max(1, mana.max) : 0.5);
+          }, 0);
+          opponentManaRatio = totalRatio / opps.length;
+        }
+      } catch (e) { /* ignore */ }
+    }
+
     const context = {
       playerName: player.name,
       holeCards: player.cards,
@@ -848,7 +920,11 @@
       phase: gameState.phase,
       minRaise: getBigBlind(),
       activeOpponentCount: getActivePlayers().length - 1,
-      magicLevel: maxMagicLevel  // 魔运等级 → AI更自信，不容易弃牌
+      magicLevel: maxMagicLevel,
+      netForce: netForce,
+      opponentManaRatio: opponentManaRatio,
+      heroId: getHeroPlayer().id,
+      raiseCount: gameState.raiseCount || 0
     };
     
     const decision = player.ai.decide(context);
@@ -874,6 +950,7 @@
     player.folded = true;
     player.hasActedThisRound = true;
     updateSeatDisplay(player);
+    broadcastActionToModels(player.id, 'fold', { phase: gameState.phase, toCall: gameState.currentBet - player.currentBet });
     
     logEvent('AI_FOLD', { playerId: player.id, playerName: player.name });
     
@@ -894,6 +971,7 @@
 
   function aiCheck(player) {
     player.hasActedThisRound = true;
+    broadcastActionToModels(player.id, 'check', { phase: gameState.phase, toCall: 0 });
     logEvent('AI_CHECK', { playerId: player.id, playerName: player.name });
     
     const status = player.seatElement.querySelector('.seat-status');
@@ -913,6 +991,7 @@
     player.totalBet += callAmount;
     
     player.hasActedThisRound = true;
+    broadcastActionToModels(player.id, 'call', { phase: gameState.phase, toCall: toCall, amount: callAmount });
     logEvent('AI_CALL', { playerId: player.id, playerName: player.name, amount: callAmount });
     
     const status = player.seatElement.querySelector('.seat-status');
@@ -969,10 +1048,12 @@
     player.totalBet += raiseAmount;
     gameState.currentBet = player.currentBet;
     gameState.lastRaiserIndex = player.id;
+    gameState.raiseCount = (gameState.raiseCount || 0) + 1;
     
     // 区分 BET 和 RAISE：当前轮无人下注时是 BET，否则是 RAISE
     const isBet = toCall === 0;
     player.hasActedThisRound = true;
+    broadcastActionToModels(player.id, 'raise', { phase: gameState.phase, toCall: toCall, amount: raiseAmount, pot: gameState.pot });
     
     // 检查是否 All-in
     const isAllIn = player.chips === 0;
@@ -1579,6 +1660,7 @@
     gameState.currentBet = 0;
     gameState.lastRaiserIndex = -1;
     gameState.actionCount = 0;
+    gameState.raiseCount = 0;
     
     // 技能系统：新一手牌开始
     skillUI.onNewHand();
@@ -1654,6 +1736,72 @@
     updateMsg(`Blinds: SB ${Currency.htmlAmount(getSmallBlind())} / BB ${Currency.htmlAmount(getBigBlind())}`);
   }
 
+  // ========== 手牌保底 (Phase 5) ==========
+  // pro/boss NPC 的手牌不能太差，否则重抽
+  const HAND_FLOOR = { pro: 30, boss: 45 };
+  const HAND_FLOOR_MAX_RETRIES = { pro: 3, boss: 5 };
+
+  function enforceHandFloor() {
+    gameState.players.forEach(player => {
+      if (player.type !== 'ai' || !player.personality) return;
+      const diff = player.personality.difficulty;
+      const floor = HAND_FLOOR[diff];
+      if (!floor) return; // noob/regular 不保底
+
+      // Boss 阶段脚本可动态调整保底阈值
+      let dynamicFloor = floor;
+      if (player.ai && player.ai.bossScript) {
+        player.ai.bossScript.updatePhase(player.chips);
+        dynamicFloor = player.ai.bossScript.getModifiers().handFloor || floor;
+      }
+
+      const maxRetries = HAND_FLOOR_MAX_RETRIES[diff] || 3;
+      let strength = PokerAI.evaluatePreflopStrength(player.cards);
+
+      for (let attempt = 0; attempt < maxRetries && strength < dynamicFloor; attempt++) {
+        // 把当前手牌放回牌堆（同时移除 DOM 元素）
+        const oldCards = player.cards.splice(0, 2);
+        oldCards.forEach(c => {
+          if (c.$el && c.$el.parentNode) {
+            c.$el.parentNode.removeChild(c.$el);
+          }
+          deckLib.cards.push(c);
+        });
+
+        // 从牌堆中随机抽 2 张新牌
+        // 先局部洗牌（只洗最后几张，避免影响已发的牌）
+        const len = deckLib.cards.length;
+        for (let i = len - 1; i > Math.max(0, len - 10); i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          const tmp = deckLib.cards[i];
+          deckLib.cards[i] = deckLib.cards[j];
+          deckLib.cards[j] = tmp;
+        }
+
+        const c1 = deckLib.cards.pop();
+        const c2 = deckLib.cards.pop();
+        player.cards.push(c1, c2);
+
+        // 视觉：新牌保持背面朝上，移到玩家座位
+        [c1, c2].forEach(c => {
+          c.setSide('back');
+          const target = player.seatElement.querySelector('.seat-cards');
+          if (target) {
+            target.appendChild(c.$el);
+            c.$el.classList.add('aligned-card');
+            c.$el.style.transform = 'none';
+            c.$el.style.position = 'relative';
+          }
+        });
+
+        strength = PokerAI.evaluatePreflopStrength(player.cards);
+        console.log('[HandFloor] ' + player.name + ' (' + diff + ') retry ' +
+          (attempt + 1) + ' floor=' + dynamicFloor +
+          ' → strength=' + strength + (strength >= dynamicFloor ? ' ✓' : ' ✗'));
+      }
+    });
+  }
+
   async function dealHoleCards() {
     const promises = [];
     
@@ -1668,6 +1816,9 @@
     }
     
     await Promise.all(promises);
+
+    // 手牌保底：pro/boss NPC 弱牌重抽
+    enforceHandFloor();
     
     const activeCount = gameState.players.filter(p => p.isActive).length;
     logEvent('DEAL', { playerCount: activeCount });
@@ -1684,6 +1835,16 @@
       gameState.turnIndex = findFirstActivePlayer((bbIndex + 1) % gameState.players.length);
     }
     gameState.actionCount = 0;
+
+    // Preflop NPC 技能决策：发牌后、下注前触发
+    // 其他阶段在 endBettingRound 中触发
+    skillUI.onRoundEnd({
+      players: gameState.players,
+      pot: gameState.pot,
+      phase: gameState.phase,
+      board: gameState.board,
+      blinds: getBigBlind()
+    });
     
     setTimeout(() => {
       nextTurn();
@@ -1706,6 +1867,7 @@
       gameState.currentBet = 0;
       gameState.lastRaiserIndex = -1;
       gameState.actionCount = 0;
+      gameState.raiseCount = 0;
       updatePotDisplay();
     }, 600);
   }
@@ -1755,10 +1917,9 @@
     
     logEvent('FLOP', { cards: cardsToString(gameState.board) });
     
-    // 🎯 检查是否所有人都 All-in，如果是则直接发下一张牌
+    // 🎯 检查是否所有人都 All-in → 暂停让玩家用技能
     if (isEveryoneAllIn()) {
-      updateMsg('All players all-in - dealing remaining cards...');
-      setTimeout(dealTurn, 1000);
+      waitForPlayerThenAdvance(dealTurn, 'TURN');
       return;
     }
     
@@ -1780,9 +1941,9 @@
     const turnCard = gameState.board[3];
     logEvent('TURN', { card: cardToSolverString(turnCard), board: cardsToString(gameState.board) });
     
-    // 🎯 检查是否所有人都 All-in，如果是则直接发河牌
+    // 🎯 检查是否所有人都 All-in → 暂停让玩家用技能
     if (isEveryoneAllIn()) {
-      setTimeout(dealRiver, 1000);
+      waitForPlayerThenAdvance(dealRiver, 'RIVER');
       return;
     }
     
@@ -1802,9 +1963,9 @@
     const riverCard = gameState.board[4];
     logEvent('RIVER', { card: cardToSolverString(riverCard), board: cardsToString(gameState.board) });
     
-    // 🎯 检查是否所有人都 All-in，如果是则直接摊牌
+    // 🎯 检查是否所有人都 All-in → 暂停让玩家用技能
     if (isEveryoneAllIn()) {
-      setTimeout(showdown, 1000);
+      waitForPlayerThenAdvance(showdown, 'SHOWDOWN');
       return;
     }
     
@@ -1829,6 +1990,58 @@
     setTimeout(determineWinner, 1000);
   }
 
+  // ========== 对手建模广播 (Phase 7) ==========
+  // 每次有玩家行动时，通知所有 pro/boss AI 的 OpponentModel
+  function broadcastActionToModels(actorId, action, ctx) {
+    gameState.players.forEach(p => {
+      if (p.type !== 'ai' || !p.ai || !p.ai.opponentModel) return;
+      if (p.id === actorId) return; // 不记录自己的动作
+      p.ai.opponentModel.recordAction(actorId, action, ctx);
+    });
+  }
+
+  // ========== FSM 事件触发 ==========
+  // 每手结束后，根据结果向每个 AI 的 FSM 发送事件
+  function fireFSMEvents(winnerIds, potWon) {
+    const bb = getBigBlind();
+    const isBigPot = potWon > bb * 10;
+
+    gameState.players.forEach(p => {
+      if (p.type !== 'ai' || !p.ai || !p.ai.fsm) return;
+
+      const isWinner = winnerIds.indexOf(p.id) !== -1;
+
+      if (isWinner) {
+        p.ai.fsm.onEvent(isBigPot ? 'win_big' : 'win_normal', { pot: potWon, bb: bb });
+      } else if (p.folded) {
+        p.ai.fsm.onEvent('fold', {});
+      } else {
+        // 参与了摊牌但输了 — 检测 Bad Beat（翻前领先但输）
+        // 简化判定：equity > 0.5 但输了 = bad beat
+        let isBadBeat = false;
+        if (p.cards && p.cards.length >= 2 && typeof EquityEstimator !== 'undefined') {
+          try {
+            const eq = EquityEstimator.estimate(p.cards, gameState.board || [], winnerIds.length, 100);
+            isBadBeat = eq.equity > 0.55;
+          } catch (e) { /* ignore */ }
+        }
+        p.ai.fsm.onEvent(isBadBeat ? 'bad_beat' : 'lose', {});
+      }
+
+      // 每手结束都检查筹码
+      p.ai.fsm.onEvent('chip_check', { chips: p.chips });
+
+      // 对手建模：记录每手结束
+      if (p.ai.opponentModel) {
+        gameState.players.forEach(other => {
+          if (other.id !== p.id) {
+            p.ai.opponentModel.recordHandEnd(other.id);
+          }
+        });
+      }
+    });
+  }
+
   function endHandEarly() {
     const winner = getActivePlayers()[0];
     const potWon = gameState.pot + gameState.players.reduce((sum, p) => sum + p.currentBet, 0);
@@ -1844,6 +2057,9 @@
     gameState.pot = 0;
     gameState.players.forEach(p => p.currentBet = 0);
     
+    // FSM 事件：所有弃牌者 + 赢家
+    fireFSMEvents([winner.id], potWon);
+
     logEvent('RESULT', {
       winner: winner.name,
       potWon: potWon,
@@ -1897,6 +2113,9 @@
     });
     
     gameState.pot = 0;
+
+    // FSM 事件：摊牌后所有 AI 收到结果
+    fireFSMEvents(winnerPlayers.map(w => w.id), potWon);
     
     const winnerNames = winnerPlayers.map(w => w.name).join(', ');
     logEvent('RESULT', {

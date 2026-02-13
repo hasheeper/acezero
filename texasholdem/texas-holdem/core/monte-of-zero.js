@@ -532,10 +532,11 @@
         }
       }
 
-      // ---- 屏蔽 (null_field): Void T3 被动，削弱所有被动力量 ----
+      // ---- 屏蔽 (null_field): Void T3 被动，反侦察 + 削弱被动力量 ----
+      // 引擎层：削弱所有被动 fortune/curse 30%
+      // UI 层：阻断敌方 Psyche 信息类技能对己方的效果（透视/胜率感知失效）
       const nullFieldForces = resolved.filter(f => f.type === 'null_field' && !f._suppressed);
       if (nullFieldForces.length > 0) {
-        // 屏蔽力量固定为 power=8，削弱所有被动力量 30%
         const nullReduction = 0.3;
         for (const f of resolved) {
           if (f._suppressed) continue;
@@ -756,25 +757,24 @@
     }
 
     /**
-     * 绝缘 (void_shield): Void T2 被动效果
-     * 敌方的 Moirai/Chaos 效果对绝缘持有者减半
+     * 绝缘 (void_shield): Void T2 toggle 效果
+     * 新设计：全场所有魔法效果减半（敌我不分）
+     * 开启绝缘时，不仅敌方效果被削弱，己方 fortune 等效果也被削弱
+     * 这是 Void"反魔法"的代价——虚无连自己人都不放过
      */
     _applyInsulation(resolved) {
       const shieldForces = resolved.filter(f => f.type === 'void_shield' && !f._suppressed);
       if (shieldForces.length === 0) return;
 
-      for (const shield of shieldForces) {
-        const shieldOwnerId = shield.ownerId;
-        // 找到针对此持有者的敌方 Moirai/Chaos forces
-        for (const f of resolved) {
-          if (f._suppressed) continue;
-          if (f.ownerId === shieldOwnerId) continue; // 己方不受影响
-          // 只减半 fortune (Moirai) 和 curse (Chaos) 效果
-          if (f.attr === 'moirai' || f.attr === 'chaos' ||
-              f.type === 'fortune' || f.type === 'curse') {
-            f.effectivePower = Math.round(f.effectivePower * 0.5 * 10) / 10;
-            f._insulationReduced = true;
-          }
+      // 绝缘生效：全场所有非 Void 的 fortune/curse 力量减半（敌我不分）
+      for (const f of resolved) {
+        if (f._suppressed) continue;
+        // Void 系技能自身不受影响
+        if (f.attr === 'void') continue;
+        // fortune 和 curse 效果减半
+        if (f.type === 'fortune' || f.type === 'curse') {
+          f.effectivePower = Math.round(f.effectivePower * 0.5 * 10) / 10;
+          f._insulationReduced = true;
         }
       }
     }
@@ -1177,14 +1177,18 @@
           .filter(h => winners.includes(h.hand))
           .map(h => h.playerId);
 
-        // 赢家: 55~75, 输家: 25~45, 有重叠 + 噪声
+        // scores 是胜率代理值，fortune 用它决定"选哪张牌让持有者赢"
+        // 核心：赢家和输家之间必须有大差距，fortune 才能有效偏向赢的牌
+        // 赢家: 55~75 (高分=fortune偏好), 输家: 15~35 (低分=fortune回避)
+        // rank 微调：同为赢家时，强牌型略高；同为输家时，强牌型略高
+        // 时髦度由 style bias 系统单独处理，不在这里
         const scores = {};
         const noise = () => (Math.random() - 0.5) * 10;
         for (const ph of handObjects) {
           if (winnerIds.includes(ph.playerId)) {
-            scores[ph.playerId] = Math.min(75, 55 + (ph.hand.rank || 0) * 1.5 + noise());
+            scores[ph.playerId] = Math.min(80, 55 + (ph.hand.rank || 0) * 2 + noise());
           } else {
-            scores[ph.playerId] = Math.max(15, 25 + (ph.hand.rank || 0) * 2 + noise());
+            scores[ph.playerId] = Math.max(10, 20 + (ph.hand.rank || 0) * 4 + noise());
           }
         }
 
