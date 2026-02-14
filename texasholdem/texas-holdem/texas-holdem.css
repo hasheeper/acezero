@@ -1613,6 +1613,19 @@ body {
   background-clip: text;
 }
 
+/* === Sealed state (封印) === */
+.hero-card.skill-sealed {
+  opacity: 0.5 !important;
+  border-color: #8B0000 !important;
+  box-shadow: inset 0 0 30px rgba(139, 0, 0, 0.3) !important;
+}
+.hero-card.skill-sealed .cost-badge {
+  background: #8B0000 !important;
+  color: #fff !important;
+  border-color: #8B0000 !important;
+  font-size: 11px !important;
+}
+
 /* === Active state (skill queued) === */
 .hero-card.skill-active {
   animation: heroCardActivePulse 1.5s ease-in-out infinite;
@@ -2403,6 +2416,25 @@ body {
 .peek-conf-mid  { color: #e67e22; }
 .peek-conf-low  { color: #e74c3c; }
 .peek-conf-vague { color: #a29bfe; }
+
+/* 千里眼多目标合并 overlay */
+.peek-target-section {
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(230, 126, 34, 0.15);
+}
+.peek-target-section:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+.peek-target-name {
+  font-size: 10px;
+  color: #f39c12;
+  font-weight: 700;
+  margin-bottom: 6px;
+  letter-spacing: 0.5px;
+}
 
 /* =========================================================
    Peek Targeting — 座位高亮（选择透视目标时）

@@ -59,10 +59,19 @@
     axiom:        { attr: 'psyche', tier: 1, threshold: 60 },
     static_field: { attr: 'void',   tier: 3, threshold: 20 },
     insulation:   { attr: 'void',   tier: 2, threshold: 40 },
-    reality:      { attr: 'void',   tier: 1, threshold: 60 }
+    reality:      { attr: 'void',   tier: 1, threshold: 60 },
+    // 角色专属技能
+    royal_decree: { attr: 'moirai', tier: 0, threshold: 80, exclusive: 'RINO' },
+    heart_read:   { attr: 'psyche', tier: 2, threshold: 20, exclusive: 'RINO' },
+    cooler:       { attr: 'chaos',  tier: 0, threshold: 80, exclusive: 'SIA' },
+    skill_seal:   { attr: 'chaos',  tier: 1, threshold: 40, exclusive: 'SIA' },
+    clairvoyance: { attr: 'psyche', tier: 0, threshold: 80, exclusive: 'LILIKA' },
+    card_swap:    { attr: 'chaos',  tier: 1, threshold: 20, exclusive: 'LILIKA' },
+    miracle:      { attr: 'moirai', tier: 0, threshold: 0,  exclusive: 'POPPO' },
+    lucky_find:   { attr: 'moirai', tier: 0, threshold: 0,  exclusive: 'POPPO' }
   };
 
-  // 特质解锁（按等级）
+  // 特质解锁（通用，按等级）
   const VANGUARD_TRAIT_UNLOCK = {
     0: null, 1: null, 2: 'blank_body', 3: 'blank_body', 4: 'blank_body', 5: 'blank_body'
   };
@@ -80,25 +89,164 @@
     5: { max: 100, regen: 5 }
   };
 
-  // 主手属性面板（KAZU = Void 特化）
-  const VANGUARD_ATTRS_BY_LEVEL = {
-    0: { moirai: 0,  chaos: 0,  psyche: 0,  void: 0 },
-    1: { moirai: 0,  chaos: 0,  psyche: 10, void: 20 },
-    2: { moirai: 0,  chaos: 0,  psyche: 20, void: 40 },
-    3: { moirai: 0,  chaos: 0,  psyche: 30, void: 60 },
-    4: { moirai: 0,  chaos: 0,  psyche: 35, void: 80 },
-    5: { moirai: 0,  chaos: 0,  psyche: 40, void: 100 }
+  // ==========================================================
+  //  专属角色档案 (NAMED_CHARACTERS)
+  //  专属角色有固定的属性成长、特质、专属技能
+  //  当作为 hero 主手/副手时，按等级查表展开
+  //  当作为 NPC 敌人时，使用 NPC_PRESETS 中的 boss 模板
+  // ==========================================================
+
+  const NAMED_CHARACTERS = {
+    // KAZU — 主角默认主手，Void 特化
+    KAZU: {
+      displayName: 'KAZU',
+      preferredSlot: 'vanguard',
+      attrsByLevel: {
+        0: { moirai: 0,  chaos: 0,  psyche: 0,  void: 0 },
+        1: { moirai: 0,  chaos: 0,  psyche: 10, void: 20 },
+        2: { moirai: 0,  chaos: 0,  psyche: 20, void: 40 },
+        3: { moirai: 0,  chaos: 0,  psyche: 30, void: 60 },
+        4: { moirai: 0,  chaos: 0,  psyche: 35, void: 80 },
+        5: { moirai: 0,  chaos: 0,  psyche: 40, void: 100 }
+      },
+      traitByLevel: {
+        vanguard: { 0: null, 1: null, 2: 'null_armor', 3: 'null_armor', 4: 'null_armor', 5: 'null_armor' },
+        rearguard: { 0: null, 1: null, 2: null, 3: 'steady_hand', 4: 'steady_hand', 5: 'steady_hand' }
+      },
+      exclusiveSkills: []  // KAZU 无专属技能
+    },
+
+    // RINO (♥ 天宫理乃) — 主角默认副手，Moirai + Psyche 特化
+    RINO: {
+      displayName: 'RINO',
+      preferredSlot: 'rearguard',
+      attrsByLevel: {
+        0: { moirai: 0,  chaos: 0,  psyche: 0,  void: 0 },
+        1: { moirai: 20, chaos: 10, psyche: 10, void: 0 },
+        2: { moirai: 40, chaos: 15, psyche: 15, void: 0 },
+        3: { moirai: 60, chaos: 20, psyche: 20, void: 0 },
+        4: { moirai: 70, chaos: 20, psyche: 25, void: 0 },
+        5: { moirai: 80, chaos: 20, psyche: 30, void: 0 }
+      },
+      traitByLevel: {
+        vanguard: { 0: null, 1: null, 2: 'crimson_crown', 3: 'crimson_crown', 4: 'crimson_crown', 5: 'crimson_crown' },
+        rearguard: { 0: null, 1: null, 2: null, 3: 'obsessive_love', 4: 'obsessive_love', 5: 'obsessive_love' }
+      },
+      exclusiveSkills: ['royal_decree', 'heart_read']
+    },
+
+    // SIA (♠ 夜伽希亚) — Chaos + Moirai 特化，Cooler 风格
+    SIA: {
+      displayName: 'SIA',
+      preferredSlot: 'vanguard',
+      attrsByLevel: {
+        0: { moirai: 0,  chaos: 0,  psyche: 0,  void: 0 },
+        1: { moirai: 10, chaos: 20, psyche: 5,  void: 0 },
+        2: { moirai: 15, chaos: 40, psyche: 5,  void: 0 },
+        3: { moirai: 20, chaos: 60, psyche: 10, void: 0 },
+        4: { moirai: 25, chaos: 70, psyche: 10, void: 0 },
+        5: { moirai: 30, chaos: 80, psyche: 10, void: 0 }
+      },
+      traitByLevel: {
+        vanguard: { 0: null, 1: null, 2: 'death_ledger', 3: 'death_ledger', 4: 'death_ledger', 5: 'death_ledger' },
+        rearguard: { 0: null, 1: null, 2: null, 3: 'binding_protocol', 4: 'binding_protocol', 5: 'binding_protocol' }
+      },
+      exclusiveSkills: ['cooler', 'skill_seal']
+    },
+
+    // LILIKA (♦ 莉莉卡) — Psyche + Chaos 特化，信息战/幻术师
+    LILIKA: {
+      displayName: 'LILIKA',
+      preferredSlot: 'vanguard',
+      attrsByLevel: {
+        0: { moirai: 0,  chaos: 0,  psyche: 0,  void: 0 },
+        1: { moirai: 5,  chaos: 10, psyche: 20, void: 0 },
+        2: { moirai: 5,  chaos: 15, psyche: 40, void: 0 },
+        3: { moirai: 10, chaos: 20, psyche: 60, void: 0 },
+        4: { moirai: 10, chaos: 25, psyche: 70, void: 0 },
+        5: { moirai: 10, chaos: 30, psyche: 80, void: 0 }
+      },
+      traitByLevel: {
+        vanguard: { 0: null, 1: null, 2: 'laser_eye', 3: 'laser_eye', 4: 'laser_eye', 5: 'laser_eye' },
+        rearguard: { 0: null, 1: null, 2: null, 3: 'service_fee', 4: 'service_fee', 5: 'service_fee' }
+      },
+      exclusiveSkills: ['clairvoyance', 'card_swap']
+    },
+
+    // POPPO (♣ 波普) — 被动触发型，绝境强运
+    POPPO: {
+      displayName: 'POPPO',
+      preferredSlot: 'rearguard',
+      attrsByLevel: {
+        0: { moirai: 0,  chaos: 0,  psyche: 0,  void: 0 },
+        1: { moirai: 5,  chaos: 0,  psyche: 0,  void: 5 },
+        2: { moirai: 10, chaos: 0,  psyche: 5,  void: 10 },
+        3: { moirai: 15, chaos: 0,  psyche: 5,  void: 15 },
+        4: { moirai: 20, chaos: 0,  psyche: 10, void: 15 },
+        5: { moirai: 25, chaos: 0,  psyche: 10, void: 20 }
+      },
+      traitByLevel: {
+        vanguard: { 0: null, 1: null, 2: 'four_leaf_clover', 3: 'four_leaf_clover', 4: 'four_leaf_clover', 5: 'four_leaf_clover' },
+        rearguard: { 0: null, 1: null, 2: null, 3: 'cockroach', 4: 'cockroach', 5: 'cockroach' }
+      },
+      exclusiveSkills: ['miracle', 'lucky_find']
+    }
   };
 
-  // 副手属性面板（RINO = Moirai 特化）
-  const REARGUARD_ATTRS_BY_LEVEL = {
-    0: { moirai: 0,  chaos: 0,  psyche: 0,  void: 0 },
-    1: { moirai: 20, chaos: 10, psyche: 10, void: 0 },
-    2: { moirai: 40, chaos: 15, psyche: 15, void: 0 },
-    3: { moirai: 60, chaos: 20, psyche: 20, void: 0 },
-    4: { moirai: 70, chaos: 20, psyche: 25, void: 0 },
-    5: { moirai: 80, chaos: 20, psyche: 30, void: 0 }
+  /**
+   * 专属角色作为 NPC 敌人时的默认配置
+   * 当 AI 在 seats 中写入 { "character": "RINO" } 时，自动展开为完整 boss 配置
+   */
+  const NAMED_NPC_PRESETS = {
+    RINO: {
+      level: 5,
+      ai: 'aggressive',
+      difficulty: 'boss',
+      emotion: 'confident',
+      attrs: { moirai: 80, chaos: 20, psyche: 30, void: 0 },
+      skills: ['royal_decree', 'grand_wish', 'minor_wish', 'heart_read'],
+      vanguardTrait: 'crimson_crown',
+      rearguardTrait: 'obsessive_love',
+      desc: '天宫理乃 — 绯红王冠的堕落公主'
+    },
+    SIA: {
+      level: 5,
+      ai: 'aggressive',
+      difficulty: 'pro',
+      emotion: 'calm',
+      attrs: { moirai: 30, chaos: 80, psyche: 10, void: 0 },
+      skills: ['cooler', 'havoc', 'hex', 'skill_seal'],
+      vanguardTrait: 'death_ledger',
+      rearguardTrait: 'binding_protocol',
+      desc: '夜伽希亚 — 死亡账簿的企业执行者'
+    },
+    LILIKA: {
+      level: 5,
+      ai: 'balanced',
+      difficulty: 'pro',
+      emotion: 'playful',
+      attrs: { moirai: 10, chaos: 30, psyche: 80, void: 0 },
+      skills: ['clairvoyance', 'refraction', 'clarity', 'card_swap'],
+      vanguardTrait: 'laser_eye',
+      rearguardTrait: 'service_fee',
+      desc: '莉莉卡 — 镜射之眼的幻术师'
+    },
+    POPPO: {
+      level: 5,
+      ai: 'passive',
+      difficulty: 'noob',
+      emotion: 'scared',
+      attrs: { moirai: 25, chaos: 0, psyche: 10, void: 20 },
+      skills: ['miracle', 'lucky_find'],
+      vanguardTrait: 'four_leaf_clover',
+      rearguardTrait: 'cockroach',
+      desc: '波普 — 擦地板的吉祥物'
+    }
   };
+
+  // 向后兼容：旧的位置表（通用角色用）
+  const VANGUARD_ATTRS_BY_LEVEL = NAMED_CHARACTERS.KAZU.attrsByLevel;
+  const REARGUARD_ATTRS_BY_LEVEL = NAMED_CHARACTERS.RINO.attrsByLevel;
 
   // 合并属性面板（取两者各维度最大值，用于战斗/防御）
   function mergeAttrs(vAttrs, rAttrs) {
@@ -113,9 +261,10 @@
   /**
    * 从属性面板推导可用技能（与 skill-system.js deriveSkillsFromAttrs 同构）
    * @param {object} attrs - { moirai, chaos, psyche, void }
-   * @returns {object} - { skillKey: level, ... }  level 基于属性值推算
+   * @param {string} [charName] - 角色名，用于过滤专属技能
+   * @returns {string[]} - 技能ID列表
    */
-  function deriveSkillsFromAttrs(attrs) {
+  function deriveSkillsFromAttrs(attrs, charName) {
     const total = (attrs.moirai || 0) + (attrs.chaos || 0) +
                   (attrs.psyche || 0) + (attrs.void || 0);
     const maxSlots = total >= 120 ? 4 : total >= 80 ? 3 : total >= 40 ? 2 : 1;
@@ -124,17 +273,59 @@
     for (const key in UNIVERSAL_SKILLS) {
       const def = UNIVERSAL_SKILLS[key];
       if (!def.attr) continue;
+      // 专属技能：只有对应角色可以使用
+      if (def.exclusive && def.exclusive !== charName) continue;
       if ((attrs[def.attr] || 0) >= def.threshold) {
         available.push({ key, ...def });
       }
     }
-    // T1 优先，同 tier 按属性值高的优先
+    // T0 > T1 > T2 > T3，同 tier 按属性值高的优先
     available.sort((a, b) => {
       if (a.tier !== b.tier) return a.tier - b.tier;
       return (attrs[b.attr] || 0) - (attrs[a.attr] || 0);
     });
 
     return available.slice(0, maxSlots).map(s => s.key);
+  }
+
+  /**
+   * 获取角色在指定位置和等级下的属性面板
+   * 专属角色使用 NAMED_CHARACTERS 表，通用角色使用位置表
+   */
+  function getCharAttrs(charName, level, slot) {
+    const nc = NAMED_CHARACTERS[charName];
+    if (nc && nc.attrsByLevel) {
+      return nc.attrsByLevel[level] || nc.attrsByLevel[0] || { moirai: 0, chaos: 0, psyche: 0, void: 0 };
+    }
+    // 通用角色：按位置查表
+    if (slot === 'vanguard') {
+      return VANGUARD_ATTRS_BY_LEVEL[level] || VANGUARD_ATTRS_BY_LEVEL[0];
+    }
+    return REARGUARD_ATTRS_BY_LEVEL[level] || REARGUARD_ATTRS_BY_LEVEL[0];
+  }
+
+  /**
+   * 获取角色在指定位置和等级下的特质
+   * 专属角色使用 NAMED_CHARACTERS 表，通用角色使用位置表
+   */
+  function getCharTrait(charName, level, slot) {
+    const nc = NAMED_CHARACTERS[charName];
+    if (nc && nc.traitByLevel && nc.traitByLevel[slot]) {
+      return nc.traitByLevel[slot][level] || null;
+    }
+    // 通用角色：按位置查表
+    if (slot === 'vanguard') {
+      return VANGUARD_TRAIT_UNLOCK[level] || null;
+    }
+    return REARGUARD_TRAIT_UNLOCK[level] || null;
+  }
+
+  /**
+   * 获取角色的专属技能列表
+   */
+  function getCharExclusiveSkills(charName) {
+    const nc = NAMED_CHARACTERS[charName];
+    return (nc && nc.exclusiveSkills) ? nc.exclusiveSkills : [];
   }
 
   // ==========================================================
@@ -153,7 +344,7 @@
     gambler:  { ai: 'maniac',     difficulty: 'noob',    desc: '赌徒 — 疯狂乱推，毫无章法' },
     rock:     { ai: 'rock',       difficulty: 'regular', desc: '老苟 — 不见兔子不撒鹰' },
     shark:    { ai: 'aggressive', difficulty: 'pro',     desc: '鲨鱼 — 剥削型打法，极其难缠' },
-    boss:     { ai: 'balanced',   difficulty: 'pro',     desc: '魔王 — 滴水不漏，连运气都会算' }
+    boss:     { ai: 'balanced',   difficulty: 'boss',    desc: '魔王 — 滴水不漏，连运气都会算' }
   };
 
   // ----------------------------------------------------------
@@ -279,20 +470,56 @@
   }
 
   /**
-   * 解析 AI 输出的座位配置：支持三种格式
-   *   1. 跑龙套速记: { "runner": "street_thug", "name": "阿猫" }
-   *   2. 三维组装:    { "name": "X", "kernel": "shark", "archetype": "cursed", "mood": "tilt" }
-   *   3. 原始直写:    { "vanguard": {...}, "ai": "balanced", ... }（透传，不处理）
+   * 从专属角色预设组装完整 NPC 座位配置
+   * @param {string} charKey - NAMED_NPC_PRESETS 键名（如 'RINO', 'SIA'）
+   * @param {object} [overrides] - 可选覆写（mood, difficulty 等）
+   * @returns {object} - 完整 NPC seat config
+   */
+  function assembleNamedNPC(charKey, overrides) {
+    const preset = NAMED_NPC_PRESETS[charKey];
+    if (!preset) return null;
+
+    const ov = overrides || {};
+    const result = {
+      vanguard: { name: preset.desc || charKey, level: ov.level || preset.level, trait: preset.vanguardTrait },
+      ai: ov.ai || preset.ai,
+      difficulty: ov.difficulty || preset.difficulty,
+      emotion: ov.mood || ov.emotion || preset.emotion,
+      attrs: { ...preset.attrs },
+      skills: [...preset.skills]
+    };
+    if (preset.rearguardTrait) {
+      result.rearguard = { name: charKey + '_REAR', level: ov.level || preset.level, trait: preset.rearguardTrait };
+    }
+    // 覆写名称
+    if (ov.name) result.vanguard.name = ov.name;
+    return result;
+  }
+
+  /**
+   * 解析 AI 输出的座位配置：支持四种格式
+   *   1. 专属角色速记: { "character": "RINO" } 或 { "character": "SIA", "mood": "tilt" }
+   *   2. 跑龙套速记:   { "runner": "street_thug", "name": "阿猫" }
+   *   3. 三维组装:      { "name": "X", "kernel": "shark", "archetype": "cursed", "mood": "tilt" }
+   *   4. 原始直写:      { "vanguard": {...}, "ai": "balanced", ... }（透传，不处理）
    */
   function resolveNpcSeat(seatData) {
     if (!seatData) return null;
 
-    // 模式 1: 跑龙套速记
+    // 模式 1: 专属角色速记
+    if (seatData.character) {
+      const key = seatData.character.toUpperCase();
+      const npc = assembleNamedNPC(key, seatData);
+      if (npc) return npc;
+      console.warn(`${PLUGIN_NAME} 未知专属角色: ${seatData.character}，降级为三维组装`);
+    }
+
+    // 模式 2: 跑龙套速记
     if (seatData.runner) {
       return assembleFromRunner(seatData.runner, seatData.name);
     }
 
-    // 模式 2: 三维组装（有 kernel 字段）
+    // 模式 3: 三维组装（有 kernel 字段）
     if (seatData.kernel) {
       return assembleNPC(seatData.name || '???', {
         kernel:    seatData.kernel,
@@ -301,7 +528,7 @@
       });
     }
 
-    // 模式 3: 原始直写（透传）
+    // 模式 4: 原始直写（透传）
     return seatData;
   }
 
@@ -393,21 +620,21 @@
     const rLv = rName ? Math.min(5, Math.max(0, rData.level || 0)) : 0;
     const maxLv = Math.max(vLv, rLv);
 
-    // 各角色独立属性面板（按等级推导）
-    const vAttrs = VANGUARD_ATTRS_BY_LEVEL[vLv] || VANGUARD_ATTRS_BY_LEVEL[0];
-    const rAttrs = rName ? (REARGUARD_ATTRS_BY_LEVEL[rLv] || REARGUARD_ATTRS_BY_LEVEL[0]) : { moirai: 0, chaos: 0, psyche: 0, void: 0 };
+    // 各角色独立属性面板（按角色名 + 等级查表，支持专属角色）
+    const vAttrs = getCharAttrs(vName, vLv, 'vanguard');
+    const rAttrs = rName ? getCharAttrs(rName, rLv, 'rearguard') : { moirai: 0, chaos: 0, psyche: 0, void: 0 };
 
     // 合并属性（取各维度最大值，用于战斗/防御）
     const eraAttrs = hero.attrs || null;
     const attrs = eraAttrs || mergeAttrs(vAttrs, rAttrs);
 
-    // 技能：各角色独立推导
-    const vanguardSkills = deriveSkillsFromAttrs(vAttrs);
-    const rearguardSkills = rName ? deriveSkillsFromAttrs(rAttrs) : [];
+    // 技能：各角色独立推导（传入角色名以解锁专属技能）
+    const vanguardSkills = deriveSkillsFromAttrs(vAttrs, vName);
+    const rearguardSkills = rName ? deriveSkillsFromAttrs(rAttrs, rName) : [];
 
-    // 特质
-    const vTrait = VANGUARD_TRAIT_UNLOCK[vLv] || null;
-    const rTrait = rName ? (REARGUARD_TRAIT_UNLOCK[rLv] || null) : null;
+    // 特质（按角色名 + 等级 + 位置查表，支持专属角色）
+    const vTrait = getCharTrait(vName, vLv, 'vanguard');
+    const rTrait = rName ? getCharTrait(rName, rLv, 'rearguard') : null;
 
     // 魔运值：从副手数据读取（副手管理魔运池），无副手则从主手
     const manaSource = rName ? rData : vData;
@@ -765,7 +992,7 @@ ${charLines}
       return buildCompleteGameConfig(vars, {});
     },
 
-    // 手动触发战局（支持 runner/kernel/直写三种格式）
+    // 手动触发战局（支持 character/runner/kernel/直写四种格式）
     async triggerBattle(rawBattleData) {
       const eraVars = await getEraVars();
       const resolved = resolveBattleData(rawBattleData);
@@ -793,6 +1020,7 @@ ${charLines}
     // NPC 组装
     assembleNPC,
     assembleFromRunner,
+    assembleNamedNPC,
     resolveBattleData,
 
     // 三维度配置表
@@ -800,8 +1028,12 @@ ${charLines}
       AI_KERNELS,
       RPG_TEMPLATES,
       MOOD_MODIFIERS,
-      RUNNER_PRESETS
+      RUNNER_PRESETS,
+      NAMED_NPC_PRESETS
     },
+
+    // 角色档案
+    CHARACTERS: NAMED_CHARACTERS,
 
     // 原有表
     TABLES: {
@@ -814,17 +1046,20 @@ ${charLines}
     },
 
     deriveSkillsFromAttrs,
+    getCharAttrs,
+    getCharTrait,
 
-    version: '0.6.0'
+    version: '0.7.0'
   };
 
   // ==========================================================
   //  初始化完成
   // ==========================================================
 
-  console.log(`${PLUGIN_NAME} 插件加载完成 (v0.6.0)`);
+  console.log(`${PLUGIN_NAME} 插件加载完成 (v0.7.0)`);
   console.log(`${PLUGIN_NAME} NPC 组装: kernel=${Object.keys(AI_KERNELS).join('/')} | archetype=${Object.keys(RPG_TEMPLATES).join('/')} | mood=${Object.keys(MOOD_MODIFIERS).join('/')}`);
+  console.log(`${PLUGIN_NAME} 专属角色: ${Object.keys(NAMED_CHARACTERS).join(', ')} | NPC预设: ${Object.keys(NAMED_NPC_PRESETS).join(', ')}`);
   console.log(`${PLUGIN_NAME} 跑龙套: ${Object.keys(RUNNER_PRESETS).join(', ')}`);
-  console.log(`${PLUGIN_NAME} 流程: AI 输出 <${BATTLE_TAG}> → NPC组装 → 合并 ERA hero → 注入 <${FRONTEND_TAG}> → ST 正则 → STver.html`);
+  console.log(`${PLUGIN_NAME} 流程: AI 输出 <${BATTLE_TAG}> → NPC组装(character/runner/kernel/直写) → 合并 ERA hero → 注入 <${FRONTEND_TAG}> → ST 正则 → STver.html`);
 
 })();

@@ -332,6 +332,14 @@
     UI.txtBoard.innerHTML = text;
   }
 
+  var _SKILL_CN = {
+    fortune: '幸运', curse: '凶咒', clarity: '澄澈', refraction: '折射',
+    reversal: '真理', null_field: '屏蔽', void_shield: '绝缘', purge_all: '现实',
+    royal_decree: '敕令', heart_read: '读心', cooler: '冤家牌', seal: '封印',
+    clairvoyance: '千里眼', card_swap: '偷天换日', miracle: '奇迹', lucky_find: '捡到了'
+  };
+  function _skillEffectCN(effect) { return _SKILL_CN[effect] || effect; }
+
   function updatePotDisplay() {
     const activeBets = gameState.players.reduce((sum, p) => sum + p.currentBet, 0);
     const totalPot = gameState.pot + activeBets;
@@ -627,14 +635,17 @@
     return playersWithChips.length <= 1;
   }
 
-  // 🎯 All-in 后暂停：让玩家有时间用技能，点击"继续"后发下一街
+  // 🎯 All-in 后暂停：让玩家有时间用技能，点击"继续"后 NPC 同时出招 → 发下一街
   let _allinAdvanceFn = null;
   function waitForPlayerThenAdvance(nextFn, label) {
-    // 1. NPC 技能决策
-    skillUI.onRoundEnd({
+    var gameCtx = {
       players: gameState.players, pot: gameState.pot,
-      phase: gameState.phase, board: gameState.board, blinds: getBigBlind()
-    });
+      phase: gameState.phase, board: gameState.board, blinds: getBigBlind(),
+      allIn: true
+    };
+
+    // 1. 基础处理（mana/CD/triggers），不含 NPC 出招
+    skillUI.onRoundEndBase(gameCtx);
 
     // 2. 启用玩家技能面板
     skillUI.update({
@@ -643,20 +654,43 @@
       board: gameState.board, players: gameState.players
     });
 
-    // 3. 显示"继续"按钮（复用 Check/Call 按钮）
-    updateMsg('All-in! 可使用技能，准备好后点击继续');
-    UI.btnFold.disabled = true;
-    UI.btnRaise.disabled = true;
-    UI.btnCheckCall.disabled = false;
-    UI.btnCheckCall.textContent = '继续 → ' + label;
+    // 3. 显示"继续"按钮（临时按钮，避免 btnCheckCall 事件冲突）
+    updateMsg('⚡ 技能博弈阶段 — 可使用技能，准备好后点击继续');
+    document.body.classList.add('game-active');
+    UI.btnFold.style.display = 'none';
+    UI.btnCheckCall.style.display = 'none';
+    UI.btnRaise.style.display = 'none';
     UI.raiseControls.style.display = 'none';
 
-    // 4. 存储回调，点击时触发
-    _allinAdvanceFn = function() {
-      _allinAdvanceFn = null;
+    var proceedBtn = document.createElement('button');
+    proceedBtn.className = 'btn-cmd';
+    proceedBtn.textContent = '继续 → ' + label;
+    proceedBtn.id = 'btn-allin-proceed';
+    var actionRow = document.getElementById('action-row');
+    actionRow.appendChild(proceedBtn);
+    actionRow.style.display = 'flex';
+
+    // 4. 点击时 NPC 同时出招 → 发牌
+    _allinAdvanceFn = null;
+    proceedBtn.addEventListener('click', function () {
+      var npcRecords = skillUI.fireNpcSkills(gameCtx);
+      if (proceedBtn.parentNode) proceedBtn.parentNode.removeChild(proceedBtn);
+      UI.btnFold.style.display = '';
+      UI.btnCheckCall.style.display = '';
+      UI.btnRaise.style.display = '';
+      actionRow.style.display = '';
       enablePlayerControls(false);
-      setTimeout(nextFn, 300);
-    };
+
+      if (npcRecords && npcRecords.length > 0) {
+        var summary = npcRecords.map(function(r) {
+          return r.ownerName + ' → ' + _skillEffectCN(r.effect) + (r.targetName ? '(' + r.targetName + ')' : '');
+        }).join(' | ');
+        updateMsg('⚡ ' + summary);
+        setTimeout(nextFn, 1500);
+      } else {
+        setTimeout(nextFn, 300);
+      }
+    });
   }
 
   function isRoundComplete() {
@@ -881,17 +915,27 @@
     
     // 计算该 AI 的最高魔运等级（影响弃牌倾向）
     const playerSkills = skillSystem.getPlayerSkills(player.id);
-    const maxMagicLevel = playerSkills.reduce((max, s) => Math.max(max, s.level || 0), 0);
+    const maxMagicLevel = playerSkills.reduce((max, s) => Math.max(max, s.tier != null ? (4 - s.tier) : 0, 0), 0);
 
     // 计算净魔运力量（己方 fortune - 敌方 curse）用于 pro/boss 魔运感知
+    // 合并 passive forces + pendingForces（不调用 collectActiveForces 以避免 backlash 副作用）
     let netForce = 0;
     let opponentManaRatio = 0.5;
     if (typeof skillSystem !== 'undefined') {
       try {
-        const pf = skillSystem.pendingForces || [];
-        const myFortune = pf.filter(f => f.ownerId === player.id && f.type === 'fortune')
+        const foldedSet = new Set(gameState.players.filter(p => p.folded).map(p => p.id));
+        // passive/toggle forces
+        const passiveForces = [];
+        for (const [, sk] of skillSystem.skills) {
+          if (!sk.active) continue;
+          if (sk.activation !== 'passive' && sk.activation !== 'toggle') continue;
+          if (foldedSet.has(sk.ownerId)) continue;
+          passiveForces.push({ ownerId: sk.ownerId, type: sk.effect === 'royal_decree' || sk.effect === 'miracle' || sk.effect === 'lucky_find' ? 'fortune' : sk.effect, power: sk.power || 0, targetId: sk.targetId });
+        }
+        const allForces = passiveForces.concat(skillSystem.pendingForces.filter(f => !foldedSet.has(f.ownerId)));
+        const myFortune = allForces.filter(f => f.ownerId === player.id && f.type === 'fortune')
           .reduce((s, f) => s + (f.power || 0), 0);
-        const enemyCurse = pf.filter(f => f.ownerId !== player.id && f.type === 'curse' &&
+        const enemyCurse = allForces.filter(f => f.ownerId !== player.id && f.type === 'curse' &&
           (f.targetId == null || f.targetId === player.id))
           .reduce((s, f) => s + (f.power || 0), 0);
         netForce = myFortune - enemyCurse;
@@ -909,6 +953,22 @@
       } catch (e) { /* ignore */ }
     }
 
+    // 收集对手难度档案（pro/boss 用于读牌）
+    const opponentProfiles = [];
+    for (const opp of getActivePlayers()) {
+      if (opp.id === player.id) continue;
+      opponentProfiles.push({
+        id: opp.id,
+        name: opp.name,
+        difficulty: opp.ai ? opp.ai.difficultyType : 'regular',
+        risk: opp.ai ? opp.ai.riskType : 'balanced',
+        currentBet: opp.currentBet || 0,
+        totalBet: opp.totalBet || 0,
+        chips: opp.chips || 0,
+        isHuman: !opp.ai
+      });
+    }
+
     const context = {
       playerName: player.name,
       holeCards: player.cards,
@@ -924,11 +984,67 @@
       netForce: netForce,
       opponentManaRatio: opponentManaRatio,
       heroId: getHeroPlayer().id,
-      raiseCount: gameState.raiseCount || 0
+      raiseCount: gameState.raiseCount || 0,
+      opponentProfiles: opponentProfiles,
+      bigBlind: getBigBlind()
     };
     
-    const decision = player.ai.decide(context);
-    
+    // ── Phase 1: 灵视类技能（betting 前，影响决策）──
+    var preSkills = [];
+    var turnGameCtx = null;
+    if (typeof skillSystem !== 'undefined' && skillSystem.npcDecideSkillsForPlayer) {
+      turnGameCtx = {
+        players: gameState.players, pot: gameState.pot + gameState.players.reduce(function(s,p){return s+p.currentBet},0),
+        phase: gameState.phase, board: gameState.board, blinds: getBigBlind()
+      };
+      preSkills = skillSystem.npcDecideSkillsForPlayer(player.id, turnGameCtx, 'pre-bet');
+      if (preSkills.length > 0) {
+        skillUI.updateDisplay();
+        skillUI.updateButtons();
+        _showTurnSkillMsg(player, preSkills);
+      }
+    }
+
+    // 如果用了灵视技能，延迟后再 betting
+    if (preSkills.length > 0) {
+      setTimeout(function() { _aiDoBetThenPostSkill(player, context, turnGameCtx); }, 1200);
+      return;
+    }
+    _aiDoBetThenPostSkill(player, context, turnGameCtx);
+  }
+
+  function _showTurnSkillMsg(player, skills) {
+    var skillMsg = skills.map(function(r) {
+      return _skillEffectCN(r.effect) + (r.targetName ? ' → ' + r.targetName : '');
+    }).join(', ');
+    updateMsg('⚡ ' + player.name + ' 使用了 ' + skillMsg);
+  }
+
+  function _aiDoBetThenPostSkill(player, context, turnGameCtx) {
+    // ── Phase 2: Betting 决策 ──
+    var decision = player.ai.decide(context);
+
+    // ── Phase 3: 攻击/增益类技能（betting 后，不弃牌才用）──
+    var postSkills = [];
+    if (decision.action !== PokerAI.ACTIONS.FOLD && turnGameCtx &&
+        typeof skillSystem !== 'undefined' && skillSystem.npcDecideSkillsForPlayer) {
+      postSkills = skillSystem.npcDecideSkillsForPlayer(player.id, turnGameCtx, 'post-bet');
+      if (postSkills.length > 0) {
+        skillUI.updateDisplay();
+        skillUI.updateButtons();
+        _showTurnSkillMsg(player, postSkills);
+      }
+    }
+
+    // 执行 betting 动作（如果有 post-bet 技能，延迟显示后再执行）
+    if (postSkills.length > 0) {
+      setTimeout(function() { _execBetAction(player, decision); }, 1200);
+    } else {
+      _execBetAction(player, decision);
+    }
+  }
+
+  function _execBetAction(player, decision) {
     switch (decision.action) {
       case PokerAI.ACTIONS.FOLD:
         aiFold(player);
@@ -1005,8 +1121,16 @@
     setTimeout(nextTurn, 800);
   }
 
+  var MAX_RAISES_PER_ROUND = 4;
+
   function aiRaise(player, amount) {
     const toCall = gameState.currentBet - player.currentBet;
+
+    // 硬性加注上限：每轮最多 4 次 raise，超过则降级为 call
+    if ((gameState.raiseCount || 0) >= MAX_RAISES_PER_ROUND) {
+      aiCall(player);
+      return;
+    }
     
     // 先跟注
     if (toCall > 0) {
@@ -1222,17 +1346,20 @@
     };
 
     // 力量三分类：favorable(对玩家有利) / hostile(对玩家不利) / neutral(中立)
-    // 玩家 ID = 0
-    var HERO_ID = 0;
+    var HERO_ID = skillUI.humanPlayerId != null ? skillUI.humanPlayerId : 0;
     var BENEFICIAL_TYPES = { fortune: 1, clarity: 1, refraction: 1, reversal: 1, null_field: 1, void_shield: 1, purge_all: 1 };
     var HARMFUL_TYPES = { curse: 1, backlash: 1 };
 
     function _classifyForce(f) {
-      // 对玩家有利：玩家自己的有益技能，或转化后归属玩家的幸运
-      if (BENEFICIAL_TYPES[f.type] && f.ownerId === HERO_ID) return 'favorable';
-      if (f.converted && f.ownerId === HERO_ID) return 'favorable';
-      // 对玩家不利：诅咒/反噬 targeting 玩家
-      if (HARMFUL_TYPES[f.type] && f.targetId === HERO_ID) return 'hostile';
+      // 己方发出的力量（包括己方 curse 攻击敌人）→ favorable
+      if (f.ownerId === HERO_ID) return 'favorable';
+      // 转化后归属玩家的幸运
+      if (f.converted && f.beneficiaryId === HERO_ID) return 'favorable';
+      // 敌方诅咒/反噬 targeting 玩家 → hostile
+      if (HARMFUL_TYPES[f.type] && f.ownerId !== HERO_ID) {
+        // 无目标的 curse 默认对玩家不利，有目标的只看是否指向玩家
+        if (f.targetId == null || f.targetId === HERO_ID) return 'hostile';
+      }
       // 其余都是中立（别人的幸运、别人的psyche、诅咒别人的等）
       return 'neutral';
     }
@@ -1459,19 +1586,31 @@
     var TYPE_CN = {
       fortune: '幸运', curse: '凶', backlash: '反噬',
       clarity: '澄澈', refraction: '折射', reversal: '真理',
-      null_field: '屏蔽', void_shield: '绝缘', purge_all: '现实'
+      null_field: '屏蔽', void_shield: '绝缘', purge_all: '现实',
+      clairvoyance: '千里眼', heart_read: '读心'
+    };
+    var SKILL_CN = {
+      cooler: '冤家牌', card_swap: '偷天换日', royal_decree: '敕令',
+      miracle: '奇迹', lucky_find: '捡到了', skill_seal: '封印'
     };
     // attr → CSS class 映射
     var ATTR_CLS = {
       fortune: 'fpk-attr-moirai', curse: 'fpk-attr-chaos', backlash: 'fpk-attr-chaos',
       clarity: 'fpk-attr-psyche', refraction: 'fpk-attr-psyche', reversal: 'fpk-attr-psyche',
+      clairvoyance: 'fpk-attr-psyche', heart_read: 'fpk-attr-psyche',
       null_field: 'fpk-attr-void', void_shield: 'fpk-attr-void', purge_all: 'fpk-attr-void'
     };
-    var typeCn = TYPE_CN[f.type] || f.type;
+    // 优先用 skillKey 的中文名，否则用 type 的中文名
+    var typeCn = (f.skillKey && SKILL_CN[f.skillKey]) || TYPE_CN[f.type] || f.type;
     var attrCls = ATTR_CLS[f.type] || 'fpk-attr-void';
     var suppCls = f.suppressed ? ' fpk-chip-suppressed' : '';
     var h = '<div class="fpk-chip ' + attrCls + suppCls + '">';
-    h += '<span class="c-txt">' + f.owner + ' · ' + typeCn + '</span>';
+    h += '<span class="c-txt">' + f.owner + ' · ' + typeCn;
+    // 显示目标（curse/seal 类技能）
+    if (f.targetName) {
+      h += ' → ' + f.targetName;
+    }
+    h += '</span>';
     if (f.tier) h += ' <span class="fpk-tier-badge">' + _tierLabel(f.tier) + '</span>';
     h += '</div>';
     return h;
@@ -1662,6 +1801,9 @@
     gameState.actionCount = 0;
     gameState.raiseCount = 0;
     
+    // 重置回合内技能使用记录
+    if (typeof skillSystem !== 'undefined' && skillSystem.resetTurnSkillTracking) skillSystem.resetTurnSkillTracking();
+
     // 技能系统：新一手牌开始
     skillUI.onNewHand();
 
@@ -1738,8 +1880,8 @@
 
   // ========== 手牌保底 (Phase 5) ==========
   // pro/boss NPC 的手牌不能太差，否则重抽
-  const HAND_FLOOR = { pro: 30, boss: 45 };
-  const HAND_FLOOR_MAX_RETRIES = { pro: 3, boss: 5 };
+  const HAND_FLOOR = { pro: 30, boss: 40 };
+  const HAND_FLOOR_MAX_RETRIES = { pro: 5, boss: 15 };
 
   function enforceHandFloor() {
     gameState.players.forEach(player => {
@@ -1836,15 +1978,14 @@
     }
     gameState.actionCount = 0;
 
-    // Preflop NPC 技能决策：发牌后、下注前触发
-    // 其他阶段在 endBettingRound 中触发
-    skillUI.onRoundEnd({
-      players: gameState.players,
-      pot: gameState.pot,
-      phase: gameState.phase,
-      board: gameState.board,
-      blinds: getBigBlind()
-    });
+    // Preflop 发牌后：只检查被动触发技能（如 Poppo 的 miracle/lucky_find）
+    // NPC 主动技能决策延迟到 endBettingRound，此时 commit > 0，pro/boss 才会用技能
+    if (skillUI.skillSystem) {
+      skillUI.skillSystem.checkTriggers({
+        players: gameState.players, pot: gameState.pot,
+        phase: gameState.phase, board: gameState.board, blinds: getBigBlind()
+      });
+    }
     
     setTimeout(() => {
       nextTurn();
@@ -1875,32 +2016,103 @@
   function endBettingRound() {
     setTurnIndicator(-1);
     collectBetsIntoPot();
-    
-    // 技能系统：每轮结束 → 恢复mana + 重置toggle + 检查触发 + NPC决策
-    skillUI.onRoundEnd({
+
+    // 检测是否所有非弃牌玩家都 all-in（chips=0）
+    var activePlayers = gameState.players.filter(function(p) { return p.isActive && !p.folded; });
+    var allAllIn = activePlayers.length > 0 && activePlayers.every(function(p) { return p.chips === 0; });
+
+    var gameCtx = {
       players: gameState.players,
       pot: gameState.pot,
       phase: gameState.phase,
       board: gameState.board,
-      blinds: getBigBlind()
+      blinds: getBigBlind(),
+      allIn: allAllIn
+    };
+
+    // 基础处理：mana恢复 + CD递减 + 触发检查（不含NPC出招）
+    skillUI.onRoundEndBase(gameCtx);
+
+    // River → 直接 NPC出招 + showdown
+    if (gameState.phase === 'river') {
+      skillUI.fireNpcSkills(gameCtx);
+      setTimeout(showdown, 800);
+      return;
+    }
+
+    // Hero 已弃牌 → 跳过技能阶段
+    var hero = getHeroPlayer();
+    if (!hero || hero.folded) {
+      skillUI.fireNpcSkills(gameCtx);
+      setTimeout(_proceedToDeal, 800);
+      return;
+    }
+
+    // ── 技能博弈阶段：暂停让玩家出招 ──
+    _enterSkillPhase(gameCtx);
+  }
+
+  function _proceedToDeal() {
+    // 重置回合内技能使用记录（新一街开始）
+    if (typeof skillSystem !== 'undefined' && skillSystem.resetTurnSkillTracking) skillSystem.resetTurnSkillTracking();
+    switch (gameState.phase) {
+      case 'preflop': dealFlop(); break;
+      case 'flop':    dealTurn(); break;
+      case 'turn':    dealRiver(); break;
+    }
+  }
+
+  /**
+   * 技能博弈阶段：玩家可用 grimoire 出招
+   * 点"继续发牌"→ NPC同时出招 → 发牌
+   */
+  function _enterSkillPhase(gameCtx) {
+    // 启用技能面板（让 grimoire 按钮可用）
+    skillUI.update({
+      phase: gameState.phase, isPlayerTurn: true,
+      deckCards: deckLib ? deckLib.cards : [],
+      board: gameState.board, players: gameState.players
     });
-    
-    setTimeout(() => {
-      switch (gameState.phase) {
-        case 'preflop':
-          dealFlop();
-          break;
-        case 'flop':
-          dealTurn();
-          break;
-        case 'turn':
-          dealRiver();
-          break;
-        case 'river':
-          showdown();
-          break;
+
+    updateMsg('⚡ 技能博弈阶段 — 可使用魔导书');
+    document.body.classList.add('game-active');
+
+    // 隐藏原始按钮（不能复用 btnCheckCall，它有永久的 playerCheckCall 监听器）
+    UI.btnFold.style.display = 'none';
+    UI.btnCheckCall.style.display = 'none';
+    UI.btnRaise.style.display = 'none';
+    UI.raiseControls.style.display = 'none';
+
+    // 创建临时按钮
+    var proceedBtn = document.createElement('button');
+    proceedBtn.className = 'btn-cmd';
+    proceedBtn.textContent = '继续发牌 ▶';
+    proceedBtn.id = 'btn-skill-proceed';
+    var actionRow = document.getElementById('action-row');
+    actionRow.appendChild(proceedBtn);
+    actionRow.style.display = 'flex';
+
+    proceedBtn.addEventListener('click', function () {
+      // NPC 同时出招
+      var npcRecords = skillUI.fireNpcSkills(gameCtx);
+      // 移除临时按钮，恢复原始按钮
+      if (proceedBtn.parentNode) proceedBtn.parentNode.removeChild(proceedBtn);
+      UI.btnFold.style.display = '';
+      UI.btnCheckCall.style.display = '';
+      UI.btnRaise.style.display = '';
+      actionRow.style.display = '';
+
+      // 显示 NPC 技能使用汇总
+      if (npcRecords && npcRecords.length > 0) {
+        var summary = npcRecords.map(function(r) {
+          return r.ownerName + ' → ' + _skillEffectCN(r.effect) + (r.targetName ? '(' + r.targetName + ')' : '');
+        }).join(' | ');
+        updateMsg('⚡ ' + summary);
+        setTimeout(_proceedToDeal, 1500);
+      } else {
+        _proceedToDeal();
       }
-    }, 800);
+    });
   }
 
   async function dealFlop() {

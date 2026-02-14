@@ -93,6 +93,7 @@
       options = options || {};
       const rinoPlayerId = options.rinoPlayerId != null ? options.rinoPlayerId : 0;
       this._heroId = rinoPlayerId; // 存储供内部方法使用
+      this._players = players; // 存储供 meta 构建使用
       if (this.combatFormula) this.combatFormula.heroId = rinoPlayerId;
 
       // ---- 调试时间线 ----
@@ -145,7 +146,8 @@
       );
       const metaForces = enhancedForces.filter(f =>
         f.type === 'null_field' || f.type === 'void_shield' ||
-        f.type === 'clarity' || f.type === 'refraction' || f.type === 'reversal'
+        f.type === 'clarity' || f.type === 'refraction' || f.type === 'reversal' ||
+        f.type === 'heart_read' || f.type === 'clairvoyance'
       );
 
       // 如果没有任何力在生效，纯随机
@@ -265,18 +267,29 @@
       // 使用对抗后的 resolvedForces（包含 _suppressed 标记 + 转化的 fortune）
       const resolvedForMeta = this._lastResolvedForces || [];
       this.lastSelectionMeta = {
-        activeForces: resolvedForMeta.map(f => ({
-          ownerId: f.ownerId,
-          owner: f.ownerName || f.ownerId,
-          targetId: f.targetId != null ? f.targetId : null,
-          type: f.type,
-          attr: f.attr,
-          tier: f.tier,
-          power: f.power,
-          effectivePower: f.effectivePower,
-          suppressed: !!f._suppressed,
-          converted: !!f._converted
-        })),
+        activeForces: resolvedForMeta.map(f => {
+          // 查找目标名称（优先从 players 数组查，保证准确）
+          var tName = null;
+          if (f.targetId != null) {
+            var tPlayer = (this._players || []).find(p => p.id === f.targetId);
+            tName = tPlayer ? tPlayer.name : (f.ownerName || ('ID:' + f.targetId));
+          }
+          return {
+            ownerId: f.ownerId,
+            owner: f.ownerName || f.ownerId,
+            targetId: f.targetId != null ? f.targetId : null,
+            targetName: tName,
+            type: f.type,
+            attr: f.attr,
+            tier: f.tier,
+            power: f.power,
+            effectivePower: f.effectivePower,
+            skillKey: f.skillKey || null,
+            protectId: f.protectId != null ? f.protectId : null,
+            suppressed: !!f._suppressed,
+            converted: !!f._converted
+          };
+        }),
         psycheEvents: this._lastPsycheEvents || [],
         totalUniverses: universes.length,
         selectedCard: cardToSolverString(selectedUniverse.card),
@@ -389,7 +402,7 @@
               break;
             }
             case 'curse': {
-              const targetId = force.targetId != null ? force.targetId : 0;
+              const targetId = force.targetId != null ? force.targetId : (this._heroId != null ? this._heroId : 0);
               const targetScore = u.scores[targetId] || 0;
               const loseRate = 1 - (targetScore / 100);
               contribution = force.effectivePower * loseRate;
@@ -844,7 +857,8 @@
       // 收集所有未被压制的 Psyche 裁定力
       const psycheForces = resolved.filter(f =>
         !f._suppressed &&
-        (f.type === 'clarity' || f.type === 'refraction' || f.type === 'reversal')
+        (f.type === 'clarity' || f.type === 'refraction' || f.type === 'reversal' ||
+         f.type === 'heart_read' || f.type === 'clairvoyance')
       );
       if (psycheForces.length === 0) return events;
 
@@ -857,8 +871,11 @@
         }
       }
 
-      for (const oid in ownerBest) {
-        const arbiter = ownerBest[oid];
+      // 按 tier 升序排列（tier 越低 = 越强，优先处理）
+      // 防止弱 Psyche (T3 clarity) 抢先消耗 curse，导致强 Psyche (T2 refraction) 空放
+      const sortedArbiters = Object.values(ownerBest).sort((a, b) => a.tier - b.tier);
+
+      for (const arbiter of sortedArbiters) {
         const arbiterOwnerId = arbiter.ownerId;
 
         // 确定转化率和可拦截的 tier 范围
@@ -869,20 +886,33 @@
             conversionRatio = 1.0;
             canInterceptT1 = true;
             break;
+          case 'clairvoyance':
+            // T0 千里眼：100% 转化，可拦截 T1（与真理同级）
+            conversionRatio = 1.0;
+            canInterceptT1 = true;
+            break;
           case 'refraction':
             // T2 折射：50% 转化，不可拦截 T1
             conversionRatio = 0.5;
             canInterceptT1 = false;
             break;
+          case 'heart_read':
+            // T2 读心：15% 转化，不可拦截 T1
+            conversionRatio = 0.15;
+            canInterceptT1 = false;
+            break;
           case 'clarity':
           default:
-            // T3 澄澈：0% 转化（纯净化），不可拦截 T1
-            conversionRatio = 0;
+            // T3 澄澈：25% 转化，不可拦截 T1
+            conversionRatio = 0.25;
             canInterceptT1 = false;
             break;
         }
 
-        // 扫描所有敌方 Curse forces
+        // 保护目标：protectId 指定保护谁，未设置则默认保护自己
+        const protectId = arbiter.protectId != null ? arbiter.protectId : arbiterOwnerId;
+
+        // 扫描敌方 Curse forces — 只拦截指向保护目标的 curse
         let intercepted = false;
         const snapshotLen = resolved.length; // 防止遍历新 push 的元素
         for (let i = 0; i < snapshotLen; i++) {
@@ -890,6 +920,9 @@
           if (f._suppressed) continue;
           if (f.type !== 'curse') continue;
           if (f.ownerId === arbiterOwnerId) continue; // 不拦截己方
+
+          // 只拦截指向保护目标的 curse（无目标的 curse 视为全体，也拦截）
+          if (f.targetId != null && f.targetId !== protectId) continue;
 
           // T1 豁免检查
           if (f.tier === 1 && !canInterceptT1) continue;
@@ -902,15 +935,12 @@
           f._reversedPower = originalPower;
           intercepted = true;
 
-          // 转化：将拦截的诅咒转化为 Fortune，归属于原诅咒目标
-          // 设计意图：折射保护被诅咒者，转化的幸运应该帮助被保护的人
+          // 转化：将拦截的诅咒转化为 Fortune，归属于施法者（自己）
           if (conversionRatio > 0 && originalPower > 0) {
             const convertedPower = Math.round(originalPower * conversionRatio * 10) / 10;
-            // 受益者 = 原诅咒目标（如果存在且未弃牌），否则回归施法者
-            const beneficiaryId = f.targetId != null ? f.targetId : arbiterOwnerId;
-            const beneficiaryName = f.targetId != null
-              ? (resolved.find(r => r.ownerId === f.targetId) || {}).ownerName || ('ID:' + f.targetId)
-              : arbiter.ownerName;
+            // 受益者 = 施法者（花 mana 保护别人，转化的幸运回馈自己）
+            const beneficiaryId = arbiterOwnerId;
+            const beneficiaryName = arbiter.ownerName;
             resolved.push({
               ownerId: beneficiaryId,
               ownerName: beneficiaryName,

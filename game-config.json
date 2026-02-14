@@ -4,12 +4,12 @@
   "heroChips": 1000,
 
   "hero": {
-    "vanguard": { "name": "KAZU", "level": 3, "trait": "blank_body" },
-    "rearguard": { "name": "RINO", "level": 5, "trait": "fate_weaver" },
-    "attrs": { "moirai": 80, "chaos": 20, "psyche": 30, "void": 60 },
-    "vanguardSkills": ["reality", "insulation", "static_field"],
-    "rearguardSkills": ["divine_order", "grand_wish", "minor_wish", "clarity"],
-    "mana": 70,
+    "vanguard": { "name": "SIA", "level": 5, "trait": "death_ledger" },
+    "rearguard": { "name": "RINO", "level": 5, "trait": "obsessive_love" },
+    "attrs": { "moirai": 80, "chaos": 80, "psyche": 30, "void": 0 },
+    "vanguardSkills": ["cooler", "catastrophe", "skill_seal", "havoc"],
+    "rearguardSkills": ["royal_decree", "divine_order", "grand_wish", "heart_read"],
+    "mana": 100,
     "maxMana": 100
   },
 
@@ -17,38 +17,31 @@
 
   "seats": {
     "BTN": {
-      "vanguard": { "name": "醉汉阿猫", "level": 0 },
-      "ai": "maniac",
-      "difficulty": "noob",
-      "emotion": "tilt",
-      "_test": "noob: 二极化下注(min-raise/allin), 高温度随机, 查表胜率, 有技能就乱用"
+      "vanguard": { "name": "通用NOOB", "level": 3, "trait": null },
+      "ai": "passive", "difficulty": "noob", "emotion": "scared",
+      "attrs": { "moirai": 15, "chaos": 10, "psyche": 5, "void": 0 },
+      "skills": ["minor_wish"]
     },
     "SB": {
-      "vanguard": { "name": "酒馆常客", "level": 2 },
-      "ai": "balanced",
-      "difficulty": "regular",
-      "emotion": "calm",
-      "attrs": { "moirai": 40, "chaos": 0, "psyche": 0, "void": 0 },
-      "skills": ["grand_wish", "minor_wish"],
-      "_test": "regular: 蒙特卡洛胜率, 线性泄露下注(强牌大注), 底池感知用技能"
+      "vanguard": { "name": "莉莉卡", "level": 5, "trait": "laser_eye" },
+      "rearguard": { "name": "LILIKA_REAR", "level": 4, "trait": "service_fee" },
+      "ai": "balanced", "difficulty": "pro", "emotion": "playful",
+      "attrs": { "moirai": 10, "chaos": 30, "psyche": 80, "void": 0 },
+      "skills": ["clairvoyance", "refraction", "clarity", "card_swap"]
     },
     "BB": {
-      "vanguard": { "name": "義手の老ディーラー", "level": 3 },
-      "ai": "aggressive",
-      "difficulty": "pro",
-      "emotion": "confident",
-      "attrs": { "moirai": 10, "chaos": 60, "psyche": 5, "void": 0 },
-      "skills": ["grand_wish", "minor_wish", "havoc"],
-      "_test": "pro: MC+魔运修正, 固定60-75%pot下注, 魔运权重0.30, 读对手mana"
+      "vanguard": { "name": "夜伽希亚", "level": 5, "trait": "death_ledger" },
+      "rearguard": { "name": "SIA_REAR", "level": 4, "trait": "binding_protocol" },
+      "ai": "aggressive", "difficulty": "boss", "emotion": "confident",
+      "attrs": { "moirai": 30, "chaos": 80, "psyche": 10, "void": 0 },
+      "skills": ["cooler", "havoc", "hex", "skill_seal"]
     },
     "HJ": {
-      "vanguard": { "name": "虚无王", "level": 5 },
-      "ai": "aggressive",
-      "difficulty": "boss",
-      "emotion": "calm",
-      "attrs": { "moirai": 30, "chaos": 80, "psyche": 40, "void": 50 },
-      "skills": ["grand_wish", "havoc", "refraction"],
-      "_test": "boss: 极低温度0.3, 反向欺骗下注, 魔运0.35+攻击0.25, 阶段脚本(Phase6)"
+      "vanguard": { "name": "天宫理乃", "level": 5, "trait": "crimson_crown" },
+      "rearguard": { "name": "RINO_REAR", "level": 4, "trait": "obsessive_love" },
+      "ai": "aggressive", "difficulty": "boss", "emotion": "confident",
+      "attrs": { "moirai": 80, "chaos": 20, "psyche": 30, "void": 0 },
+      "skills": ["royal_decree", "grand_wish", "minor_wish", "heart_read"]
     }
   }
 }

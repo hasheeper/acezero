@@ -39,14 +39,22 @@ export const DISADVANTAGE_MULT = 0.75;
 const NEUTRAL_MULT = 1.0;
 
 export const EFFECT_TO_ATTR = {
-  fortune:     ATTR.MOIRAI,
-  curse:       ATTR.CHAOS,
-  clarity:     ATTR.PSYCHE,
-  refraction:  ATTR.PSYCHE,
-  reversal:    ATTR.PSYCHE,
-  null_field:  ATTR.VOID,
-  void_shield: ATTR.VOID,
-  purge_all:   ATTR.VOID
+  fortune:      ATTR.MOIRAI,
+  curse:        ATTR.CHAOS,
+  clarity:      ATTR.PSYCHE,
+  refraction:   ATTR.PSYCHE,
+  reversal:     ATTR.PSYCHE,
+  null_field:   ATTR.VOID,
+  void_shield:  ATTR.VOID,
+  purge_all:    ATTR.VOID,
+  royal_decree: ATTR.MOIRAI,
+  heart_read:   ATTR.PSYCHE,
+  cooler:       ATTR.CHAOS,
+  seal:         ATTR.CHAOS,
+  clairvoyance: ATTR.PSYCHE,
+  card_swap:    ATTR.CHAOS,
+  miracle:      ATTR.MOIRAI,
+  lucky_find:   ATTR.MOIRAI
 };
 
 const DEFAULT_ATTRIBUTES = {

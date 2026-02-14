@@ -53,26 +53,38 @@ TraitSystem.TRAIT_SLOT = TRAIT_SLOT;
 // ========== 属性面板自动构建 ==========
 // 统一接口：所有角色的 attrs 都从 JSON config 读取
 
-window.__rpgBuildAttrPlayers = function (config) {
+window.__rpgBuildAttrPlayers = function (config, playerIdMap) {
   if (!config) return [];
 
   const players = [];
   const ZERO = { moirai: 0, chaos: 0, psyche: 0, void: 0 };
 
-  // Hero
-  if (config.hero) {
-    players.push({ id: 0, attributes: { ...ZERO, ...(config.hero.attrs || {}) } });
-  }
-
-  // NPC seats
-  if (config.seats) {
-    const order = ['UTG', 'HJ', 'CO', 'BTN', 'SB', 'BB'];
-    let idx = 1;
-    for (const seat of order) {
-      const s = config.seats[seat];
-      if (!s) continue;
-      players.push({ id: idx, attributes: { ...ZERO, ...(s.attrs || {}) } });
-      idx++;
+  if (playerIdMap && playerIdMap.heroId != null) {
+    // 使用真实游戏 ID
+    if (config.hero) {
+      players.push({ id: playerIdMap.heroId, attributes: { ...ZERO, ...(config.hero.attrs || {}) } });
+    }
+    if (config.seats && playerIdMap.seats) {
+      for (const seat in playerIdMap.seats) {
+        const s = config.seats[seat];
+        if (!s) continue;
+        players.push({ id: playerIdMap.seats[seat], attributes: { ...ZERO, ...(s.attrs || {}) } });
+      }
+    }
+  } else {
+    // 回退：顺序分配
+    if (config.hero) {
+      players.push({ id: 0, attributes: { ...ZERO, ...(config.hero.attrs || {}) } });
+    }
+    if (config.seats) {
+      const order = ['UTG', 'HJ', 'CO', 'BTN', 'SB', 'BB'];
+      let idx = 1;
+      for (const seat of order) {
+        const s = config.seats[seat];
+        if (!s) continue;
+        players.push({ id: idx, attributes: { ...ZERO, ...(s.attrs || {}) } });
+        idx++;
+      }
     }
   }
 

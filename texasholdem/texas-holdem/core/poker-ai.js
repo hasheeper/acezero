@@ -274,7 +274,7 @@
     noob:    { hand: 0.70, potOdds: 0.05, position: 0.00, opponent: 0.00, magic: 0.05, aggro: 0.20 },
     regular: { hand: 0.40, potOdds: 0.20, position: 0.10, opponent: 0.00, magic: 0.15, aggro: 0.15 },
     pro:     { hand: 0.20, potOdds: 0.15, position: 0.10, opponent: 0.15, magic: 0.30, aggro: 0.10 },
-    boss:    { hand: 0.15, potOdds: 0.10, position: 0.05, opponent: 0.10, magic: 0.35, aggro: 0.25 }
+    boss:    { hand: 0.25, potOdds: 0.15, position: 0.05, opponent: 0.10, magic: 0.25, aggro: 0.20 }
   };
 
   // Softmax 温度：越低越理性（几乎总选最优），越高越随机
@@ -993,6 +993,21 @@
         equity = rawStrength / 100;
       }
 
+      // 1.2 pro/boss 读牌加成：识别弱手对手的虚张声势
+      let readBonus = 0;
+      if ((this.difficultyType === 'pro' || this.difficultyType === 'boss') && toCall > 0) {
+        readBonus = this._estimateReadBonus(context);
+        equity = Math.min(0.95, equity + readBonus);
+      }
+
+      // 1.3 魔运勇气加成：己方净魔运力量越高，越有信心留在牌局
+      let magicBonus = 0;
+      if ((this.difficultyType === 'pro' || this.difficultyType === 'boss') && netForce > 0) {
+        // netForce=10 → +3%, netForce=30 → +8%, netForce=50 → +12%
+        magicBonus = Math.min(0.15, netForce * 0.0025);
+        equity = Math.min(0.95, equity + magicBonus);
+      }
+
       // 1.5 获取手牌名称（用于日志）
       let handName = phase === 'preflop' ? 'Preflop' : '?';
       if (phase !== 'preflop' && boardCards && boardCards.length > 0) {
@@ -1031,11 +1046,25 @@
       const heroId = context.heroId != null ? context.heroId : 0;
       const oppManaRatio = context.opponentManaRatio != null ? context.opponentManaRatio : 0.5;
 
+      // 强牌保护：pro/boss 不弃强牌
+      // preflop: raw>=65 (JJ+/AKs), postflop: raw>=50 或 equity>=70%
+      // MC equity 在多人桌可能严重低估，所以用 raw + 筹码承受力兜底
+      const potOddsRatio = toCall > 0 ? toCall / (pot + toCall) : 0;
+      if (toCall > 0 && (this.difficultyType === 'pro' || this.difficultyType === 'boss') &&
+          toCall <= aiStack * 0.5) {
+        var rawThreshold = phase === 'preflop' ? 65 : 50;
+        if (rawStrength >= rawThreshold || equity >= 0.70) {
+          console.log('[AI] ' + playerName + ' strong-hand-protect: raw=' + rawStrength +
+            ' eq=' + (equity * 100).toFixed(0) + ' toCall=' + toCall + ' stack=' + aiStack +
+            ' phase=' + phase + ' → auto CALL');
+          return { action: ACTIONS.CALL, amount: Math.min(toCall, aiStack) };
+        }
+      }
+
       // Pot-committed 快速通道：剩余筹码极少，toCall 几乎等于全部身家时直接 call
       // 条件：pot odds < 5% 且 toCall >= 80% 剩余筹码（真正的 pot-committed）
       // 例：投了 8.3金，只剩 42银，再跟 42银 看 30金底池 → 必须 call
       // 反例：20银 bet into 400 pot，手里还有 900 → 不触发，走正常决策（可能 raise）
-      const potOddsRatio = toCall > 0 ? toCall / (pot + toCall) : 0;
       const stackCommit = toCall > 0 ? toCall / Math.max(1, aiStack) : 0;
       if (toCall > 0 && potOddsRatio < 0.05 && stackCommit >= 0.8 && equity > 0.08) {
         console.log('[AI] ' + playerName + ' pot-committed: toCall=' + toCall +
@@ -1160,6 +1189,8 @@
         ' | 手牌: ' + holeStr + ' [' + handName + ']' +
         ' | eq=' + (equity * 100).toFixed(0) + ' raw=' + rawStrength +
         ' magic=' + magicLevel + ' net=' + netForce +
+        (readBonus > 0 ? ' read=+' + (readBonus * 100).toFixed(0) : '') +
+        (magicBonus > 0 ? ' mcourage=+' + (magicBonus * 100).toFixed(0) : '') +
         ' | pot=' + pot + ' toCall=' + toCall + ' stack=' + aiStack +
         ' opp=' + opponents +
         ' T=' + temperature.toFixed(1) +
@@ -1214,6 +1245,72 @@
       }
 
       return candidates;
+    }
+
+    /**
+     * 读牌加成：pro/boss 根据对手难度和下注模式估算虚张声势概率
+     * noob 大额加注 → 很可能是垃圾牌瞎打 → equity 加成高
+     * regular 大额加注 → 可能有牌也可能诈唬 → 中等加成
+     * pro/boss/human 大额加注 → 可能是真的 → 不加成
+     *
+     * @param {object} ctx - decide() 的 context
+     * @returns {number} 0~0.20 的 equity 加成
+     */
+    _estimateReadBonus(ctx) {
+      const profiles = ctx.opponentProfiles;
+      if (!profiles || profiles.length === 0) return 0;
+      const bb = ctx.bigBlind || 20;
+      const toCall = ctx.toCall || 0;
+      if (toCall <= 0) return 0;
+
+      // 找到当前最大下注者（最可能是施压者）
+      let maxBetOpp = null;
+      let maxBet = 0;
+      for (const opp of profiles) {
+        if (opp.currentBet > maxBet) {
+          maxBet = opp.currentBet;
+          maxBetOpp = opp;
+        }
+      }
+      if (!maxBetOpp) return 0;
+
+      // 对手难度 → 基础虚张声势概率
+      // noob: 经常用垃圾牌大额加注，bluff 概率高
+      // regular: 有一定策略但会泄露，bluff 概率中等
+      // pro/boss/human: 不好读，不给加成
+      const BLUFF_BASE = {
+        noob: 0.55,     // noob 55% 的大额加注是垃圾牌
+        regular: 0.25,  // regular 25% 是诈唬
+        pro: 0.05,      // pro 几乎不可读
+        boss: 0.0       // boss 不可读
+      };
+      const baseBluff = BLUFF_BASE[maxBetOpp.difficulty] || 0;
+      if (baseBluff <= 0) return 0;
+
+      // 下注尺度修正：overbet 越大，noob 越可能是瞎打
+      // betRatio = 下注额 / 大盲注，越大越可疑
+      const betRatio = maxBet / bb;
+      let sizingMod = 0;
+      if (betRatio > 10) sizingMod = 0.15;       // 超过 10BB 的加注
+      else if (betRatio > 5) sizingMod = 0.08;   // 5-10BB
+      else if (betRatio > 3) sizingMod = 0.03;   // 3-5BB
+      // 小额加注不加成（可能是正常下注）
+
+      // 风险偏好修正：maniac 更可能诈唬
+      const RISK_MOD = { maniac: 0.10, aggressive: 0.05, balanced: 0, rock: -0.10, passive: -0.05 };
+      const riskMod = RISK_MOD[maxBetOpp.risk] || 0;
+
+      // 最终虚张声势概率
+      const bluffProb = Math.max(0, Math.min(0.8, baseBluff + sizingMod + riskMod));
+
+      // 转换为 equity 加成：bluffProb 越高，我的实际胜率越被低估
+      // bluffProb=0.55 → bonus ≈ 0.14, bluffProb=0.25 → bonus ≈ 0.06
+      const bonus = bluffProb * 0.25;
+
+      // boss 比 pro 读得更准
+      const diffMult = this.difficultyType === 'boss' ? 1.0 : 0.6;
+
+      return Math.min(0.20, bonus * diffMult);
     }
 
     calculateRawStrength(holeCards, boardCards, phase) {
@@ -1412,6 +1509,14 @@
      * @returns {boolean}
      */
     shouldUseSkill(difficulty, skill, owner, ctx, pendingForces, mana) {
+      // --- 专属技能特殊决策 ---
+      if (skill.effect === 'cooler')       return SkillAI._decideExclusive(difficulty, skill, owner, ctx, mana);
+      if (skill.effect === 'royal_decree') return SkillAI._decideExclusive(difficulty, skill, owner, ctx, mana);
+      if (skill.effect === 'clairvoyance') return SkillAI._decideClairvoyance(difficulty, skill, owner, ctx, mana);
+      if (skill.effect === 'seal')         return SkillAI._decideSeal(difficulty, skill, owner, ctx, mana);
+      if (skill.effect === 'heart_read')   return SkillAI._decideHeartRead(difficulty, skill, owner, ctx, mana);
+      if (skill.effect === 'card_swap')    return SkillAI._decideCardSwap(difficulty, skill, owner, ctx, mana);
+
       // river 阶段无牌可发，发牌类技能无意义
       if (ctx.phase === 'river') return false;
 
@@ -1451,11 +1556,16 @@
         }
         case 'boss':
         case 'pro': {
-          if (pi === 0) return false;
           if (mana && mana.current < skill.manaCost * 1.5 && skill.tier !== 1) return false;
-          // 投入越多越积极，手牌强度作为次要参考
           var strength = SkillAI._getHandStrength(owner, ctx);
-          var strengthMod = strength >= 50 ? 0.15 : 0; // 强牌额外加成
+          var strengthMod = strength >= 50 ? 0.15 : 0;
+          if (pi === 0) {
+            // preflop→flop 是最关键的选牌：基于手牌强度决定
+            // T3(便宜) 更容易用，T1/T2 需要更强的手牌
+            var tierMod = skill.tier >= 3 ? 0.10 : 0;
+            var base = 0.12 + tierMod + commit * 0.40;
+            return Math.random() < (base + strengthMod);
+          }
           return Math.random() < (0.08 + commit * 0.50 + strengthMod + pi * 0.08);
         }
         default: return false;
@@ -1483,11 +1593,14 @@
         }
         case 'boss':
         case 'pro': {
-          if (pi === 0) return false;
           if (mana && mana.current < skill.manaCost * 1.5 && skill.tier !== 1) return false;
-          // 投入多时积极诅咒，太强不需要
           var strength = SkillAI._getHandStrength(owner, ctx);
           if (strength > 80) return false; // 碾压局不浪费 mana
+          if (pi === 0) {
+            // preflop→flop：基于手牌强度诅咒对手
+            var tierMod2 = skill.tier >= 3 ? 0.08 : 0;
+            return Math.random() < (0.10 + tierMod2 + commit * 0.35);
+          }
           return Math.random() < (0.10 + commit * 0.45 + pi * 0.08);
         }
         default: return false;
@@ -1549,7 +1662,13 @@
             if (skill.tier <= 2) return Math.random() < 0.2;
             return Math.random() < 0.12;
           }
-          return false; // preflop 不预防
+          // preflop→flop：预防性使用（信息价值 + 防御准备）
+          if (pi === 0) {
+            if (skill.tier <= 1) return Math.random() < 0.15; // T0/T1 高阶预防
+            if (skill.tier === 2) return Math.random() < 0.18;
+            return Math.random() < 0.10; // T3 低概率预防
+          }
+          return false;
         }
         default: return false;
       }
@@ -1598,6 +1717,139 @@
      * commit=0: 还没投入, commit=0.5: 投了一半, commit=1.0: 全押
      * 注意：totalBet 已包含 currentBet，不要重复计算
      */
+    // ---- 专属技能：cooler / royal_decree (T0, 1/game) ----
+    // 核心逻辑：整局只有一次，必须在关键时刻使用
+    // 条件：turn/river + 高投入 或 flop + 极高投入
+    _decideExclusive(difficulty, skill, owner, ctx, mana) {
+      var pi = PHASE_INDEX[ctx.phase] || 0;
+      var commit = SkillAI._getCommitRatio(owner);
+
+      // river 阶段不用（选牌已结束）
+      if (ctx.phase === 'river') return false;
+      // preflop 不用（太早浪费）
+      if (pi === 0) return false;
+      // mana 不足
+      if (mana && mana.current < skill.manaCost) return false;
+
+      switch (difficulty) {
+        case 'noob':
+          // noob 不会战略性使用终极技能
+          return Math.random() < 0.08;
+        case 'regular':
+          // regular 在 turn 且投入较多时可能使用
+          if (pi < 2) return false;
+          return Math.random() < (commit * 0.4);
+        case 'boss':
+        case 'pro': {
+          // pro/boss 在 flop 高投入或 turn 中投入时使用
+          var strength = SkillAI._getHandStrength(owner, ctx);
+          // 碾压局不浪费终极技能
+          if (strength > 80) return false;
+          // turn 是最佳时机（还有 river 牌可影响）
+          if (pi === 2) return Math.random() < (0.25 + commit * 0.45);
+          // flop 需要高投入才值得
+          if (pi === 1) return Math.random() < (commit > 0.3 ? 0.15 + commit * 0.3 : 0);
+          return false;
+        }
+        default: return false;
+      }
+    },
+
+    // ---- seal（封印）：控制技能，冻结对手技能 2 回合 ----
+    // 核心逻辑：在对手刚用过强力技能后封印最有价值，或预防性封印
+    _decideSeal(difficulty, skill, owner, ctx, mana) {
+      var pi = PHASE_INDEX[ctx.phase] || 0;
+      // mana 不足
+      if (mana && mana.current < skill.manaCost) return false;
+
+      switch (difficulty) {
+        case 'noob':
+          return Math.random() < 0.05;
+        case 'regular':
+          if (pi === 0) return false;
+          return Math.random() < 0.15;
+        case 'boss':
+        case 'pro': {
+          // preflop 不封印（对手还没用技能）
+          if (pi === 0) return false;
+          // flop/turn 是封印的好时机（封住 2 回合 = 封住 turn+river）
+          if (pi === 1) return Math.random() < 0.25;
+          if (pi === 2) return Math.random() < 0.20;
+          // river 也可以封印（防止对手 river 反击）
+          if (pi === 3) return Math.random() < 0.10;
+          return false;
+        }
+        default: return false;
+      }
+    },
+
+    // ---- heart_read（读心）：信息技能 ----
+    _decideHeartRead(difficulty, skill, owner, ctx, mana) {
+      var pi = PHASE_INDEX[ctx.phase] || 0;
+      if (mana && mana.current < skill.manaCost) return false;
+
+      switch (difficulty) {
+        case 'noob':    return false;
+        case 'regular': return pi >= 1 && Math.random() < 0.2;
+        case 'boss':
+        case 'pro': {
+          // preflop: 读心有信息价值 + 消除T3 curse
+          if (pi === 0) return Math.random() < 0.15;
+          return Math.random() < 0.3;
+        }
+        default:        return false;
+      }
+    },
+
+    // ---- card_swap（偷天换日）：fortune+curse 双重幻术 ----
+    _decideCardSwap(difficulty, skill, owner, ctx, mana) {
+      var pi = PHASE_INDEX[ctx.phase] || 0;
+      var commit = SkillAI._getCommitRatio(owner);
+
+      // river 不用（不影响选牌）
+      if (ctx.phase === 'river') return false;
+      // mana 不足
+      if (mana && mana.current < skill.manaCost) return false;
+
+      switch (difficulty) {
+        case 'noob':
+          return pi >= 1 && Math.random() < 0.10;
+        case 'regular':
+          if (pi < 2) return false;
+          return Math.random() < (0.10 + commit * 0.30);
+        case 'boss':
+        case 'pro': {
+          var strength = SkillAI._getHandStrength(owner, ctx);
+          if (strength > 75) return false;
+          // preflop: fortune+curse 双重效果影响翻牌
+          if (pi === 0) return Math.random() < 0.15;
+          return Math.random() < (0.12 + commit * 0.35 + pi * 0.05);
+        }
+        default: return false;
+      }
+    },
+
+    // ---- clairvoyance（千里眼）：T0 Psyche 透视 + 词咒拦截 ----
+    _decideClairvoyance(difficulty, skill, owner, ctx, mana) {
+      var pi = PHASE_INDEX[ctx.phase] || 0;
+      if (ctx.phase === 'river') return false;
+      if (mana && mana.current < skill.manaCost) return false;
+
+      switch (difficulty) {
+        case 'noob':    return Math.random() < 0.05;
+        case 'regular': return pi >= 1 && Math.random() < 0.15;
+        case 'boss':
+        case 'pro': {
+          // preflop: 高价值信息技能，影响翻牌选择
+          if (pi === 0) return Math.random() < 0.20;
+          // flop/turn: 更积极
+          var commit = SkillAI._getCommitRatio(owner);
+          return Math.random() < (0.20 + commit * 0.30 + pi * 0.05);
+        }
+        default: return false;
+      }
+    },
+
     _getCommitRatio(owner) {
       var invested = Math.max(owner.totalBet || 0, owner.currentBet || 0);
       var startStack = invested + (owner.chips || 0);

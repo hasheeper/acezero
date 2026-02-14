@@ -109,7 +109,7 @@ Void 不参与克制，纯消除
 
 | Difficulty | 策略 | 逻辑 |
 |-----------|------|------|
-| noob | **Nemesis** (死磕) | 锁定主角(id=0)，主角弃牌才随机选 |
+| noob | **Nemesis** (死磕) | 锁定主角，主角弃牌才随机选 |
 | regular | **Pot Commitment** (沉没成本) | 诅咒投入底池最多的对手（不会弃牌，收益最大） |
 | pro | **Threat Assessment** (威胁评估) | 综合下注量×0.7 + 筹码量×0.3 评估威胁度 |
 
@@ -309,24 +309,39 @@ BOSS 开大吉 (fortune P30)、不用任何 Chaos 技能
    → 存活 T1 执行 suppressTiers / suppressAttr / suppressAll
 
 3. [绝缘减半]   _applyInsulation()
-   → void_shield 持有者：敌方 Moirai/Chaos 效果 ×0.5
+   → void_shield 持有者：全场所有非 Void 的 fortune/curse 效果 ×0.5（敌我不分）
 
 4. [同类对抗]   _resolveTypeOpposition()
    → 同类型 fortune vs fortune / curse vs curse 互相抵消
+   → 分阵营：hero 方 vs NPC 方，同阵营不对抗
 
-5. [主动压被动] 主动技能额外削弱敌方被动技能
+5. [天命护盾]   _applyFortuneCurseOpposition()
+   → fortune 持有者的幸运力量可部分抵消针对自己的 curse
+   → 护盾效率 60%，最多削减 curse 50%，fortune 自身最多消耗 50%
+   → 例：大吉 P30 vs 2×大凶 P60 → curse 降至 42，fortune 降至 15
+
+6. [属性克制]   Chaos > Moirai +10% 加成
+   → 只在存在对立 fortune 时生效（拔河场景）
+
+7. [主动压被动] 主动技能额外削弱敌方被动技能
    → tier 差越大，压制越强
 
-6. [屏蔽削弱]   null_field 削弱所有被动力量 30%
+8. [屏蔽削弱]   null_field 削弱所有被动力量 30%
 
-7. [Psyche裁定]  _applyPsycheArbiter()
-   → clarity: 消除敌方 T3/T2 Curse (0% 转化) + 显示牌堆胜率
-   → refraction: 消除敌方 T3/T2 Curse (50% 转化为 Fortune) + 透视目标手牌
-   → reversal: 湮灭所有敌方 Curse 含 T1 (100% 转化) + 显示牌堆胜率 + 对手手牌信息
+9. [Psyche裁定]  _applyPsycheArbiter()
+   → 每个 Psyche 技能可指定保护目标（protectId），只拦截指向保护目标的 curse
+   → 转化的 fortune 归属施法者（花 mana 保护别人，转化的幸运回馈自己）
+   → clarity(T3): 消除 T3/T2 Curse, 25% 转化
+   → heart_read(T2): 消除 T3/T2 Curse, 15% 转化 + 读心信息
+   → refraction(T2): 消除 T3/T2 Curse, 50% 转化 + 透视手牌
+   → clairvoyance(T0): 湮灭所有 Curse 含 T1, 100% 转化 + 全场透视
+   → reversal(T1): 湮灭所有 Curse 含 T1, 100% 转化 + 胜率+透视
    → 无敌方 Curse 时空放 (Moirai > Psyche 克制)
 
-8. [Void 减伤]  CombatFormula.applyVoidReduction()
-   → Kazu 前台时，敌方所有效果 ÷ voidDivisor
+10. [Void 减伤]  CombatFormula.applyVoidReduction()
+    → Kazu 前台时，敌方所有效果 ÷ voidDivisor
+    → null_armor 特质增强 Void 减伤 +30%
+    → death_ledger 特质穿透 25% Void 减伤
 ```
 
 ---
@@ -590,9 +605,11 @@ OPPOSITION_RESULT [
 
 | 行为 | 技能 | UI 表现 |
 |------|------|----------|
-| **FORCE** | 小吉、大吉、天命、小凶、大凶、灾变、现实 | 点击按钮 → 注入力 |
-| **PSYCHE** | 澄澈、折射、真理 | 点击 → 信息效果(胜率/透视) + 注入反制力 |
-| **PASSIVE** | 屏蔽、绝缘 | 无按钮，自动生效 |
+| **FORCE** | 小吉、大吉、天命、现实 | 点击按钮 → 注入力 |
+| **CURSE** | 小凶、大凶、灾变、冤家牌、偷天换日、封印 | 点击 → 选目标座位 → 注入指向性力 |
+| **PSYCHE** | 澄澈、折射、真理、读心、千里眼 | 点击 → 选保护目标 → 信息效果 + 注入反制力 |
+| **TOGGLE** | 绝缘 | 点击切换开/关，0 mana |
+| **PASSIVE** | 屏蔽 | 无按钮，自动生效 |
 
 ---
 
@@ -604,5 +621,9 @@ OPPOSITION_RESULT [
 | `core/monte-of-zero.js` | 引擎：力量对抗、阶级压制、选牌、调试时间线 |
 | `ui/skill-ui.js` | UI 按钮、激活路由、Psyche透视/胜率、力量对抗展示 |
 | `rpg/attribute-system.js` | 四属性、克制环、属性加成 |
-| `rpg/combat-formula.js` | 属性增强、Void 减伤 |
+| `rpg/combat-formula.js` | 属性增强、特质加成、Void 减伤 |
+| `rpg/trait-system.js` | 特质目录 TRAIT_CATALOG、TraitSystem 类 |
+| `rpg/switch-system.js` | 前台/后台切换、Void 减伤路由 |
+| `rpg/survival-economy.js` | Mana 经济：掠夺回蓝、大胜回蓝、反噬 |
+| `rpg/rpg-init.js` | ES Module 桥接入口，挂载到 window |
 | `ST/acezero-tavern-plugin.js` | 酒馆中间件：ERA → 技能推导 |

@@ -164,7 +164,8 @@
       }
       case 'SKILL_USE': {
         var casterTag = entry.caster ? entry.caster + ': ' : '';
-        return '[技能] ' + casterTag + (entry.skill || '未知') + (entry.manaRemaining != null ? ' (剩余魔力: ' + entry.manaRemaining + ')' : '');
+        var targetTag = entry.target ? ' → ' + entry.target : '';
+        return '[技能] ' + casterTag + (entry.skill || '未知') + targetTag + (entry.manaRemaining != null ? ' (剩余魔力: ' + entry.manaRemaining + ')' : '');
       }
       case 'NPC_SKILL':
         var targetTag = entry.targetName ? ' → ' + entry.targetName : '';

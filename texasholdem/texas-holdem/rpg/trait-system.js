@@ -49,6 +49,26 @@ export const TRAIT_CATALOG = {
     effect: { type: 'void_bonus', value: 20 }
   },
 
+  // --- 主手特质：角色专属 ---
+  null_armor: {
+    slot: 'vanguard',
+    name: '虚无铠装',
+    description: 'Void减伤效果+30%，但自身fortune效果-15%',
+    effect: { type: 'void_amp_fortune_penalty', voidBonus: 0.3, fortunePenalty: 0.15 }
+  },
+  crimson_crown: {
+    slot: 'vanguard',
+    name: '绯红王冠',
+    description: '天命系技能力量+25%，但受到的诅咒效果+15%',
+    effect: { type: 'fortune_amp_curse_vuln', fortuneBonus: 0.25, curseVuln: 0.15 }
+  },
+  death_ledger: {
+    slot: 'vanguard',
+    name: '死亡账簿',
+    description: '诅咒穿透目标25%的Void减伤和Psyche反制',
+    effect: { type: 'curse_penetration', value: 0.25 }
+  },
+
   // --- 副手特质（魔力/精神层） ---
   fate_weaver: {
     slot: 'rearguard',
@@ -73,6 +93,58 @@ export const TRAIT_CATALOG = {
     name: '玻璃大炮',
     description: '所有主动技能伤害 +30%，但 mana 上限 -20%',
     effect: { type: 'damage_up_mana_down', damage: 0.3, mana: -0.2 }
+  },
+
+  // --- 副手特质：角色专属 ---
+  steady_hand: {
+    slot: 'rearguard',
+    name: '不动心',
+    description: '被动mana回复+3/回合，前台角色受curse伤害-10%',
+    effect: { type: 'calm_support', manaRegen: 3, curseReduction: 0.1 }
+  },
+  obsessive_love: {
+    slot: 'rearguard',
+    name: '执念之爱',
+    description: '筹码落后时天命+20%且常驻fortune(P10)，领先时-10%且反fortune(P-5)',
+    effect: { type: 'desperate_devotion', behind: 0.2, ahead: -0.1, passiveBehind: 10, passiveAhead: -5 }
+  },
+  binding_protocol: {
+    slot: 'rearguard',
+    name: '拘束协议',
+    description: '封印拘束节省魔力，技能mana消耗-50%，但力量-10%',
+    effect: { type: 'mana_efficiency', costMult: 0.5, powerMult: 0.9 }
+  },
+
+  // --- 主手特质：Lilika 专属 ---
+  laser_eye: {
+    slot: 'vanguard',
+    name: '镭射之眼',
+    description: 'Psyche反制效果+25%（curse消除/转化更强），但mana回复-20%',
+    effect: { type: 'psyche_amp_mana_penalty', psycheBonus: 0.25, manaRegenPenalty: 0.2 }
+  },
+
+  // --- 副手特质：Lilika 专属 ---
+  service_fee: {
+    slot: 'rearguard',
+    name: '手续费',
+    description: '技能命中时窃取目标15%mana（最多10点），但fortune效果-20%',
+    effect: { type: 'mana_siphon', siphonRate: 0.15, siphonCap: 10, fortunePenalty: 0.2 }
+  },
+
+  // --- 主手特质：Poppo 专属 ---
+  four_leaf_clover: {
+    slot: 'vanguard',
+    name: '四叶草',
+    description: '筹码低于50%时被动fortune+40%，低于20%时被动fortune+80%（越惨越强）',
+    effect: { type: 'underdog_fortune', midThreshold: 0.5, midBonus: 0.4, lowThreshold: 0.2, lowBonus: 0.8 }
+  },
+
+  // --- 副手特质：Poppo 专属 ---
+  cockroach: {
+    slot: 'rearguard',
+    name: '不死身',
+    description: '每手牌第一次受到curse时效果减半（限1次/手），被动mana回复+5/回合',
+    effect: { type: 'survival_instinct', firstCurseReduction: 0.5, manaRegen: 5 }
   }
 };
 
@@ -88,22 +160,38 @@ export class TraitSystem {
    * 从 game-config.json 注册所有角色的特质
    * 统一接口：每个角色有 vanguard.trait 和 rearguard.trait
    * @param {object} config - 完整的 game config
+   * @param {object} [playerIdMap] - { heroId, seats: { BTN: id, ... } }
+   *   如果提供，使用真实游戏 ID；否则回退到顺序分配（hero=0, NPC=1,2,...）
    */
-  registerFromConfig(config) {
+  registerFromConfig(config, playerIdMap) {
     this.traits.clear();
 
-    if (config.hero) {
-      this._registerChar(0, config.hero);
-    }
-
-    if (config.seats) {
-      const order = ['UTG', 'HJ', 'CO', 'BTN', 'SB', 'BB'];
-      let idx = 1;
-      for (const seat of order) {
-        const s = config.seats[seat];
-        if (!s) continue;
-        this._registerChar(idx, s);
-        idx++;
+    if (playerIdMap && playerIdMap.heroId != null) {
+      // 使用真实游戏 ID
+      if (config.hero) {
+        this._registerChar(playerIdMap.heroId, config.hero);
+      }
+      if (config.seats && playerIdMap.seats) {
+        for (const seat in playerIdMap.seats) {
+          const s = config.seats[seat];
+          if (!s) continue;
+          this._registerChar(playerIdMap.seats[seat], s);
+        }
+      }
+    } else {
+      // 回退：顺序分配
+      if (config.hero) {
+        this._registerChar(0, config.hero);
+      }
+      if (config.seats) {
+        const order = ['UTG', 'HJ', 'CO', 'BTN', 'SB', 'BB'];
+        let idx = 1;
+        for (const seat of order) {
+          const s = config.seats[seat];
+          if (!s) continue;
+          this._registerChar(idx, s);
+          idx++;
+        }
       }
     }
   }
@@ -148,7 +236,7 @@ export class TraitSystem {
       if (!key) continue;
       const def = TRAIT_CATALOG[key];
       if (def && def.effect && def.effect.type === effectType) {
-        return { has: true, value: def.effect.value, slot: slot };
+        return { has: true, value: def.effect, slot: slot };
       }
     }
     return { has: false, value: 0, slot: null };

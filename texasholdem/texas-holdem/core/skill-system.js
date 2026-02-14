@@ -40,7 +40,16 @@
     REVERSAL:    'reversal',      // Psyche T1: 胜率+透视 + 湮灭所有 Curse(含T1) + 100%转化
     NULL_FIELD:  'null_field',    // Void T3:   阻断侦查
     VOID_SHIELD: 'void_shield',   // Void T2:   Moirai/Chaos 效果减半
-    PURGE_ALL:   'purge_all'      // Void T1:   清除所有非 Void 技能
+    PURGE_ALL:   'purge_all',      // Void T1:   清除所有非 Void 技能
+    // --- 角色专属 ---
+    ROYAL_DECREE:'royal_decree',   // Rino T0:   超强天命（fortune power=70）
+    HEART_READ:  'heart_read',     // Rino Psyche: 读心（信息+消除T3 curse）
+    COOLER:      'cooler',         // Sia T0:    冤家牌（自己fortune+对手curse）
+    SEAL:        'seal',           // Sia Chaos:  封印对手技能2回合
+    CLAIRVOYANCE:'clairvoyance',   // Lilika T0: 千里眼（完全透视+消除所有curse）
+    CARD_SWAP:   'card_swap',      // Lilika T1: 偷天换日（fortune+curse misdirection）
+    MIRACLE:     'miracle',        // Poppo T0:  奇迹（绝境被动触发 fortune）
+    LUCKY_FIND:  'lucky_find'      // Poppo T2:  捡到了（随机被动触发 fortune）
   };
 
   // ========== 通用技能目录 ==========
@@ -69,7 +78,24 @@
     // ===== Void (虚无) — 反魔法系，零 Mana 消耗，代价是策略成本 =====
     static_field: { attr: 'void',   tier: 3, threshold: 20, effect: 'null_field',  activation: 'passive', manaCost: 0,  cooldown: 0, power: 8,  description: '屏蔽 — 反侦察：敌方信息类技能对己方失效' },
     insulation:   { attr: 'void',   tier: 2, threshold: 40, effect: 'void_shield', activation: 'toggle',  manaCost: 0,  cooldown: 0, power: 15, description: '绝缘 — 全场魔法效果减半（敌我不分）' },
-    reality:      { attr: 'void',   tier: 1, threshold: 60, effect: 'purge_all',   activation: 'active',  manaCost: 0,  cooldown: 0, power: 0,  suppressAll: true, usesPerGame: 1, description: '现实 — 物理回滚（整局限1次）' }
+    reality:      { attr: 'void',   tier: 1, threshold: 60, effect: 'purge_all',   activation: 'active',  manaCost: 0,  cooldown: 0, power: 0,  suppressAll: true, usesPerGame: 1, description: '现实 — 物理回滚（整局限1次）' },
+
+    // ===== 角色专属技能 =====
+    // --- Rino (♥ 天宫理乃) ---
+    royal_decree: { attr: 'moirai', tier: 0, threshold: 80, effect: 'royal_decree', activation: 'active', manaCost: 25, cooldown: 0, power: 50, suppressTiers: [1, 2, 3], usesPerGame: 1, description: '敕令 — 绝对天命，超强概率偏斜（整局限1次）' },
+    heart_read:   { attr: 'psyche', tier: 2, threshold: 20, effect: 'heart_read',  activation: 'active', manaCost: 15, cooldown: 2, power: 0,  description: '读心 — 读取对手意图 + 消除敌方T3 Curse' },
+
+    // --- Sia (♠ 夜伽希亚) ---
+    cooler:       { attr: 'chaos',  tier: 0, threshold: 80, effect: 'cooler',      activation: 'active', manaCost: 50, cooldown: 0, power: 55, suppressTiers: [1, 2, 3], usesPerGame: 1, description: '冤家牌 — 制造必败的好牌（整局限1次）' },
+    skill_seal:   { attr: 'chaos',  tier: 1, threshold: 40, effect: 'seal',        activation: 'active', manaCost: 30, cooldown: 3, power: 0,  description: '封印 — 冻结目标技能2回合' },
+
+    // --- Lilika (♦ 莉莉卡) ---
+    clairvoyance: { attr: 'psyche', tier: 0, threshold: 80, effect: 'clairvoyance', activation: 'active', manaCost: 40, cooldown: 0, power: 0, suppressTiers: [1, 2, 3], usesPerGame: 1, description: '千里眼 — 完全透视所有手牌 + 湮灭所有Curse并转化（整局限1次）' },
+    card_swap:    { attr: 'chaos',  tier: 1, threshold: 40, effect: 'card_swap',    activation: 'active', manaCost: 25, cooldown: 3, power: 20, description: '偷天换日 — 己方fortune(P20) + 敌方curse(P20) 幻术' },
+
+    // --- Poppo (♣ 波普) ---
+    miracle:      { attr: 'moirai', tier: 0, threshold: 0,  effect: 'miracle',      activation: 'trigger', manaCost: 0, cooldown: 0, power: 40, suppressTiers: [1, 2, 3], usesPerGame: 1, trigger: { condition: 'chips_percent_below', value: 0.10 }, description: '奇迹 — 绝境自动触发，强力fortune(P40)（整局限1次）' },
+    lucky_find:   { attr: 'moirai', tier: 2, threshold: 0,  effect: 'lucky_find',   activation: 'trigger', manaCost: 0, cooldown: 2, power: 10, trigger: { condition: 'random_chance', value: 0.25 }, description: '捡到了！— 每轮25%概率自动触发fortune(P10)' }
   };
 
   /**
@@ -387,11 +413,11 @@
         active: initialActive,
         description: catalog.description || '',
         target: catalog.target || null,
-        trigger: null,
+        trigger: catalog.trigger || null,
         cooldown: catalog.cooldown || 0,
         currentCooldown: 0,
         // 阶级压制元数据
-        tier: catalog.tier || 3,
+        tier: catalog.tier != null ? catalog.tier : 3,
         attr: catalog.attr || null,
         suppressTiers: catalog.suppressTiers || null,
         suppressAttr: catalog.suppressAttr || null,
@@ -454,9 +480,11 @@
      * @param {string} uniqueId - 技能唯一ID (ownerId_skillKey)
      * @returns {{ success, reason?, skill? }}
      */
-    activatePlayerSkill(uniqueId) {
+    activatePlayerSkill(uniqueId, options) {
       const skill = this.skills.get(uniqueId);
       if (!skill) return { success: false, reason: 'SKILL_NOT_FOUND' };
+      const targetOverride = options && options.targetId != null ? options.targetId : null;
+      const protectOverride = options && options.protectId != null ? options.protectId : null;
 
       // Toggle 类型：切换开/关状态
       if (skill.activation === ACTIVATION.TOGGLE) {
@@ -481,9 +509,13 @@
         return { success: false, reason: 'ON_COOLDOWN', cooldown: skill.currentCooldown };
       }
 
-      // Mana 检查
-      if (skill.manaCost > 0 && !this.spendMana(skill.ownerId, skill.manaCost)) {
-        return { success: false, reason: 'INSUFFICIENT_MANA', cost: skill.manaCost };
+      // Mana 检查（特质可能修改消耗）
+      var actualCost = skill.manaCost;
+      if (actualCost > 0 && this.traitCostFn) {
+        actualCost = this.traitCostFn(skill.ownerId, actualCost);
+      }
+      if (actualCost > 0 && !this.spendMana(skill.ownerId, actualCost)) {
+        return { success: false, reason: 'INSUFFICIENT_MANA', cost: actualCost };
       }
 
       // 激活
@@ -497,32 +529,88 @@
       // 根据 effect 类型处理
       // Psyche 技能都是双重效果: 信息(必定) + 反制(vs Chaos)
       switch (skill.effect) {
-        case EFFECT.CLARITY:
+        case EFFECT.CLARITY: {
           // 澄澈: 信息=胜率显示, 反制=消除敌方 T3/T2 Curse
-          this.pendingForces.push(this._skillToForce(skill));
+          var cForce = this._skillToForce(skill);
+          if (protectOverride != null) cForce.protectId = protectOverride;
+          this.pendingForces.push(cForce);
           this.emit('skill:activated', { skill, type: 'clarity' });
           break;
-        case EFFECT.REFRACTION:
+        }
+        case EFFECT.REFRACTION: {
           // 折射: 信息=透视手牌, 反制=消除敌方 T3/T2 Curse + 50%转化
-          this.pendingForces.push(this._skillToForce(skill));
+          var rForce = this._skillToForce(skill);
+          if (protectOverride != null) rForce.protectId = protectOverride;
+          this.pendingForces.push(rForce);
           this.emit('skill:activated', { skill, type: 'refraction' });
           break;
-        case EFFECT.REVERSAL:
+        }
+        case EFFECT.REVERSAL: {
           // 真理: 信息=胜率+透视(继承), 反制=湮灭所有 Curse + 100%转化
-          this.pendingForces.push(this._skillToForce(skill));
+          var aForce = this._skillToForce(skill);
+          if (protectOverride != null) aForce.protectId = protectOverride;
+          this.pendingForces.push(aForce);
           this.emit('skill:activated', { skill, type: 'reversal' });
           break;
+        }
         case EFFECT.PURGE_ALL:
           // 现实：清除所有非 Void pendingForces，自身加入
           this.pendingForces = this.pendingForces.filter(f => f.attr === 'void');
           this.pendingForces.push(this._skillToForce(skill));
           this.emit('skill:activated', { skill, type: 'purge_all' });
           break;
-        default:
-          // fortune / curse / null_field / void_shield → 加入 pendingForces
+        case EFFECT.ROYAL_DECREE:
+          // 敕令：超强 fortune，直接加入 pendingForces
           this.pendingForces.push(this._skillToForce(skill));
+          this.emit('skill:activated', { skill, type: 'royal_decree' });
+          break;
+        case EFFECT.HEART_READ: {
+          // 读心：信息技能，显示对手下注倾向
+          var hForce = this._skillToForce(skill);
+          if (protectOverride != null) hForce.protectId = protectOverride;
+          this.pendingForces.push(hForce);
+          this.emit('skill:activated', { skill, type: 'heart_read' });
+          break;
+        }
+        case EFFECT.COOLER: {
+          // 冤家牌：同时推入 fortune(自己) + curse(对手)
+          this.pendingForces.push(this._coolerToForces(skill));
+          var coolerCurse = this._coolerCurseForce(skill);
+          if (targetOverride != null) coolerCurse.targetId = targetOverride;
+          this.pendingForces.push(coolerCurse);
+          this.emit('skill:activated', { skill, type: 'cooler' });
+          break;
+        }
+        case EFFECT.CARD_SWAP: {
+          // 偷天换日：fortune(自己) + curse(对手)
+          this.pendingForces.push(this._cardSwapFortune(skill));
+          var swapCurse = this._cardSwapCurse(skill);
+          if (targetOverride != null) swapCurse.targetId = targetOverride;
+          this.pendingForces.push(swapCurse);
+          this.emit('skill:activated', { skill, type: 'card_swap' });
+          break;
+        }
+        case EFFECT.CLAIRVOYANCE: {
+          // 千里眼：信息技能 + 湮灭所有 curse 并转化
+          var cvForce = this._skillToForce(skill);
+          if (protectOverride != null) cvForce.protectId = protectOverride;
+          this.pendingForces.push(cvForce);
+          this.emit('skill:activated', { skill, type: 'clairvoyance' });
+          break;
+        }
+        case EFFECT.SEAL:
+          // 封印：冻结目标技能2回合
+          this._applySeal(skill, null, targetOverride);
+          this.emit('skill:activated', { skill, type: 'seal' });
+          break;
+        default: {
+          // fortune / curse / null_field / void_shield → 加入 pendingForces
+          var force = this._skillToForce(skill);
+          if (targetOverride != null && force.type === 'curse') force.targetId = targetOverride;
+          this.pendingForces.push(force);
           this.emit('skill:activated', { skill, type: 'force' });
           break;
+        }
       }
 
       this._log('SKILL_ACTIVATED', {
@@ -570,10 +658,24 @@
      * @param {object} gameContext - { players, pot, phase, board }
      */
     npcDecideSkills(gameContext) {
-      // 两轮决策：先进攻(fortune/curse)，再防御(psyche/void)
+      // 两轮决策：先进攻(fortune/curse/cooler/royal_decree)，再防御(psyche/void/seal/heart_read)
       // 这样 Psyche NPC 能看到本轮刚释放的 Chaos forces 并做出反应
-      const OFFENSE_EFFECTS = [EFFECT.FORTUNE, EFFECT.CURSE];
-      const DEFENSE_EFFECTS = [EFFECT.CLARITY, EFFECT.REFRACTION, EFFECT.REVERSAL, EFFECT.PURGE_ALL];
+      const OFFENSE_EFFECTS = [EFFECT.FORTUNE, EFFECT.CURSE, EFFECT.COOLER, EFFECT.ROYAL_DECREE, EFFECT.CARD_SWAP];
+      const DEFENSE_EFFECTS = [EFFECT.CLARITY, EFFECT.REFRACTION, EFFECT.REVERSAL, EFFECT.PURGE_ALL, EFFECT.SEAL, EFFECT.HEART_READ, EFFECT.CLAIRVOYANCE];
+
+      // All-in 后降低配额：每人最多1个，且禁用 fortune（无 betting 博弈意义）
+      var isAllIn = !!gameContext.allIn;
+      const MAX_SKILLS_PER_ROUND = isAllIn ? 1 : 2;
+      const usedThisRound = {};
+      // 计入回合中已用的技能数（key 格式: "playerId_timing"）
+      if (this._turnSkillUsed) {
+        for (var key in this._turnSkillUsed) {
+          if (!this._turnSkillUsed[key]) continue;
+          var pid = key.split('_')[0];
+          usedThisRound[pid] = (usedThisRound[pid] || 0) + 1;
+        }
+      }
+      const skillRecords = [];
 
       for (var pass = 0; pass < 2; pass++) {
         var allowedEffects = pass === 0 ? OFFENSE_EFFECTS : DEFENSE_EFFECTS;
@@ -584,52 +686,238 @@
           if (skill.currentCooldown > 0) continue;
           if (allowedEffects.indexOf(skill.effect) < 0) continue;
 
-          // river 阶段无牌可发，发牌类技能无意义
-          if (gameContext.phase === 'river') continue;
+          // 每轮技能上限检查
+          const used = usedThisRound[skill.ownerId] || 0;
+          if (used >= MAX_SKILLS_PER_ROUND) continue;
 
-          // 检查 NPC 是否还在游戏中（未弃牌、有筹码）
+          // 整局使用次数检查
+          if (skill.usesPerGame > 0 && skill.gameUsesRemaining <= 0) continue;
+
+          // river 阶段：只有 seal/heart_read/clairvoyance 可用（不影响选牌）
+          if (gameContext.phase === 'river' && skill.effect !== EFFECT.SEAL && skill.effect !== EFFECT.HEART_READ && skill.effect !== EFFECT.CLAIRVOYANCE) continue;
+
+          // All-in 后：禁用 fortune/royal_decree（无 betting 博弈意义，只剩选牌影响）
+          if (isAllIn && (skill.effect === EFFECT.FORTUNE || skill.effect === EFFECT.ROYAL_DECREE)) continue;
+
+          // 检查 NPC 是否还在游戏中（未弃牌）
           const owner = gameContext.players.find(p => p.id === skill.ownerId);
           if (!owner || owner.folded) continue;
 
           // AI 决策：根据技能类型和游戏状态决定是否使用
           const shouldUse = this._npcShouldUseSkill(skill, owner, gameContext);
+          this._log('NPC_SKILL_CONSIDER', {
+            owner: skill.ownerName, key: skill.skillKey, effect: skill.effect,
+            phase: gameContext.phase, shouldUse: shouldUse, pass: pass
+          });
           if (!shouldUse) continue;
 
-          // Mana 检查
-          if (skill.manaCost > 0) {
+          // Mana 检查（特质可能修改消耗）
+          var actualCost = skill.manaCost;
+          if (actualCost > 0 && this.traitCostFn) {
+            actualCost = this.traitCostFn(skill.ownerId, actualCost);
+          }
+          if (actualCost > 0) {
             const pool = this.manaPools.get(skill.ownerId);
-            if (!pool || pool.current < skill.manaCost) continue;
-            this.spendMana(skill.ownerId, skill.manaCost);
+            if (!pool || pool.current < actualCost) continue;
+            this.spendMana(skill.ownerId, actualCost);
           }
 
           skill.currentCooldown = skill.cooldown;
 
-          // 加入 pendingForces（传入 gameContext 供 curse 选目标）
-          const force = this._skillToForce(skill, gameContext);
-          this.pendingForces.push(force);
+          // 扣减整局使用次数
+          if (skill.usesPerGame > 0) {
+            skill.gameUsesRemaining--;
+          }
 
-          // 找到目标名称（如果是 curse）
-          const targetName = force.targetId != null
-            ? ((gameContext.players.find(p => p.id === force.targetId) || {}).name || 'ID:' + force.targetId)
-            : null;
+          // 计入本轮技能使用次数
+          usedThisRound[skill.ownerId] = (usedThisRound[skill.ownerId] || 0) + 1;
+
+          // 根据 effect 类型分别处理（与 activatePlayerSkill 对齐）
+          var force = null;
+          var targetName = null;
+
+          switch (skill.effect) {
+            case EFFECT.COOLER:
+              // 冤家牌：fortune(自己) + curse(对手)
+              this.pendingForces.push(this._coolerToForces(skill));
+              force = this._coolerCurseForce(skill, gameContext);
+              this.pendingForces.push(force);
+              break;
+            case EFFECT.CARD_SWAP:
+              // 偷天换日：fortune(自己 P20) + curse(对手 P20)
+              this.pendingForces.push(this._cardSwapFortune(skill));
+              force = this._cardSwapCurse(skill, gameContext);
+              this.pendingForces.push(force);
+              break;
+            case EFFECT.SEAL:
+              // 封印：冻结目标技能2回合
+              this._applySeal(skill, gameContext);
+              force = { targetId: null }; // seal 无 force
+              break;
+            default:
+              // fortune / curse / royal_decree / heart_read / clairvoyance / 其他
+              force = this._skillToForce(skill, gameContext);
+              // NPC Psyche 技能默认保护自己
+              var PSYCHE_EFFECTS = ['clarity', 'refraction', 'reversal', 'heart_read', 'clairvoyance'];
+              if (PSYCHE_EFFECTS.indexOf(skill.effect) >= 0 && force.protectId == null) {
+                force.protectId = skill.ownerId;
+              }
+              this.pendingForces.push(force);
+              break;
+          }
+
+          // 找到目标名称
+          if (force && force.targetId != null) {
+            targetName = (gameContext.players.find(p => p.id === force.targetId) || {}).name || 'ID:' + force.targetId;
+          }
+
+          var record = {
+            ownerName: skill.ownerName,
+            ownerId: skill.ownerId,
+            skillKey: skill.skillKey,
+            effect: skill.effect,
+            tier: skill.tier,
+            targetId: force ? force.targetId : null,
+            targetName: targetName,
+            protectId: force ? force.protectId : null
+          };
 
           this._log('NPC_SKILL_USED', {
             owner: skill.ownerName, key: skill.skillKey,
             effect: skill.effect, tier: skill.tier,
-            targetId: force.targetId, targetName: targetName
+            targetId: record.targetId, targetName: targetName
           });
 
-          this.emit('npc:skill_used', {
-            ownerName: skill.ownerName,
-            skillKey: skill.skillKey,
-            effect: skill.effect,
-            tier: skill.tier,
-            targetId: force.targetId,
-            targetName: targetName
-          });
+          this.emit('npc:skill_used', record);
+          skillRecords.push(record);
         }
       }
 
+      return skillRecords;
+    }
+
+    /**
+     * 单个 NPC 在自己的 betting turn 决定是否使用技能（最多1个）
+     * @param {number} playerId — NPC 的 ID
+     * @param {object} gameContext — { players, pot, phase, board }
+     * @returns {Array} skillRecords
+     */
+    /**
+     * @param {string} [timing] — 'pre-bet': 灵视类(betting前), 'post-bet': 攻击/增益类(betting后)
+     */
+    npcDecideSkillsForPlayer(playerId, gameContext, timing) {
+      if (!this._turnSkillUsed) this._turnSkillUsed = {};
+      var usedKey = playerId + '_' + (timing || 'all');
+      if (this._turnSkillUsed[usedKey]) return [];
+
+      const MAX_TURN_SKILLS = 1; // 每阶段最多用1个技能
+      const skillRecords = [];
+      const owner = gameContext.players.find(p => p.id === playerId);
+      if (!owner || owner.folded) return [];
+
+      // pre-bet: 灵视/防御类（影响 betting 决策）
+      // post-bet: 攻击/增益类（根据投入筹码决定）
+      var PRE_BET = [EFFECT.CLARITY, EFFECT.REFRACTION, EFFECT.REVERSAL, EFFECT.HEART_READ, EFFECT.CLAIRVOYANCE];
+      var POST_BET = [EFFECT.FORTUNE, EFFECT.CURSE, EFFECT.COOLER, EFFECT.ROYAL_DECREE, EFFECT.CARD_SWAP, EFFECT.PURGE_ALL, EFFECT.SEAL];
+
+      var passes;
+      if (timing === 'pre-bet') {
+        passes = [PRE_BET];
+      } else if (timing === 'post-bet') {
+        passes = [POST_BET];
+      } else {
+        passes = [POST_BET, PRE_BET]; // 兼容旧调用
+      }
+
+      for (var pass = 0; pass < passes.length; pass++) {
+        var allowed = passes[pass];
+        if (skillRecords.length >= MAX_TURN_SKILLS) break;
+
+        for (const [, skill] of this.skills) {
+          if (skill.ownerId !== playerId) continue;
+          if (skill.ownerType === 'human') continue;
+          if (skill.activation !== ACTIVATION.ACTIVE) continue;
+          if (skill.currentCooldown > 0) continue;
+          if (allowed.indexOf(skill.effect) < 0) continue;
+          if (skill.usesPerGame > 0 && skill.gameUsesRemaining <= 0) continue;
+          if (gameContext.phase === 'river' && skill.effect !== EFFECT.SEAL && skill.effect !== EFFECT.HEART_READ && skill.effect !== EFFECT.CLAIRVOYANCE) continue;
+          if (skillRecords.length >= MAX_TURN_SKILLS) break;
+
+          var shouldUse = this._npcShouldUseSkill(skill, owner, gameContext);
+          this._log('NPC_SKILL_CONSIDER', {
+            owner: skill.ownerName, key: skill.skillKey, effect: skill.effect,
+            phase: gameContext.phase, shouldUse: shouldUse, pass: pass, timing: 'turn'
+          });
+          if (!shouldUse) continue;
+
+          var actualCost = skill.manaCost;
+          if (actualCost > 0 && this.traitCostFn) actualCost = this.traitCostFn(skill.ownerId, actualCost);
+          if (actualCost > 0) {
+            var pool = this.manaPools.get(skill.ownerId);
+            if (!pool || pool.current < actualCost) continue;
+            this.spendMana(skill.ownerId, actualCost);
+          }
+
+          skill.currentCooldown = skill.cooldown;
+          if (skill.usesPerGame > 0) skill.gameUsesRemaining--;
+
+          var force = null, targetName = null;
+          switch (skill.effect) {
+            case EFFECT.COOLER:
+              this.pendingForces.push(this._coolerToForces(skill));
+              force = this._coolerCurseForce(skill, gameContext);
+              this.pendingForces.push(force);
+              break;
+            case EFFECT.CARD_SWAP:
+              this.pendingForces.push(this._cardSwapFortune(skill));
+              force = this._cardSwapCurse(skill, gameContext);
+              this.pendingForces.push(force);
+              break;
+            case EFFECT.SEAL:
+              this._applySeal(skill, gameContext);
+              force = { targetId: null };
+              break;
+            default:
+              force = this._skillToForce(skill, gameContext);
+              var PSYCHE_EFFECTS = ['clarity', 'refraction', 'reversal', 'heart_read', 'clairvoyance'];
+              if (PSYCHE_EFFECTS.indexOf(skill.effect) >= 0 && force.protectId == null) {
+                force.protectId = skill.ownerId;
+              }
+              this.pendingForces.push(force);
+              break;
+          }
+
+          if (force && force.targetId != null) {
+            targetName = (gameContext.players.find(p => p.id === force.targetId) || {}).name || 'ID:' + force.targetId;
+          }
+
+          var record = {
+            ownerName: skill.ownerName, ownerId: skill.ownerId,
+            skillKey: skill.skillKey, effect: skill.effect, tier: skill.tier,
+            targetId: force ? force.targetId : null, targetName: targetName,
+            protectId: force ? force.protectId : null
+          };
+
+          this._log('NPC_SKILL_USED', {
+            owner: skill.ownerName, key: skill.skillKey,
+            effect: skill.effect, tier: skill.tier,
+            targetId: record.targetId, targetName: targetName, timing: 'turn'
+          });
+
+          this.emit('npc:skill_used', record);
+          skillRecords.push(record);
+        }
+      }
+
+      if (skillRecords.length > 0) this._turnSkillUsed[usedKey] = true;
+      return skillRecords;
+    }
+
+    /**
+     * 重置回合内技能使用记录（每个 betting round 开始时调用）
+     */
+    resetTurnSkillTracking() {
+      this._turnSkillUsed = {};
     }
 
     /**
@@ -655,7 +943,15 @@
         reversal:    '灵视·真理',
         null_field:  '虚无·屏蔽',
         void_shield: '虚无·绝缘',
-        purge_all:   '虚无·现实'
+        purge_all:   '虚无·现实',
+        royal_decree:'天命·敕令',
+        heart_read:  '灵视·读心',
+        cooler:      '狂厄·冤家牌',
+        seal:        '狂厄·封印',
+        clairvoyance:'灵视·千里眼',
+        card_swap:   '幻术·偷天换日',
+        miracle:     '天命·奇迹',
+        lucky_find:  '天命·捡到了'
       };
       return names[effect] || '未知魔力';
     }
@@ -669,18 +965,32 @@
       for (const [, skill] of this.skills) {
         if (skill.activation !== ACTIVATION.TRIGGERED) continue;
         if (!skill.trigger) continue;
+        // 冷却中不触发
+        if (skill.currentCooldown > 0) continue;
+        // 整局次数用尽不触发
+        if (skill.usesPerGame > 0 && skill.gameUsesRemaining <= 0) continue;
+        // 已弃牌不触发
+        const owner = gameContext.players ? gameContext.players.find(p => p.id === skill.ownerId) : null;
+        if (owner && owner.folded) continue;
 
         let shouldActivate = false;
 
         switch (skill.trigger.condition) {
           case 'chips_below': {
-            const owner = gameContext.players.find(p => p.id === skill.ownerId);
             if (owner && owner.chips < (skill.trigger.value || 200)) shouldActivate = true;
             break;
           }
+          case 'chips_percent_below': {
+            // 筹码低于起始筹码的 X%（如 0.10 = 10%）
+            if (owner) {
+              const startStack = (owner.chips || 0) + (owner.totalBet || 0);
+              const threshold = startStack > 0 ? skill.trigger.value || 0.10 : 0;
+              if (startStack > 0 && owner.chips <= startStack * threshold) shouldActivate = true;
+            }
+            break;
+          }
           case 'chips_above': {
-            const owner2 = gameContext.players.find(p => p.id === skill.ownerId);
-            if (owner2 && owner2.chips > (skill.trigger.value || 2000)) shouldActivate = true;
+            if (owner && owner.chips > (skill.trigger.value || 2000)) shouldActivate = true;
             break;
           }
           case 'pot_above': {
@@ -691,14 +1001,23 @@
             if (gameContext.phase === skill.trigger.value) shouldActivate = true;
             break;
           }
+          case 'random_chance': {
+            // 每轮随机触发（如 0.25 = 25%）
+            shouldActivate = Math.random() < (skill.trigger.value || 0.25);
+            break;
+          }
         }
 
         if (shouldActivate && !skill.active) {
           skill.active = true;
+          // 触发技能产生 force
           this.pendingForces.push(this._skillToForce(skill));
+          // 设置冷却和次数
+          skill.currentCooldown = skill.cooldown;
+          if (skill.usesPerGame > 0) skill.gameUsesRemaining--;
           this._log('SKILL_TRIGGERED', {
             owner: skill.ownerName, key: skill.skillKey,
-            condition: skill.trigger.condition
+            condition: skill.trigger.condition, power: skill.power
           });
           this.emit('skill:triggered', { skill });
         } else if (!shouldActivate && skill.active) {
@@ -768,15 +1087,18 @@
      * @param {object} [gameContext] - 用于 curse 智能选目标
      */
     _skillToForce(skill, gameContext) {
+      // fortune 类专属技能 → fortune type (MoZ 只认 fortune/curse)
+      const FORTUNE_EFFECTS = ['royal_decree', 'miracle', 'lucky_find'];
+      const forceType = FORTUNE_EFFECTS.indexOf(skill.effect) >= 0 ? 'fortune' : skill.effect;
       const force = {
         ownerId: skill.ownerId,
         ownerName: skill.ownerName,
-        type: skill.effect,
+        type: forceType,
         power: skill.power || 0,
         activation: skill.activation,
         source: skill.activation,
         // 阶级压制元数据（供 MoZ 使用）
-        tier: skill.tier || 3,
+        tier: skill.tier != null ? skill.tier : 3,
         attr: skill.attr || null,
         skillKey: skill.skillKey,
         suppressTiers: skill.suppressTiers || null,
@@ -794,6 +1116,165 @@
       return force;
     }
 
+    /**
+     * 冤家牌 — fortune 部分（给自己的强运）
+     * @param {object} skill
+     * @returns {object} fortune force
+     */
+    _coolerToForces(skill) {
+      return {
+        ownerId: skill.ownerId,
+        ownerName: skill.ownerName,
+        type: 'fortune',
+        power: skill.power || 55,
+        activation: skill.activation,
+        source: 'cooler',
+        tier: skill.tier || 0,
+        attr: 'moirai',
+        skillKey: skill.skillKey,
+        suppressTiers: skill.suppressTiers || null,
+        suppressAttr: null,
+        suppressAll: false,
+        cannotAffect: null,
+        _isCooler: true
+      };
+    }
+
+    /**
+     * 冤家牌 — curse 部分（给对手的诅咒，让对手也拿好牌但比自己差）
+     * @param {object} skill
+     * @returns {object} curse force
+     */
+    _coolerCurseForce(skill, gameContext) {
+      // 选目标：委托外部 AI，或默认选 hero 对面
+      let targetId = null;
+      if (this.curseTargetFn) {
+        const players = gameContext ? gameContext.players : null;
+        targetId = this.curseTargetFn(skill.ownerId, players);
+      }
+      return {
+        ownerId: skill.ownerId,
+        ownerName: skill.ownerName,
+        type: 'curse',
+        power: Math.round(skill.power * 0.7),  // curse 部分弱于 fortune 部分
+        activation: skill.activation,
+        source: 'cooler',
+        tier: skill.tier || 0,
+        attr: 'chaos',
+        skillKey: skill.skillKey,
+        suppressTiers: skill.suppressTiers || null,
+        suppressAttr: null,
+        suppressAll: false,
+        cannotAffect: null,
+        targetId: targetId,
+        _isCooler: true
+      };
+    }
+
+    /**
+     * 偷天换日 — fortune 部分（给自己的幻术好运）
+     * @param {object} skill
+     * @returns {object} fortune force
+     */
+    _cardSwapFortune(skill) {
+      return {
+        ownerId: skill.ownerId,
+        ownerName: skill.ownerName,
+        type: 'fortune',
+        power: skill.power || 20,
+        activation: skill.activation,
+        source: 'card_swap',
+        tier: skill.tier != null ? skill.tier : 1,
+        attr: 'psyche',
+        skillKey: skill.skillKey,
+        suppressTiers: null,
+        suppressAttr: null,
+        suppressAll: false,
+        cannotAffect: null,
+        _isCardSwap: true
+      };
+    }
+
+    /**
+     * 偷天换日 — curse 部分（给对手的幻术厄运）
+     * @param {object} skill
+     * @returns {object} curse force
+     */
+    _cardSwapCurse(skill, gameContext) {
+      let targetId = null;
+      if (this.curseTargetFn) {
+        const players = gameContext ? gameContext.players : null;
+        targetId = this.curseTargetFn(skill.ownerId, players);
+      }
+      return {
+        ownerId: skill.ownerId,
+        ownerName: skill.ownerName,
+        type: 'curse',
+        power: skill.power || 20,
+        activation: skill.activation,
+        source: 'card_swap',
+        tier: skill.tier != null ? skill.tier : 1,
+        attr: 'chaos',
+        skillKey: skill.skillKey,
+        suppressTiers: null,
+        suppressAttr: null,
+        suppressAll: false,
+        cannotAffect: null,
+        targetId: targetId,
+        _isCardSwap: true
+      };
+    }
+
+    /**
+     * 封印 — 冻结目标所有主动技能 2 回合
+     * @param {object} skill
+     */
+    _applySeal(skill, gameContext, targetOverride) {
+      // 选目标：优先使用 UI 传入的 targetOverride
+      let targetId = null;
+      if (targetOverride != null) {
+        targetId = targetOverride;
+      } else if (this.curseTargetFn) {
+        const players = gameContext ? gameContext.players : null;
+        targetId = this.curseTargetFn(skill.ownerId, players);
+      }
+      if (targetId == null) return;
+
+      const SEAL_DURATION = 2;
+      let sealCount = 0;
+
+      for (const [, s] of this.skills) {
+        if (s.ownerId !== targetId) continue;
+        if (s.activation === ACTIVATION.PASSIVE) continue;
+        // 封印：设置额外冷却
+        s.currentCooldown = Math.max(s.currentCooldown, SEAL_DURATION);
+        s._sealed = SEAL_DURATION;
+        sealCount++;
+      }
+
+      const targetName = this._findOwnerName(targetId);
+      this._log('SEAL_APPLIED', {
+        caster: skill.ownerName, target: targetName,
+        targetId: targetId, skillsSealed: sealCount, duration: SEAL_DURATION
+      });
+      this.emit('seal:applied', {
+        casterId: skill.ownerId, casterName: skill.ownerName,
+        targetId: targetId, targetName: targetName,
+        skillsSealed: sealCount, duration: SEAL_DURATION
+      });
+    }
+
+    /**
+     * 查找 ownerId 对应的名字
+     * @private
+     */
+    _findOwnerName(ownerId) {
+      for (const [, s] of this.skills) {
+        if (s.ownerId === ownerId) return s.ownerName;
+      }
+      return 'ID:' + ownerId;
+    }
+
     // ========== 回合生命周期 ==========
 
     /**
@@ -809,7 +1290,8 @@
       // 注意：toggle 技能（如绝缘）不在回合结束时重置
       // 它们由玩家手动切换开/关，跨手牌保持状态
 
-      // 冷却递减
+      // 冷却按「阶段」递减：一回合 = 一个德州阶段 (preflop/flop/turn/river)
+      // cooldown=2 意味着 2 个阶段后可用，seal duration=2 意味着 2 个阶段后解封
       for (const [, skill] of this.skills) {
         if (skill.currentCooldown > 0) {
           skill.currentCooldown--;
@@ -831,7 +1313,8 @@
         if (skill.activation !== ACTIVATION.PASSIVE && skill.activation !== ACTIVATION.TOGGLE) {
           skill.active = false;
         }
-        skill.currentCooldown = 0;
+        // 注意：冷却不在这里重置，跨手牌保留剩余CD
+        // cooldown 在 onRoundEnd() 按阶段递减
       }
 
       this.emit('hand:start', {});
