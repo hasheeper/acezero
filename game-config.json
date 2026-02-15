@@ -1,14 +1,20 @@
 {
+  "gameMode": "texas-holdem",
+
   "blinds": [10, 20],
   "chips": 1000,
   "heroChips": 1000,
 
+  "blackjack": {
+    "startingChips": 1000,
+    "baseBet": 50,
+    "dealerStandOnSoft17": true
+  },
+
   "hero": {
-    "vanguard": { "name": "SIA", "level": 5, "trait": "death_ledger" },
-    "rearguard": { "name": "RINO", "level": 5, "trait": "obsessive_love" },
-    "attrs": { "moirai": 80, "chaos": 80, "psyche": 30, "void": 0 },
-    "vanguardSkills": ["cooler", "catastrophe", "skill_seal", "havoc"],
-    "rearguardSkills": ["royal_decree", "divine_order", "grand_wish", "heart_read"],
+    "vanguard": { "name": "KAZU", "level": 5, "trait": "null_armor" },
+    "attrs": { "moirai": 80, "chaos": 20, "psyche": 40, "void": 100 },
+    "vanguardSkills": ["reality", "insulation", "refraction", "static_field"],
     "mana": 100,
     "maxMana": 100
   },
@@ -17,10 +23,10 @@
 
   "seats": {
     "BTN": {
-      "vanguard": { "name": "通用NOOB", "level": 3, "trait": null },
+      "vanguard": { "name": "波普", "level": 5, "trait": "four_leaf_clover" },
       "ai": "passive", "difficulty": "noob", "emotion": "scared",
-      "attrs": { "moirai": 15, "chaos": 10, "psyche": 5, "void": 0 },
-      "skills": ["minor_wish"]
+      "attrs": { "moirai": 25, "chaos": 0, "psyche": 10, "void": 20 },
+      "skills": ["miracle", "lucky_find"]
     },
     "SB": {
       "vanguard": { "name": "莉莉卡", "level": 5, "trait": "laser_eye" },

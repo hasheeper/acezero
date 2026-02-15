@@ -207,7 +207,7 @@
       skills: ['royal_decree', 'grand_wish', 'minor_wish', 'heart_read'],
       vanguardTrait: 'crimson_crown',
       rearguardTrait: 'obsessive_love',
-      desc: '天宫理乃 — 绯红王冠的堕落公主'
+      desc: '天宫理乃'
     },
     SIA: {
       level: 5,
@@ -218,7 +218,7 @@
       skills: ['cooler', 'havoc', 'hex', 'skill_seal'],
       vanguardTrait: 'death_ledger',
       rearguardTrait: 'binding_protocol',
-      desc: '夜伽希亚 — 死亡账簿的企业执行者'
+      desc: '夜伽希亚'
     },
     LILIKA: {
       level: 5,
@@ -229,7 +229,7 @@
       skills: ['clairvoyance', 'refraction', 'clarity', 'card_swap'],
       vanguardTrait: 'laser_eye',
       rearguardTrait: 'service_fee',
-      desc: '莉莉卡 — 镜射之眼的幻术师'
+      desc: '莉莉卡'
     },
     POPPO: {
       level: 5,
@@ -240,7 +240,7 @@
       skills: ['miracle', 'lucky_find'],
       vanguardTrait: 'four_leaf_clover',
       rearguardTrait: 'cockroach',
-      desc: '波普 — 擦地板的吉祥物'
+      desc: '波普'
     }
   };
 

@@ -127,8 +127,8 @@
       // 新增游戏只需在此添加一行
       // ============================================
       const GAME_ROUTES = {
-        'texas-holdem': 'texasholdem/texas-holdem/texas-holdem.html'
-        // 'blackjack': 'blackjack/blackjack.html'
+        'texas-holdem': 'texasholdem/texas-holdem/texas-holdem.html',
+        'blackjack': 'blackjack/blackjack.html'
       };
 
       const DEFAULT_GAME = 'texas-holdem';
@@ -208,6 +208,14 @@
         return base + route;
       }
 
+      function resolveGameKey(config) {
+        const raw = (config && (config.gameMode || config.gameId)) || DEFAULT_GAME;
+        const norm = String(raw).toLowerCase();
+        if (norm === '21' || norm === 'blackjack') return 'blackjack';
+        if (norm === 'texas' || norm === 'texas-holdem' || norm === 'holdem') return 'texas-holdem';
+        return GAME_ROUTES[norm] ? norm : DEFAULT_GAME;
+      }
+
       // 3. 向游戏 iframe 发送配置（附带来源标记，仅首次生效）
       function sendConfigToGame(config, source) {
         if (!frame || !frame.contentWindow) return;
@@ -226,7 +234,7 @@
       // 4. 启动
       async function boot() {
         const config = await resolveConfig();
-        const gameId = config.gameId || DEFAULT_GAME;
+        const gameId = resolveGameKey(config);
 
         console.log('[ENGINE] gameId:', gameId);
         loadingStatus.textContent = 'LOADING ' + gameId.toUpperCase() + '...';

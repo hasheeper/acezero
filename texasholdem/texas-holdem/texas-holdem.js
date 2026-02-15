@@ -351,24 +351,8 @@
 
   function updateCenterChipsVisual(amount) {
     const container = UI.potClusters;
-    if (!container) return;
-    container.innerHTML = '';
-    if (amount <= 0) return;
-
-    const vis = Currency.chipVisual(amount);
-
-    for (let i = 0; i < vis.count; i++) {
-      const chip = document.createElement('div');
-      chip.className = `chip-stack ${vis.color}`;
-      const offset = i * -6;
-      chip.style.top = `${offset}px`;
-      chip.style.zIndex = i + 1;
-      chip.innerHTML = `
-        <div class="chip-ring"></div>
-        <div class="chip-inlay"></div>
-      `;
-      container.appendChild(chip);
-    }
+    if (!container || !window.AceZeroChips) return;
+    window.AceZeroChips.renderPotClusters(container, amount, Currency);
   }
 
   // ========== 座位UI生成 ==========
@@ -443,11 +427,6 @@
     }
   }
 
-  // 根据银弗数值获取筹码颜色 (委托给 Currency 模块)
-  function getChipType(amount) {
-    return Currency.chipColor(amount);
-  }
-
   function updateSeatDisplay(player) {
     if (!player.seatElement) return;
     
@@ -455,17 +434,9 @@
     chipCount.innerHTML = Currency.html(player.chips);
     
     const betChips = player.seatElement.querySelector('.bet-chips');
-    if (player.currentBet > 0 && player.isActive) {
-      betChips.style.display = 'flex';
-      betChips.querySelector('.chip-amount').innerHTML = Currency.htmlAmount(player.currentBet);
-      
-      // 根据下注金额设置筹码类型
-      const chipStack = betChips.querySelector('.chip-stack');
-      const chipType = getChipType(player.currentBet);
-      console.log(`[Chip Debug] Player: ${player.name}, Bet: ${Currency.amount(player.currentBet)}, Chip Type: ${chipType}`);
-      chipStack.className = 'chip-stack ' + chipType;
-    } else {
-      betChips.style.display = 'none';
+    if (betChips && window.AceZeroChips) {
+      const activeBet = player.currentBet > 0 && player.isActive ? player.currentBet : 0;
+      window.AceZeroChips.updateSeatBetChips(betChips, activeBet, Currency);
     }
     
     // 更新状态

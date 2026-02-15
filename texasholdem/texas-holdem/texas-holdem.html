@@ -8,7 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=JetBrains+Mono:wght@400;700&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
-  <link href="../deck-of-cards/example/example.css" rel="stylesheet">
+  <link href="../../deck-of-cards/example/example.css" rel="stylesheet">
+  <link href="../../deck-of-cards/acezero-chips.css" rel="stylesheet">
   <link href="texas-holdem.css" rel="stylesheet">
 </head>
 <body>
@@ -169,11 +170,12 @@
 
 
   <!-- 第三方库（全局挂载，非 ES Module） -->
-  <script src="../deck-of-cards/dist/deck.js"></script>
+  <script src="../../deck-of-cards/dist/deck.js"></script>
   <script src="../pokersolver/pokersolver.js"></script>
 
   <!-- 核心引擎（IIFE，逐步迁移） -->
-  <script src="utils/currency.js"></script>
+  <script src="../../deck-of-cards/acezero-currency.js"></script>
+  <script src="../../deck-of-cards/acezero-chips.js"></script>
   <script src="core/equity-estimator.js"></script>
   <script src="core/poker-ai.js"></script>
   <script src="utils/game-logger.js"></script>

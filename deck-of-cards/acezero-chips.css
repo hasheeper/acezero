@@ -1,0 +1,193 @@
+/* Shared AceZero chip visuals (Texas Hold'em / future games) */
+
+.bet-chips {
+  position: absolute;
+  bottom: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  z-index: 5;
+}
+
+.seat[data-position="top"] .bet-chips,
+.seat[data-position="top-left"] .bet-chips,
+.seat[data-position="top-right"] .bet-chips {
+  top: auto;
+  bottom: -30px;
+}
+
+.chip-stack {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  position: relative;
+  box-shadow:
+    0 3px 0 rgba(0, 0, 0, 0.5),
+    0 5px 10px rgba(0, 0, 0, 0.6),
+    inset 0 0 8px rgba(0, 0, 0, 0.4);
+  transition: transform 0.2s;
+}
+
+.chip-ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  z-index: 1;
+}
+
+.chip-inlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 60%;
+  height: 60%;
+  border-radius: 50%;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.3),
+    inset 0 1px 3px rgba(255, 255, 255, 0.3),
+    inset 0 -1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.chip-stack.white {
+  background: #e0e0e0;
+}
+.chip-stack.white .chip-ring {
+  background: repeating-conic-gradient(
+    #e0e0e0 0deg 30deg,
+    #bdc3c7 30deg 45deg,
+    #e0e0e0 45deg 60deg
+  );
+}
+.chip-stack.white .chip-inlay {
+  background: #fff;
+  border: 2px solid #bdc3c7;
+}
+
+.chip-stack.green {
+  background: #27ae60;
+}
+.chip-stack.green .chip-ring {
+  background: repeating-conic-gradient(
+    #27ae60 0deg 40deg,
+    #f1c40f 40deg 45deg,
+    #1e8449 45deg 55deg,
+    #f1c40f 55deg 60deg,
+    #27ae60 60deg 90deg
+  );
+}
+.chip-stack.green .chip-inlay {
+  background: #145a32;
+  border: 2px solid #7a6e35;
+}
+
+.chip-stack.blue {
+  background: #2980b9;
+}
+.chip-stack.blue .chip-ring {
+  background: repeating-conic-gradient(
+    from 15deg,
+    #2980b9 0deg 30deg,
+    #cfb53b 30deg 36deg,
+    #2980b9 36deg 60deg
+  );
+}
+.chip-stack.blue .chip-inlay {
+  background: #0b1a2a;
+  border: 1px dashed #cfb53b;
+}
+
+.chip-stack.red {
+  background: #c0392b;
+}
+.chip-stack.red .chip-ring {
+  background: repeating-conic-gradient(
+    #922b21 0deg 45deg,
+    #e74c3c 45deg 48deg,
+    #0b0c10 48deg 58deg,
+    #e74c3c 58deg 61deg,
+    #922b21 61deg 90deg
+  );
+}
+.chip-stack.red .chip-inlay {
+  background: #300a0a;
+  border: 2px solid #c0392b;
+}
+
+.chip-stack.purple {
+  background: #8e44ad;
+}
+.chip-stack.purple .chip-ring {
+  background: repeating-conic-gradient(
+    from 0deg,
+    #8e44ad 0% 10%,
+    #cfb53b 10% 12%,
+    #4a235a 12% 14%,
+    #cfb53b 14% 16%,
+    #8e44ad 16% 25%
+  );
+}
+.chip-stack.purple .chip-inlay {
+  background: radial-gradient(circle, #4a235a 30%, #000 100%);
+  border: 1px solid #cfb53b;
+  box-shadow: 0 0 5px #8e44ad;
+}
+
+.chip-stack.black {
+  background: #1a1a1a;
+}
+.chip-stack.black .chip-ring {
+  background: repeating-conic-gradient(
+    #000 0deg 28deg,
+    #cfb53b 28deg 32deg,
+    #333 32deg 60deg
+  );
+  border: 1px solid #000;
+}
+.chip-stack.black .chip-inlay {
+  background: #000;
+  border: 2px double #cfb53b;
+}
+
+.chip-amount {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--gold-main, #cfb53b);
+  background: rgba(0, 0, 0, 0.9);
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid var(--gold-dim, #7a6e35);
+  white-space: nowrap;
+}
+
+#pot-clusters .chip-stack {
+  position: absolute;
+  left: 5px;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.6);
+}
+
+@keyframes acezeroChipFlyToCenter {
+  0% {
+    transform: translateX(-50%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-50%) translateY(-80px) scale(0.3);
+    opacity: 0;
+  }
+}
+
+.bet-chips.flying {
+  animation: acezeroChipFlyToCenter 0.6s ease-in forwards;
+}

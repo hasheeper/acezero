@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AceZero - Gilded Blackjack</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../deck-of-cards/example/example.css" />
+  <link rel="stylesheet" href="../deck-of-cards/acezero-chips.css" />
+  <link rel="stylesheet" href="blackjack.css" />
+</head>
+<body>
+  <main class="table-frame">
+    <div class="watermark">ACEZERO // BJ-TERMINAL</div>
+
+    <div class="deck-shoe"></div>
+    <div id="deck-wrapper" class="deck-origin"><div id="deck-mount"></div></div>
+
+    <section class="zone zone-dealer">
+      <div class="hand-wrapper">
+        <div class="score-bubble" id="dealer-score">0</div>
+        <div class="hand-container" id="dealer-cards"></div>
+      </div>
+      <div class="zone-tag">DEALER</div>
+    </section>
+
+    <section class="zone zone-center">
+      <div class="logo-text">BLACKJACK</div>
+      <div class="payout-text">Pays 3 to 2 · Dealer stands on 17</div>
+      <div id="main-pot-area">
+        <div id="pot-clusters"></div>
+        <div class="pot-info-hover">
+          <div class="pot-label">TOTAL POT</div>
+          <div class="pot-val-hover"><span id="pot-amount">0</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="zone zone-player">
+      <div class="zone-tag player-tag" id="meta-player">PLAYER: ---</div>
+      <div class="hand-wrapper">
+        <div class="score-bubble" id="player-score">0</div>
+        <div class="bet-chips" id="player-bet-chips" style="display:none;">
+          <div class="chip-stack"><div class="chip-ring"></div><div class="chip-inlay"></div></div>
+          <div class="chip-amount"></div>
+        </div>
+        <div class="hand-container" id="player-cards"></div>
+      </div>
+    </section>
+  </main>
+
+  <nav class="ui-dashboard">
+    <div class="info-panel">
+      <div class="stat-box">
+        <div class="stat-label">BALANCE</div>
+        <div class="stat-val gold" id="chips">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">ROUND</div>
+        <div class="stat-val" id="round-count">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">BASE BET</div>
+        <div class="stat-val" id="base-bet">0</div>
+      </div>
+    </div>
+
+    <div class="controls-center">
+      <button class="btn-cmd" id="btn-hit" disabled>HIT</button>
+      <button class="btn-cmd" id="btn-stand" disabled>STAND</button>
+      <button class="btn-cmd primary" id="btn-new-round">NEW ROUND</button>
+    </div>
+
+    <div class="status-panel">
+      <div class="status-msg" id="message">点击 NEW ROUND 开始 21 点。</div>
+    </div>
+  </nav>
+
+  <script src="../deck-of-cards/dist/deck.js"></script>
+  <script src="../deck-of-cards/acezero-currency.js"></script>
+  <script src="../deck-of-cards/acezero-chips.js"></script>
+  <script src="blackjack.js"></script>
+</body>
+</html>

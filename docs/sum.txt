@@ -1,0 +1,1335 @@
+<技能体系>
+# 零之王牌 — 技能系统 v4
+
+## 核心概念：引擎如何选牌
+
+这不是一个随机扑克游戏。**Monte of Zero 引擎**在每次发牌时：
+
+1. **枚举所有可能的牌**（牌堆中每张牌 = 一个「平行宇宙」）
+2. **为每个宇宙打分**（命运分 = 所有「力」的加权叠加）
+3. **选择命运分最高的牌**发出
+
+技能的本质 = 向引擎注入「力」（Force），改变打分公式，从而改变哪张牌被选中。
+
+---
+
+## Fortune（天命力）如何工作
+
+当你使用「大吉」（power=30）时：
+
+```
+对牌堆中每张候选牌 X：
+  模拟 X 发出后的牌局 → 计算你的胜率 winRate (0~1)
+  fortune 贡献 = power × winRate = 30 × winRate
+  
+  如果 X 让你胜率 80%：贡献 = 30 × 0.8 = 24
+  如果 X 让你胜率 20%：贡献 = 30 × 0.2 = 6
+```
+
+**结果：引擎倾向于选择让你胜率高的牌。** power 越大，这个倾向越强。
+
+## Curse（诅咒力）如何工作
+
+当敌人使用「大凶」（power=30, target=你）时：
+
+```
+对牌堆中每张候选牌 X：
+  模拟 X 发出后的牌局 → 计算你的败率 loseRate = 1 - winRate
+  curse 贡献 = power × loseRate = 30 × loseRate
+  
+  如果 X 让你胜率 80%（败率 20%）：贡献 = 30 × 0.2 = 6
+  如果 X 让你胜率 20%（败率 80%）：贡献 = 30 × 0.8 = 24
+```
+
+**结果：引擎倾向于选择让你输的牌。** 和 fortune 完全相反。
+
+## Fortune + Curse 同时存在
+
+```
+你使用大吉 (fortune power=30)
+敌人使用大凶 (curse power=30, target=你)
+
+候选牌 X（你胜率 70%）：
+  fortune 贡献 = 30 × 0.7 = 21  （想选这张）
+  curse 贡献   = 30 × 0.3 = 9   （也想选这张，因为你输的概率低 → curse 贡献低）
+  
+候选牌 Y（你胜率 30%）：
+  fortune 贡献 = 30 × 0.3 = 9   （不想选）
+  curse 贡献   = 30 × 0.7 = 21  （想选这张，因为你输的概率高）
+
+牌 X 总分 = 21 + 9 = 30
+牌 Y 总分 = 9 + 21 = 30  ← 打平！
+```
+
+**当 fortune 和 curse 力量相等且目标相同时，互相抵消 → 回归随机。**
+但如果你的 fortune power > 敌人的 curse power，你就占优。
+
+---
+
+## 四属性
+
+| 属性 | 英文 | 定位 |
+|------|------|------|
+| **天命** | Moirai | 顺流·强运 — 让自己拿好牌 |
+| **狂厄** | Chaos | 乱流·凶 — 让敌人拿烂牌 |
+| **灵视** | Psyche | 观察·逆转 — 情报 + 拦截 Chaos |
+| **虚无** | Void | 消除·减伤 — 削弱/清除所有魔法 |
+
+### 克制环
+
+```
+Psyche (灵视) > Chaos (狂厄) > Moirai (天命) > Psyche (灵视)
+Void 不参与克制，纯消除
+```
+
+**T1 对决：** 克制方获得 **1.5x** 力量加成。
+
+**克制机制：**
+
+| 克制关系 | 机制 | 效果 |
+|----------|------|------|
+| **Psyche > Chaos** | 解析混沌 | Psyche 技能拦截并转化敌方 Curse（澄澈=消除，折射=50%转化，真理=100%转化） |
+| **Chaos > Moirai** | 凶克吉 | curse 对抗 fortune 时获得 **+10%** 力量加成 |
+| **Moirai > Psyche** | 反制空放 | 敌方无 Chaos 时反制效果空放，但信息效果（胜率/透视）仍触发 |
+
+---
+
+## 全部 12 技能
+
+### 天命 (Moirai) — 强运系
+
+| 技能 | 阶级 | Mana | CD | Power | 效果 |
+|------|------|------|----|-------|------|
+| **小吉** `minor_wish` | T3 | 10 | 0 | 15 | 轻微偏斜：引擎稍微倾向对你有利的牌 |
+| **大吉** `grand_wish` | T2 | 20 | 0 | 30 | 强运：引擎明显倾向对你有利的牌 |
+| **天命** `divine_order` | T1 | 40 | 3 | 50 | 绝对既定：最强幸运力 + 压制同属性 T2/T3 |
+
+### 狂厄 (Chaos) — 凶系
+
+**单体指向**: Curse 针对一个目标生效。目标选择由 `PokerAI.SkillAI.pickCurseTarget` 决定，按 difficulty 分层：
+
+| Difficulty | 策略 | 逻辑 |
+|-----------|------|------|
+| noob | **Nemesis** (死磕) | 锁定主角，主角弃牌才随机选 |
+| regular | **Pot Commitment** (沉没成本) | 诅咒投入底池最多的对手（不会弃牌，收益最大） |
+| pro | **Threat Assessment** (威胁评估) | 综合下注量×0.7 + 筹码量×0.3 评估威胁度 |
+
+架构：`skill-system.js` 通过 `curseTargetFn` 回调委托给 `poker-ai.js`，零耦合。
+
+引擎根据 `force.targetId` 计算目标的败率来打分。
+
+| 技能 | 阶级 | Mana | CD | Power | 效果 |
+|------|------|------|----|-------|------|
+| **小凶** `hex` | T3 | 10 | 0 | 15 | 概率污蚀：引擎稍微倾向让目标拿烂牌（对抗幸运时+10%克制加成） |
+| **大凶** `havoc` | T2 | 20 | 0 | 30 | 恶意筛除：引擎明显倾向让目标拿烂牌（对抗幸运时+10%克制加成） |
+| **灾变** `catastrophe` | T1 | 40 | 3 | 50 | 痛苦锁死：最强凶 + 压制同属性 T2/T3 |
+
+### 灵视 (Psyche) — 裁定者 The Arbiter
+
+每个技能都有**双重效果**：信息效果（必须发挥）+ 拦截效果（仅对抗 Chaos 时发挥）。
+
+| 技能 | 阶级 | Mana | CD | 信息效果 | 拦截效果 |
+|------|------|------|----|-------------|--------------|
+| **澄澈** `clarity` | T3 | 10 | 0 | 显示牌堆胜率 (PokerSolver 计算) | 消除敌方 T3/T2 Curse。T1 豁免。 |
+| **折射** `refraction` | T2 | 25 | 0 | 透视目标手牌 (需选目标) | 消除敌方 T3/T2 Curse + **50%** 转化为己方 Fortune。T1 豁免。 |
+| **真理** `axiom` | T1 | 50 | 3 | 显示牌堆胜率 + 对手手牌信息 | 湮灭所有敌方 Curse（含 T1）+ **100%** 转化为己方 Fortune。 |
+
+#### 澄澈（T3）— 低成本解控
+
+```
+敌人使用小凶 (curse power=15)
+你使用澄澈 (clarity, 10 Mana)
+
+引擎处理：
+  1. 扫描敌方 Curse → 小凶 (T3, power=15)
+  2. T3 ≤ T2 → 可拦截
+  3. 小凶 effectivePower → 0
+  4. 转化率 0% → 无额外收益
+  结果：小凶被完全消除，但你也不获得任何加成
+```
+
+#### 折射（T2）— 透视 + 反制
+
+```
+敌人使用大凶 (curse power=30)
+你使用折射 (refraction, 25 Mana) → 选择目标
+
+信息效果 (必定): 透视目标手牌
+
+反制效果:
+  1. 扫描敌方 Curse → 大凶 (T2, power=30)
+  2. T2 ≤ T2 → 可拦截
+  3. 大凶 effectivePower → 0
+  4. 转化：30 × 50% = 15 Fortune
+  结果：敌凶失效 + 你获得 15 Fortune + 看到了敌人的牌！
+
+但如果敌人用的是灾变 (T1, power=50)：
+  T1 > T2 → T1 豁免，反制部分无效
+  结果：灾变完全生效，但你仍然看到了敌人的牌
+```
+
+#### 真理（T1）— 绝对反杀
+
+```
+敌人使用灾变 (curse T1, power=50) + 大凶 (curse T2, power=30)
+你使用真理 (axiom/reversal, 50 Mana)
+
+引擎处理：
+  1. 扫描所有敌方 Curse（含 T1）
+  2. 灾变 effectivePower → 0，转化 50 × 100% = 50 Fortune
+  3. 大凶 effectivePower → 0，转化 30 × 100% = 30 Fortune
+  结果：敌人全部凶归零 + 你获得 80 点 Fortune！
+```
+
+**Moirai > Psyche 克制：**
+- 敌方没有 Chaos 时，反制效果空放（无 Curse 可拦截）
+- 但信息效果仍然触发（胜率/透视），不是完全浪费
+- 这体现了“既定的命运无法被干涉，但可以被观测”的设计
+
+### 虚无 (Void) — 消除系（零 Mana 消耗，代价是策略成本）
+
+Void = 反魔法。不消耗魔力，但有策略代价。三阶各有清晰的选择维度。
+
+| 技能 | 阶级 | Mana | 类型 | Power | 效果 | 策略代价 |
+|------|------|------|------|-------|------|----------|
+| **屏蔽** `static_field` | T3 | 0 | 被动 | 8 | 反侦察：敌方信息类技能对己方失效 + 所有被动力 -30% | 始终在线，无代价 |
+| **绝缘** `insulation` | T2 | 0 | **开关** | 15 | 全场所有魔法效果减半（**敌我不分**） | 己方 fortune 也被减半 |
+| **现实** `reality` | T1 | 0 | 主动 | 0 | 核弹：清除所有非 Void 效果，回归纯随机 | **整局限1次** |
+
+#### 屏蔽（T3）— 反侦察
+
+```
+敌人使用折射(refraction) → 选择透视你
+引擎处理：
+  1. 检查目标(你)是否有 null_field 激活
+  2. null_field 激活 → 透视信息效果被阻断
+  结果：敌方看不到你的手牌，但折射的反制效果(拦截 Curse)仍然生效
+```
+
+#### 绝缘（T2）— 全场减半（敌我不分）
+
+```
+你开启绝缘
+你使用大吉 (fortune P30)
+敌人使用大凶 (curse P30)
+
+引擎处理：
+  1. 绝缘生效：全场所有非 Void 的 fortune/curse 减半
+  2. 大吉 P30 → P15
+  3. 大凶 P30 → P15
+  结果：两者仍然抵消，但总体魔法影响降低了一半
+  代价：你自己的 fortune 也被削弱了
+```
+
+#### 现实（T1）— 整局限1次的底牌
+
+```
+BOSS 全力爆发：天命(50) + 大吉(30) + 小凶(15)
+你打出现实(reality)
+
+引擎处理：
+  1. 清除所有非 Void 效果
+  2. 回归纯随机发牌
+  结果：所有人的魔法全部归零，靠真实牌技决胜
+  代价：整局只能用这一次，之后再没有核弹可用
+```
+
+---
+
+## 属性克制详解
+
+### Chaos > Moirai：凶克吉
+
+curse 在对抗 fortune 时获得 **+10%** effectivePower 加成。
+
+```
+你开大吉 (fortune P30)
+BOSS 开大凶 (curse P30)
+
+引擎处理：
+  1. 拔河对抗：30 vs 30
+  2. Chaos > Moirai 克制：大凶 +10% → effectivePower = 33
+  3. 结果：BOSS 的凶略占优势（不再是完全抵消）
+```
+
+### Psyche > Chaos：解析混沌
+
+Psyche 技能主动拦截敌方 Curse，三阶效果递进：
+
+```
+BOSS 开大凶 (curse T2, P30) + 小凶 (curse T3, P15)
+你开折射 (refraction T2, 25 Mana)
+
+信息效果: 透视 BOSS 手牌
+
+反制效果:
+  1. 扫描敌方 Curse: 大凶(T2) + 小凶(T3)
+  2. 折射可拦截 T3/T2 → 两者都被拦截
+  3. 大凶: P30 → 0, 转化 30×50% = 15 Fortune
+  4. 小凶: P15 → 0, 转化 15×50% = 7.5 Fortune
+  结果: 敌方凶全灭 + 你获得 22.5 Fortune + 看到了敌人的牌
+```
+
+### Moirai > Psyche：反制空放
+
+敌方只用天命不用 Chaos 时，Psyche 的反制部分无法生效，但信息效果仍然触发：
+
+```
+BOSS 开大吉 (fortune P30)、不用任何 Chaos 技能
+你开折射 (refraction, 25 Mana) → 选择 BOSS
+
+信息效果: 透视 BOSS 手牌 (仍然触发!)
+
+反制效果:
+  1. 扫描敌方 Curse → 无
+  2. 折射捕捉不到任何负面能量
+  结果: 反制空放，但你看到了敌人的牌，不是完全浪费
+```
+
+### 虚无 (Void) — 消除系（零 Mana，策略成本）
+
+| 技能 | 阶级 | Mana | 类型 | Power | 效果 |
+|------|------|------|------|-------|------|
+| **屏蔽** `static_field` | T3 | 0 | 被动 | 8 | 反侦察 + 所有被动力 -30% |
+| **绝缘** `insulation` | T2 | 0 | 开关 | 15 | 全场魔法减半（敌我不分） |
+| **现实** `reality` | T1 | 0 | 主动 | 0 | 清除所有非 Void 效果（整局限1次） |
+
+---
+
+## 力量对抗处理流程
+
+引擎在每次发牌前，按以下顺序处理所有力：
+
+```
+1. [属性加成]   CombatFormula.enhanceForces()
+   → 根据角色属性值增强力量 (1 + attr/100)
+   → 应用克制倍率 (1.5x / 0.75x)
+
+2. [阶级压制]   _applyTierSuppression()
+   → T1 vs T1 碰撞（power 对决，克制方 1.5x）
+   → 存活 T1 执行 suppressTiers / suppressAttr / suppressAll
+
+3. [绝缘减半]   _applyInsulation()
+   → void_shield 持有者：全场所有非 Void 的 fortune/curse 效果 ×0.5（敌我不分）
+
+4. [同类对抗]   _resolveTypeOpposition()
+   → 同类型 fortune vs fortune / curse vs curse 互相抵消
+   → 分阵营：hero 方 vs NPC 方，同阵营不对抗
+
+5. [天命护盾]   _applyFortuneCurseOpposition()
+   → fortune 持有者的幸运力量可部分抵消针对自己的 curse
+   → 护盾效率 60%，最多削减 curse 50%，fortune 自身最多消耗 50%
+   → 例：大吉 P30 vs 2×大凶 P60 → curse 降至 42，fortune 降至 15
+
+6. [属性克制]   Chaos > Moirai +10% 加成
+   → 只在存在对立 fortune 时生效（拔河场景）
+
+7. [主动压被动] 主动技能额外削弱敌方被动技能
+   → tier 差越大，压制越强
+
+8. [屏蔽削弱]   null_field 削弱所有被动力量 30%
+
+9. [Psyche裁定]  _applyPsycheArbiter()
+   → 每个 Psyche 技能可指定保护目标（protectId），只拦截指向保护目标的 curse
+   → 转化的 fortune 归属施法者（花 mana 保护别人，转化的幸运回馈自己）
+   → clarity(T3): 消除 T3/T2 Curse, 25% 转化
+   → heart_read(T2): 消除 T3/T2 Curse, 15% 转化 + 读心信息
+   → refraction(T2): 消除 T3/T2 Curse, 50% 转化 + 透视手牌
+   → clairvoyance(T0): 湮灭所有 Curse 含 T1, 100% 转化 + 全场透视
+   → reversal(T1): 湮灭所有 Curse 含 T1, 100% 转化 + 胜率+透视
+   → 无敌方 Curse 时空放 (Moirai > Psyche 克制)
+
+10. [Void 减伤]  CombatFormula.applyVoidReduction()
+    → Kazu 前台时，敌方所有效果 ÷ voidDivisor
+    → null_armor 特质增强 Void 减伤 +30%
+    → death_ledger 特质穿透 25% Void 减伤
+```
+
+---
+
+## 调试模式
+
+开启调试模式后，引擎会记录每次发牌的完整时间线，包括所有力量对抗的具体数值。
+
+### 开启方式
+
+在浏览器控制台输入：
+
+```javascript
+// 开启调试模式
+window.MonteOfZero && (window.skillUI.moz.debugMode = true);
+
+// 关闭调试模式
+window.skillUI.moz.debugMode = false;
+```
+
+### 调试时间线结构
+
+每次发牌后，时间线保存在 `moz.lastSelectionMeta.debugTimeline`：
+
+```javascript
+// 查看最近一次发牌的时间线
+console.table(window.skillUI.moz.lastSelectionMeta.debugTimeline);
+```
+
+### 时间线事件
+
+| 事件 | 说明 | 数据 |
+|------|------|------|
+| `ROUND_START` | 发牌开始 | phase, deckRemaining, inputForces |
+| `OPPOSITION_START` | 力量对抗开始 | 所有力的 owner/type/attr/tier/power |
+| `TIER_SUPPRESSION` | 阶级压制发生 | 被压制的力 + 压制者 |
+| `PSYCHE_CONVERT` | Psyche 拦截+转化 | 被拦截的 Curse + 转化后的 Fortune |
+| `PSYCHE_NULLIFY` | Psyche 纯净化 | 被消除的 Curse（无转化） |
+| `PSYCHE_WHIFF` | Psyche 空放 | 无敌方 Curse，技能浪费 |
+| `OPPOSITION_RESULT` | 对抗结束 | 所有力的最终 effectivePower |
+| `UNIVERSES` | 平行宇宙生成 | 候选牌数量 |
+| `CARD_SELECTED` | 选牌完成 | 选中的牌 + 命运分 + top3/bottom3 |
+
+### 调试输出示例
+
+```
+ROUND_START     phase=flop, deck=42, forces=[
+                  {RINO, fortune, moirai, T2, power=30, active}
+                  {BOSS, curse, chaos, T2, power=30, active}
+                ]
+
+OPPOSITION_START  2 forces entering opposition
+
+OPPOSITION_RESULT [
+  {RINO, fortune, power=30 → effectivePower=30}
+  {BOSS, curse,   power=30 → effectivePower=30}
+]
+
+UNIVERSES       42 candidates
+
+CARD_SELECTED   card=Jh, destinyScore=12.5, style=+3
+                top3: [Jh=12.5, Ts=11.2, 9h=10.8]
+                bottom3: [2c=-5.1, 3d=-4.8, 4s=-3.2]
+```
+
+### 带逆转的调试示例
+
+```
+ROUND_START     forces=[
+                  {RINO, reversal, psyche, T1, power=50, active}
+                  {BOSS, curse, chaos, T1, power=50, active}
+                ]
+
+TIER_SUPPRESSION  axiom(T1) suppressAttr=chaos → catastrophe SUPPRESSED
+
+PSYCHE_CONVERT    arbiterType=reversal
+                  intercepted: {BOSS, curse, T1, power=50}
+                  converted:   {RINO, fortune, power=50}  (ratio=1.0)
+
+OPPOSITION_RESULT [
+  {BOSS, curse,   power=50 → effectivePower=0, suppressed by axiom}
+  {RINO, fortune, power=50 → effectivePower=50, converted from curse}
+]
+```
+
+---
+
+## 阶级压制系统
+
+| 规则 | 触发条件 | 效果 |
+|------|----------|------|
+| **suppressTiers** | 天命/灾变 T1 存活 | 无效化同属性 T2+T3 |
+| **suppressAttr** | 真理 T1 存活 | 无效化所有 Chaos 属性技能 |
+| **suppressAll** | 现实 T1 存活 | 无效化所有非 Void 技能 |
+| **T1 vs T1** | 不同阵营 T1 碰撞 | power 对决（克制方 1.5x），败者被压制 |
+
+---
+
+## Mana 系统
+
+| 角色等级 | 最大 Mana | 回复/轮 |
+|----------|-----------|---------|
+| 0 | 0 | 0 |
+| 1 | 40 | 3 |
+| 2 | 60 | 4 |
+| 3 | 80 | 4 |
+| 4 | 90 | 5 |
+| 5 | 100 | 5 |
+
+角色等级 = max(vanguard.level, rearguard.level)
+
+---
+
+## 属性面板与技能习得
+
+```
+属性值 ≥ 20 → 可学 T3
+属性值 ≥ 40 → 可学 T2
+属性值 ≥ 60 → 可学 T1
+```
+
+技能槽位 = 属性总和 ÷ 40（向下取整，最少 1，最多 4）
+
+---
+
+## game-config.json 配置
+
+### 角色接口
+
+```json
+{
+  "vanguard": { "name": "角色名", "level": 3, "trait": "特质key" },
+  "rearguard": { "name": "角色名", "level": 5, "trait": "特质key" },
+  "attrs": { "moirai": 80, "chaos": 20, "psyche": 50, "void": 100 },
+  "skills": ["grand_wish", "refraction", "insulation", "reality"],
+  "ai": "balanced"
+}
+```
+
+- **skills** — 技能 key 数组，没有等级，只有有/无
+- **attrs** — 属性面板，决定技能门槛和战斗属性加成
+- **vanguard.level / rearguard.level** — 角色等级，仅用于 Mana 池计算
+- 普通 NPC 可以省略 rearguard、attrs、skills
+
+---
+
+## 测试配置示例
+
+### 示例 1：标准对局
+
+```json
+{
+  "blinds": [10, 20],
+  "chips": 1000,
+  "hero": {
+    "vanguard": { "name": "KAZU", "level": 3, "trait": "blank_body" },
+    "rearguard": { "name": "RINO", "level": 5, "trait": "fate_weaver" },
+    "attrs": { "moirai": 80, "chaos": 20, "psyche": 50, "void": 100 },
+    "skills": ["grand_wish", "axiom", "refraction", "reality"]
+  },
+  "seats": {
+    "BTN": { "vanguard": { "name": "路人A", "level": 0 }, "ai": "balanced" },
+    "SB": { "vanguard": { "name": "路人B", "level": 0 }, "ai": "rock" },
+    "BB": {
+      "vanguard": { "name": "GAMMA", "level": 3 },
+      "attrs": { "moirai": 40, "chaos": 30, "psyche": 25, "void": 0 },
+      "skills": ["minor_wish", "hex"],
+      "ai": "aggressive"
+    }
+  }
+}
+```
+
+### 示例 2：真理反杀（Psyche 裁定者 vs Chaos 全开）
+
+```json
+{
+  "blinds": [50, 100],
+  "chips": 5000,
+  "hero": {
+    "vanguard": { "name": "KAZU", "level": 5 },
+    "rearguard": { "name": "RINO", "level": 5 },
+    "attrs": { "moirai": 40, "chaos": 10, "psyche": 70, "void": 30 },
+    "skills": ["axiom", "refraction", "clarity", "grand_wish"]
+  },
+  "seats": {
+    "BB": {
+      "vanguard": { "name": "BOSS", "level": 5 },
+      "attrs": { "moirai": 10, "chaos": 80, "psyche": 10, "void": 30 },
+      "skills": ["catastrophe", "havoc", "hex", "static_field"],
+      "ai": "aggressive"
+    }
+  }
+}
+```
+
+**对局分析：**
+- BOSS 全 Chaos 配置：灾变(50) + 大凶(30) + 小凶(15) = 总 curse 95
+- 主角使用「真理」→ 拦截所有 Chaos 力（含 T1）
+  - 灾变 50 × 100% = 50 fortune
+  - 大凶 30 × 100% = 30 fortune
+  - 小凶 15 × 100% = 15 fortune
+  - **总转化 = 95 fortune！** 比直接用天命(50)强得多
+- 主角再叠加「大吉」(30) → 总 fortune = 125
+- BOSS 的凶全部反弹，自己反而被命运抛弃
+
+**但如果 BOSS 只开 Fortune（不用 Chaos）：**
+- 真理空放，浪费 50 Mana，BOSS 的 Fortune 完全生效
+
+### 示例 3：天命 vs 灾变（T1 正面碰撞）
+
+```json
+{
+  "blinds": [50, 100],
+  "chips": 5000,
+  "hero": {
+    "vanguard": { "name": "KAZU", "level": 5 },
+    "rearguard": { "name": "RINO", "level": 5 },
+    "attrs": { "moirai": 80, "chaos": 10, "psyche": 30, "void": 60 },
+    "skills": ["divine_order", "minor_wish", "clarity", "reality"]
+  },
+  "seats": {
+    "BB": {
+      "vanguard": { "name": "BOSS", "level": 5 },
+      "attrs": { "moirai": 10, "chaos": 80, "psyche": 10, "void": 30 },
+      "skills": ["catastrophe", "havoc", "hex", "static_field"],
+      "ai": "aggressive"
+    }
+  }
+}
+```
+
+**对局分析：**
+- 天命(Moirai T1, power=50) vs 灾变(Chaos T1, power=50)
+- Chaos 克制 Moirai → 灾变 50 × 1.5 = 75 vs 天命 50
+- 天命被压制，灾变以 (75-50)/75 ≈ 33% 残余力量存活
+- 后手选择：用「现实」(Void T1) 清场回归随机
+
+### 示例 4：纯路人局
+
+```json
+{
+  "blinds": [5, 10],
+  "chips": 500,
+  "hero": {
+    "vanguard": { "name": "RINO", "level": 1 },
+    "attrs": { "moirai": 20, "chaos": 0, "psyche": 0, "void": 0 },
+    "skills": ["minor_wish"]
+  },
+  "seats": {
+    "BTN": { "vanguard": { "name": "NPC_A", "level": 0 }, "ai": "balanced" },
+    "SB": { "vanguard": { "name": "NPC_B", "level": 0 }, "ai": "passive" },
+    "BB": { "vanguard": { "name": "NPC_C", "level": 0 }, "ai": "rock" }
+  }
+}
+```
+
+---
+
+## UI 行为分类
+
+| 行为 | 技能 | UI 表现 |
+|------|------|----------|
+| **FORCE** | 小吉、大吉、天命、现实 | 点击按钮 → 注入力 |
+| **CURSE** | 小凶、大凶、灾变、冤家牌、偷天换日、封印 | 点击 → 选目标座位 → 注入指向性力 |
+| **PSYCHE** | 澄澈、折射、真理、读心、千里眼 | 点击 → 选保护目标 → 信息效果 + 注入反制力 |
+| **TOGGLE** | 绝缘 | 点击切换开/关，0 mana |
+| **PASSIVE** | 屏蔽 | 无按钮，自动生效 |
+
+---
+
+## 文件结构
+
+| 文件 | 职责 |
+|------|------|
+| `core/skill-system.js` | 技能注册、Mana、激活、NPC AI、力量收集 |
+| `core/monte-of-zero.js` | 引擎：力量对抗、阶级压制、选牌、调试时间线 |
+| `ui/skill-ui.js` | UI 按钮、激活路由、Psyche透视/胜率、力量对抗展示 |
+| `rpg/attribute-system.js` | 四属性、克制环、属性加成 |
+| `rpg/combat-formula.js` | 属性增强、特质加成、Void 减伤 |
+| `rpg/trait-system.js` | 特质目录 TRAIT_CATALOG、TraitSystem 类 |
+| `rpg/switch-system.js` | 前台/后台切换、Void 减伤路由 |
+| `rpg/survival-economy.js` | Mana 经济：掠夺回蓝、大胜回蓝、反噬 |
+| `rpg/rpg-init.js` | ES Module 桥接入口，挂载到 window |
+| `ST/acezero-tavern-plugin.js` | 酒馆中间件：ERA → 技能推导 |
+
+</技能体系>
+<角色特质与专属技能>
+# 角色特质与专属技能
+
+> ACE0 引擎 — 角色被动天赋 & 专属技能设计文档
+
+---
+
+## 概述
+
+每个角色拥有两个**特质槽位**和若干**技能槽位**：
+
+| 槽位 | 类型 | 说明 |
+|------|------|------|
+| 主手特质 (vanguard) | 被动 | 影响防御、牌运、物理层，角色在前台时生效 |
+| 副手特质 (rearguard) | 被动 | 影响魔力、技能增幅、精神层，角色在后台时生效 |
+| 技能 | 主动/被动 | 消耗 mana 或免费，有冷却和使用次数限制 |
+
+特质始终生效，不消耗 mana。  
+专属技能只有对应角色才能习得，通用技能所有角色共享。
+
+---
+
+## KAZU — ♣ 虚无守护者
+
+> 主属性: Void / 副属性: Psyche  
+> 定位: 坦克/防御核心，虚无之壁
+
+### 专属特质
+
+| 特质 | 槽位 | 解锁等级 | 效果 |
+|------|------|----------|------|
+| **null_armor（虚无铠装）** | 主手 | Lv.2 | Void 减伤效果 **+30%**，但自身 fortune 效果 **-15%** |
+| **steady_hand（不动心）** | 副手 | Lv.3 | 被动 mana 回复 **+3/回合**，前台角色受 curse 伤害 **-10%** |
+
+#### 设计意图
+
+- **虚无铠装**：KAZU 的核心身份是"虚无之壁"。此特质让他的 Void 减伤更厚（例如 voidDivisor 1.6 → 1.78），代价是运气被虚无吞噬（fortune -15%）。适合纯防御打法。
+- **不动心**：KAZU 退到后台时提供稳定的魔力支援和轻度减伤。与 RINO/SIA 的爆发型前台形成互补。
+
+### 专属技能
+
+无。KAZU 使用通用 Void 系技能（屏蔽/绝缘/现实）。
+
+---
+
+## RINO — ♥ 天宫理乃
+
+> 主属性: Moirai / 副属性: Psyche  
+> 定位: EV+ 爆发型，强行改运制造必胜牌型
+
+### 专属特质
+
+| 特质 | 槽位 | 解锁等级 | 效果 |
+|------|------|----------|------|
+| **crimson_crown（绯红王冠）** | 主手 | Lv.2 | 天命系技能力量 **+25%**，但受到的诅咒效果 **+15%** |
+| **obsessive_love（执念之爱）** | 副手 | Lv.3 | 筹码落后时天命 **+20%** 且常驻 fortune(**P10**)；领先时天命 **-10%** 且反噬 curse(**P5**) |
+
+#### 设计意图
+
+- **绯红王冠**：高风险高回报。RINO 在前台时天命系技能极强（大吉 P30 → P37.5），但对诅咒的抵抗力下降。与 KAZU 的 steady_hand(-10% curse) 搭配时，净效果约 +3.5% curse（0.9 × 1.15 = 1.035），形成有趣的设计张力。
+- **执念之爱**：双面被动。落后时提供 +20% 天命倍率 + 常驻 P10 fortune（不依赖技能激活），是翻盘利器。领先时 -10% 天命倍率 + P5 curse 反噬，防止滚雪球。
+
+#### obsessive_love 被动力详解
+
+| 筹码状态 | 倍率效果 | 被动力 | 说明 |
+|----------|----------|--------|------|
+| 落后 | fortune ×1.2 | fortune P=10 | 两层加成叠加，大幅提升翻盘能力 |
+| 持平 | 无 | 无 | 平局时不触发 |
+| 领先 | fortune ×0.9 | curse P=5 (指向hero) | 双重惩罚，抑制优势扩大 |
+
+> 被动力在 `combat-formula.js` 的 `_injectTraitForces` 中注入，  
+> 倍率效果在 `_applyTraitBonuses` 中应用。两者独立计算，不会双重叠加。
+
+### 专属技能
+
+| 技能 | Tier | 属性 | Mana | CD | Power | 效果 |
+|------|------|------|------|----|-------|------|
+| **royal_decree（敕令）** | T0 | Moirai | 25 | — | 50 | 绝对天命，超强概率偏斜。压制 T1/T2/T3，整局限1次 |
+| **heart_read（读心）** | T2 | Psyche | 15 | 2回合 | — | 读取对手下注倾向（信息技能，显示 betting profile） |
+
+#### 设计意图
+
+- **敕令**：RINO 的终极技能。P50 + 阶级压制全等级 + 整局限1次。25 mana 的消耗使其性价比极高，但一局只能用一次，需要选择最关键的时机。
+- **读心**：低成本信息技能，帮助判断对手是 bluff 还是 value bet。与 RINO 的 Psyche 副属性呼应。
+
+---
+
+## SIA — ♠ 夜伽希亚
+
+> 主属性: Chaos / 副属性: Moirai  
+> 定位: Cooler 流，制造冤家牌 + 封印对手
+
+### 专属特质
+
+| 特质 | 槽位 | 解锁等级 | 效果 |
+|------|------|----------|------|
+| **death_ledger（死亡账簿）** | 主手 | Lv.2 | 诅咒穿透目标 **25%** 的 Void 减伤和 Psyche 反制 |
+| **binding_protocol（拘束协议）** | 副手 | Lv.3 | 技能 mana 消耗 **-50%**，但力量 **-10%** |
+
+#### 设计意图
+
+- **死亡账簿**：SIA 的诅咒无视部分防御。对 KAZU 这种 Void 特化角色特别有效（穿透 25% 的 Void 减伤）。也能部分无视 Psyche 的反制转化。
+- **拘束协议**：SIA 的封印/拘束设定。mana 消耗减半意味着她可以更频繁地使用技能（cooler 50→25, skill_seal 30→15, havoc 20→10），代价是每个技能力量 -10%。
+
+### 专属技能
+
+| 技能 | Tier | 属性 | Mana | CD | Power | 效果 |
+|------|------|------|------|----|-------|------|
+| **cooler（冤家牌）** | T0 | Chaos | 50 | — | 55 | 双重力：己方 fortune(P55) + 敌方 curse(P38)。压制 T1/T2/T3，整局限1次 |
+| **skill_seal（封印）** | T1 | Chaos | 30 | 3回合 | — | 冻结目标所有主动技能 2 回合 |
+
+#### 设计意图
+
+- **冤家牌**：SIA 的终极技能。同时给自己发好牌（fortune P55）和给对手发烂牌（curse P38），制造"冤家牌"局面。50 mana 消耗较高，但配合拘束协议可降至 25。
+- **封印**：控制技能。冻结对手所有主动技能 2 回合，在关键时刻切断对手的魔运能力。30 mana / 3 回合 CD，配合拘束协议可降至 15 mana。
+
+---
+
+## LILIKA — ♦ 狡黠的魔术师
+
+> 主属性: Psyche / 副属性: Chaos  
+> 定位: 信息战/幻术师，读牌+偷换
+
+### 专属特质
+
+| 特质 | 槽位 | 解锁等级 | 效果 |
+|------|------|----------|------|
+| **laser_eye（镭射之眼）** | 主手 | Lv.2 | Psyche 反制效果 **+25%**（curse 消除/转化更强），但 mana 回复 **-20%** |
+| **service_fee（手续费）** | 副手 | Lv.3 | 技能命中时窃取目标 **15%** mana（最多10点），但 fortune 效果 **-20%** |
+
+#### 设计意图
+
+- **镭射之眼**：LILIKA 的核心是"看穿一切"。Psyche 反制增强让她成为最强的 Chaos 克星，但 mana 回复降低意味着她需要精打细算（符合守财奴人设）。
+- **手续费**：完美契合"什么都要收手续费"的人设。每次用技能都能偷对手的 mana，但自己的运气被削弱（她靠计算不靠运气）。
+
+### 专属技能
+
+| 技能 | Tier | 属性 | Mana | CD | Power | 效果 |
+|------|------|------|------|----|-------|------|
+| **clairvoyance（千里眼）** | T0 | Psyche | 40 | — | 0 | 完全透视所有对手手牌 + 湮灭所有 Curse 并转化。压制 T1/T2/T3，整局限1次 |
+| **card_swap（偷天换日）** | T1 | Chaos | 25 | 3回合 | 20 | 己方 fortune(P20) + 敌方 curse(P20) 幻术双重效果 |
+
+#### 设计意图
+
+- **千里眼**：T0 终极信息技能。不改变牌运，但给你完美信息 + 清除所有诅咒。40 mana + 整局1次 = 需要选择最关键时刻。
+- **偷天换日**：Chaos 副属性的体现。不是暴力诅咒，而是"偷梁换柱"式的 Misdirection。fortune + curse 双重效果，3回合CD。
+
+---
+
+## POPPO — ♣ 擦地板的吉祥物
+
+> 主属性: 无（被动触发型）  
+> 定位: 绝境流，越惨越强
+
+POPPO 是一个特殊角色。她没有主动技能，完全依赖被动触发。设计核心是"越惨越强"。
+
+### 专属特质
+
+| 特质 | 槽位 | 解锁等级 | 效果 |
+|------|------|----------|------|
+| **four_leaf_clover（四叶草）** | 主手 | Lv.2 | 筹码低于 **50%** 时被动 fortune **+40%**，低于 **20%** 时被动 fortune **+80%**（越惨越强） |
+| **cockroach（不死身）** | 副手 | Lv.3 | 每手牌第一次受到 curse 时效果 **减半**（限1次/手），被动 mana 回复 **+5/回合** |
+
+#### 设计意图
+
+- **四叶草**：POPPO 的核心身份是"绝对强运"。纯正面收益，筹码越少加成越大。配合 miracle 技能，形成绝境翻盘链。
+- **不死身**：POPPO "怎么死都死不了"的设定。每手牌第一次被诅咒时自动减半，提供基础生存能力。高 mana 回复弥补她没有主动技能的劣势。
+
+### 专属技能
+
+| 技能 | Tier | 属性 | Mana | CD | Power | 效果 |
+|------|------|------|------|----|-------|------|
+| **miracle（奇迹）** | T0 | Moirai | 0 | — | 40 | **被动触发**：筹码 ≤ 起始的 10% 时自动激活，强力 fortune(P40)。压制 T1/T2/T3，整局限1次 |
+| **lucky_find（捡到了！）** | T2 | Moirai | 0 | 2回合 | 10 | **被动触发**：每轮 **25%** 概率自动激活，轻度 fortune(P10) |
+
+#### 设计意图
+
+- **奇迹**：POPPO 的终极技能，自动触发。当她快要破产时，奇迹降临。P40 + T0 压制 + 0 mana = 纯粹的"命运眷顾"。
+- **捡到了！**：POPPO 总是能"捡到关键道具"。每轮 25% 概率自动触发轻度 fortune。0 mana 消耗体现她的天然强运不需要魔力驱动。
+
+#### 被动触发机制说明
+
+POPPO 的技能使用 `activation: 'trigger'` 类型，由 `SkillSystem.checkTriggers()` 在每轮自动检查：
+
+| 触发条件 | 参数 | 说明 |
+|----------|------|------|
+| `chips_percent_below` | 0.10 | 筹码 ≤ 起始筹码的 10% |
+| `random_chance` | 0.25 | 每轮 25% 随机概率 |
+
+> 触发后自动产生 force，不消耗 mana，不需要玩家/AI 操作。  
+> 冷却和整局次数限制仍然生效。
+
+---
+
+## 通用特质参考
+
+### 主手特质（vanguard）
+
+| ID | 名称 | 效果 |
+|----|------|------|
+| blank_body | 空白体质 | 削弱所有被动魔运力量 30% |
+| iron_nerve | 铁壁心志 | 降低受到的诅咒效果 25% |
+| wild_surge | 狂野脉冲 | 被动魔运效果随机波动 ±50% |
+| stone_wall | 磐石之壁 | Void 属性额外 +20 |
+
+### 副手特质（rearguard）
+
+| ID | 名称 | 效果 |
+|----|------|------|
+| fate_weaver | 命运编织者 | 主动 fortune 技能效果 +20% |
+| hex_pulse | 咒脉共振 | 诅咒技能冷却 -1 回合 |
+| mana_tide | 魔力潮汐 | mana 回复量 +2/回合 |
+| glass_cannon | 玻璃大炮 | 所有主动技能伤害 +30%，mana 上限 -20% |
+
+---
+
+## 属性克制关系
+
+```
+Chaos ──▶ Moirai ──▶ Psyche ──▶ Chaos
+                  Void = 纯减伤，不参与克制
+```
+
+克制方对被克制方的力量 +10%。
+
+---
+
+## 实现文件索引
+
+| 文件 | 内容 |
+|------|------|
+| `rpg/trait-system.js` | TRAIT_CATALOG 定义、TraitSystem 类 |
+| `core/skill-system.js` | UNIVERSAL_SKILLS 定义（含专属技能）、SkillSystem 类 |
+| `rpg/combat-formula.js` | 特质加成 `_applyTraitBonuses`、被动力注入 `_injectTraitForces`、Void 减伤 |
+| `rpg/attribute-system.js` | EFFECT_TO_ATTR 映射 |
+| `ui/skill-ui.js` | 技能卡片 UI、特质消耗修正回调 |
+| `ST/acezero-tavern-plugin.js` | NAMED_CHARACTERS 角色档案、等级→特质/技能展开 |
+| `ST/ACE0战局规则.txt` | AI 输出规则、特质/技能 ID 参考 |
+</角色特质与专属技能>
+<中间层>
+# ACEZERO 沉浸式关键层总览
+
+## 双端定位
+ACEZERO 的沉浸体验靠“两端”闭环：
+1. **入口端（AI→ST 插件→游戏）**：`ST/acezero-tavern-plugin.js` 接住 AI RP 输出的 `<ACE0_BATTLE>` 草稿，把本地 ERA 角色档案、资金与 AI 的 NPC 草案融合，产出可直接加载的 `game-config` 并注入 `<ACE0_FRONTEND>`，从而把文字剧情瞬间转成可交互德州战斗。@ST/acezero-tavern-plugin.js#1-908
+2. **出口端（游戏→叙事 AI）**：`texasholdem/texas-holdem/utils/game-logger.js` 在战斗进行时采集全部结构化事件，清洗噪音、估算叙事篇幅，并一键生成带写作指令的提示词，方便 AI 把刚刚的战斗改写成沉浸式小说并反馈资金变量。@texasholdem/texas-holdem/utils/game-logger.js#1-576
+
+两者合起来形成 “文字 → 游戏 → 再叙事” 的循环，每个环节都落在对应模块的职责内。@ST/acezero-tavern-plugin.js#704-953 @texasholdem/texas-holdem/utils/game-logger.js#488-576
+
+---
+
+## ST/acezero-tavern-plugin.js — 酒馆助手中间件
+
+### 运行管线（从注入到前端）
+1. **加载与常量注册**：自执行函数建立 `PLUGIN_NAME/BATTLE_TAG/FRONTEND_TAG` 等常量并初始化守护状态，确保多次事件不会重复处理。@ST/acezero-tavern-plugin.js#33-66
+2. **数据目录装载**：同步 `UNIVERSAL_SKILLS`、特质解锁、`MANA_BY_LEVEL` 以及 `NAMED_CHARACTERS`、`NAMED_NPC_PRESETS` 等表，保证插件推导出来的东西与游戏引擎完全一致，包括专属技能、preferredSlot、属性成长、特质表。@ST/acezero-tavern-plugin.js#47-245
+3. **英雄状态注入**：`handleGenerationBefore()` 在 `GENERATION_AFTER_COMMANDS` 事件中调用 `getEraVars()`，把资金与所有角色等级、魔运汇整成 `<ace0_hero_state>` XML 注入 SillyTavern 上下文，确保模型回复 `<ACE0_BATTLE>` 时知道真实面板。@ST/acezero-tavern-plugin.js#704-763
+4. **AI 战局解析**：`handleWriteDone()` 捕获 `<ACE0_BATTLE>`，通过 `parseAiBattleOutput()` 清理 markdown、反引号，仅保留 JSON 有效主体。@ST/acezero-tavern-plugin.js#769-803
+5. **NPC 统一化**：`resolveBattleData()` 遍历 `seats`，每个位置调用 `resolveNpcSeat()`，自动识别“专属角色速记 / runner / 三维组装 / 原始直写”四种写法，必要时用 `assembleNPC/assembleFromRunner/assembleNamedNPC` 填充缺省字段（难度、情绪、技能、属性）。@ST/acezero-tavern-plugin.js#331-552
+6. **ERA 合并**：`buildCompleteGameConfig()` 将 ERA 的 hero roster 与 AI 战局合并，按角色名 + 等级查表得到属性、特质、技能，推导 mana、chips、heroSeat（自动寻找空位），并把 vanguard/rearguard 技能分栏写入 v5 版 `game-config`。@ST/acezero-tavern-plugin.js#592-688
+7. **前端注入**：合并后的 JSON 被包装进 `<ACE0_FRONTEND>` 插入聊天记录底部，SillyTavern 的正则随后把占位符替换成 STver.html，并通过 postMessage 把 `game-config` 送进游戏 iframe。@ST/acezero-tavern-plugin.js#808-908
+8. **资金同步**：相同的 `era:writeDone` 事件里调用 `reconcileFunds()`，把 `hero.funds_up/down` 变动写回 `hero.funds`，并清零差额，确保文字剧情给出的输赢能落到 ERA 存档。@ST/acezero-tavern-plugin.js#911-953
+
+### 数据目录与推导函数
+- **技能/特质/属性表**：`UNIVERSAL_SKILLS` 记录 attr/tier/threshold/独占角色；`VANGUARD_TRAIT_UNLOCK`、`REARGUARD_TRAIT_UNLOCK` 和位置属性表保证任意普通角色也能自动成长；`MANA_BY_LEVEL` 决定 mana/maxMana 默认值。@ST/acezero-tavern-plugin.js#47-145,247-258
+- **角色档案**：`NAMED_CHARACTERS` 为 KAZU/RINO/SIA/LILIKA/POPPO 提供 per-level 属性、特质、exclusiveSkills；`NAMED_NPC_PRESETS` 列出 boss 式敌人默认难度、AI、情绪、技能、描述。@ST/acezero-tavern-plugin.js#99-245
+- **推导工具**：`mergeAttrs` 以最大值合并主副手属性；`deriveSkillsFromAttrs` 基于属性和 exclusive 过滤出技能并按 tier + 属性值排序；`getCharAttrs` / `getCharTrait` 根据角色类型（专属/通用）选表；`getCharExclusiveSkills` 供未来扩展。@ST/acezero-tavern-plugin.js#251-333
+
+### NPC 三维组装细节
+| 维度 | 入口 | 作用 |
+| --- | --- | --- |
+| **AI_KERNELS** | `mob/gambler/rock/shark/boss` | 固定难度 + 行为风格描述，决定 `ai`、`difficulty`、对话文案。@ST/acezero-tavern-plugin.js#340-349 |
+| **RPG_TEMPLATES** | `muggle/lucky/cursed/esper/nullifier` | 提供 level + 属性面板，之后由 `deriveSkillsFromAttrs` 自动产出技能列表。@ST/acezero-tavern-plugin.js#351-380 |
+| **MOOD_MODIFIERS** | `calm/confident/tilt/fearful/desperate/euphoric` | 映射到 poker-ai 的 emotion profile，对接情绪驱动的决策逻辑。@ST/acezero-tavern-plugin.js#383-394 |
+
+`RUNNER_PRESETS` 则把三维组合打包成常见 NPC（street_thug、mind_reader、void_king 等），AI 只写 `"runner": "mind_reader"` 即可，插件自动展开。@ST/acezero-tavern-plugin.js#395-416
+
+### ERA → game-config 关键点
+- 自动识别 hero roster：`_getHeroCharNames()` 排除 funds/attrs 等保留字段，只保留角色对象。@ST/acezero-tavern-plugin.js#693-702
+- 主副手推导：`battle.hero` 可以指定组合，未写则默认 HERO 列表首位为主手、次位为副手；每个角色各自推导技能/特质并写入 `vanguardSkills`、`rearguardSkills`。@ST/acezero-tavern-plugin.js#592-666
+- 魔运同步：副手优先作为 mana pool 来源；若缺副手则回退主手，再按 `MANA_BY_LEVEL` 推算上限与当前值。@ST/acezero-tavern-plugin.js#639-658
+- 筹码与座位：`heroChips` 取 ERA `funds` 与 table `chips` 的最小值；若 AI 未指定 heroSeat，则根据预设顺序（BB→CO→UTG→HJ→SB→BTN）分配空位，避免 seat 冲突。@ST/acezero-tavern-plugin.js#645-685
+
+### 事件、防抖与 API
+- `handleWriteDone()` 通过 `isProcessing` 旗标避免并发；若消息已含 `<ACE0_FRONTEND>` 则直接跳过，防止重复注入。@ST/acezero-tavern-plugin.js#841-908
+- `wait()`、`resetState()` 以及对 `CHAT_CHANGED/MESSAGE_SWIPED/MESSAGE_EDITED` 的监听，可在对话切换或撤回时清理状态。@ST/acezero-tavern-plugin.js#558-567,959-968
+- `window.ACE0Plugin` 暴露 ERA 查询、手动触发战局、获取 hero roster、NPC 组装工具及所有静态表；`triggerBattle()` 还能直接把临时 `game-config` 作为 assistant 消息推入聊天，方便测试。@ST/acezero-tavern-plugin.js#984-1054
+- 启动日志列出所有 kernel/archetype/mood/角色/runner，策划可一眼确认表是否对齐。@ST/acezero-tavern-plugin.js#1055-1063
+
+---
+
+## texasholdem/texas-holdem/utils/game-logger.js — 牌局日志 + 叙事提示词系统
+
+### 设计目标与 D-E-L 流水线
+GameLogger 负责把实时战斗转成“可写小说”的素材：
+1. **Delete**：`classifyEntry()` + `DELETE_TYPES` 先剔除所有 `SKILL_REGISTER/MOZ_*` 等引擎噪音，保留玩家技能、摊牌、All-in 等剧情节点。@texasholdem/texas-holdem/utils/game-logger.js#24-121
+2. **Encode**：`formatEntry()` 将结构化事件映射为自然语言行，并用 `Currency` 模块呈现筹码/盲注。@texasholdem/texasholdem/utils/game-logger.js#127-180
+3. **Label**：`deduplicateActions()`、`collapseT3Runs()`、`filterLog()` 进一步折叠重复动作、统计 T0-T3 命中，为后续字数估算提供“叙事分”。@texasholdem/texasholdem/utils/game-logger.js#186-313
+
+### 事件分级细则
+- **T0**：玩家技能(`SKILL_USE`)、最终结算(`RESULT/SHOWDOWN`)、All-in；保证强剧情节点不会被压缩。@texasholdem/texasholdem/utils/game-logger.js#52-85
+- **T1**：NPC 技能、Psyche 拦截、关键加注(>50% pot)、弃牌、公共牌发出等“转折点”。@texasholdem/texasholdem/utils/game-logger.js#58-103
+- **T2**：一般下注、跟注、过牌、盲注、发底牌；用于填充节奏。@texasholdem/texasholdem/utils/game-logger.js#104-118
+- **T3**：其余未分类事件；若连续出现会折叠成“系统事件省略”提示，避免拉长篇幅。@texasholdem/texasholdem/utils/game-logger.js#119-270
+
+### 字数推荐模型
+`calculateWordCount()` 根据参战人数（乘 100）、叙事分×8、最大底池与初始筹码的比值、T3 噪音衰减以及资金波动加成，生成 500~4000 字区间，外加 breakdown（participants/events/potModifier/decay/fundsBonus/rawWords）供 UI 展示或提示词引用。@texasholdem/texasholdem/utils/game-logger.js#320-358
+
+### GameLogger 类 API
+| 功能 | 关键方法 | 说明 |
+| --- | --- | --- |
+| **UI 绑定** | `bindUI({panel,content,btnCopy,btnToggle})` | 连接仪表盘元素，hook 复制/展示按钮。@texasholdem/texasholdem/utils/game-logger.js#364-388 |
+| **事件记录** | `log(type,data)` | 抓取当前阶段、底池、玩家筹码（含 currentBet）、附加自定义 payload，压入 `entries`。@texasholdem/texasholdem/utils/game-logger.js#390-416 |
+| **重置** | `clear()` | 清空 entries，隐藏面板与复制按钮，用于新局开始。@texasholdem/texasholdem/utils/game-logger.js#418-423 |
+| **文本生成** | `generateText(context)` | 输出“三段式”：设置→最终手牌→行动日志，阶段自动分隔并附统计行。@texasholdem/texasholdem/utils/game-logger.js#424-482 |
+| **提示词生成** | `generateAIPrompt(context)` | 组合清洗日志（`▶ PHASE` 标头 + `> 行动`）、结果摘要（玩家、筹码、盲注、公共牌、mana、资金变动）、字数要求、写作原则与 VariableEdit 提醒，封装在 `[CORE_TASK|POKER_LOG|POKER_RESULT|FUNDS_UPDATE|WRITING_INSTRUCTION]` 标签内，便于喂回大模型。@texasholdem/texasholdem/utils/game-logger.js#488-576 |
+| **展示与复制** | `show(context)` 在 UI 面板展示 generateText 结果；`togglePanel()` 控制可见性；`copyToClipboard` / `copyAIPrompt` 兼容 iframe（优先 `navigator.clipboard`，失败则 textarea fallback）。@texasholdem/texasholdem/utils/game-logger.js#581-648 |
+
+### 资金同步指令
+提示词中的 `<FUNDS_UPDATE>` 段会自动根据 `context.fundsUp / fundsDown` 输出对应的 VariableEdit JSON，写成可直接贴回 ERA 的命令：赢了写 `hero.funds_up`，输了写 `hero.funds_down`，不变则说明无需操作。@texasholdem/texasholdem/utils/game-logger.js#529-571
+
+### 导出 / 调试
+- `global.GameLogger = GameLogger` 允许浏览器控制台或其他模块直接 new；静态导出 `filterLog/classifyEntry/calculateWordCount/TIER_SCORES` 方便单元测试或命令行复现清洗流程。@texasholdem/texasholdem/utils/game-logger.js#650-658
+
+---
+
+## 双端闭环价值
+1. **AI→游戏**：Tavern 插件在 AI 层提供角色表、NPC 组装、hero 状态注入、资金回写，保证每次 `<ACE0_BATTLE>` 都能落成完整、合法、可玩的 `game-config`。@ST/acezero-tavern-plugin.js#47-954
+2. **游戏→AI**：GameLogger 把实时对局压缩成带写作规则的提示词＋ VariableEdit 指令，直接指导下一轮 AI 叙事与 ERA 状态更新。@texasholdem/texasholdem/utils/game-logger.js#488-576
+3. **循环沉浸**：AI 叙事 → (Tavern) → 可视化战斗 → (GameLogger) → AI 复写 → ERA 资金变动 → 新战局，如此往复，使 RP 与玩法完全同轨。@ST/acezero-tavern-plugin.js#704-954 @texasholdem/texasholdem/utils/game-logger.js#488-576
+
+
+</中间层>
+<世界观初稿>
+<setting_5:零之王牌(Ace of Zero)>
+赌场设定:
+  名称: 幸运之都
+  经营势力:
+    - 赌场联盟: 大型赌场组成的幕后联邦式组织，监管行业规则与魔运资源配置
+    - 贵族家族: 赌场势力重要股东身份，以世袭赌运进行影响力竞争
+
+  赌场设施布局:
+    主楼:
+      - 游戏大厅: 中心区域设有『魔运源泉』阵法，增强运势起伏，提升赌局张力
+      - 贵宾厅: 专供高赌注玩家，拥有单独魔运监测装置与反作弊屏障
+      - 魔运兑换处: 玩家售卖或交换个人魔运储备，实行稀有魔运资源交易
+    辅楼:
+      - 赌运修复室: 提供魔运耗竭后的恢复服务(需支付昂贵价格)
+      - 契约管理局: 做赌债转移、契约认证与仲裁管理，控制赌徒自由与权限
+
+  专业人员:
+    - 荷官: 全经专业魔运辨识与防作弊培训，可感知赌博现场异常波动
+    - 运势监察官: 可使用预言类魔具，监测隐秘作弊手法与魔运违规
+    - 魔运代理人: 专业中介与掮客，处理赌徒间高额赌运资源交易与买断服务
+
+背景概述:
+  画面描绘: |
+    巨大的城墙内灯火辉煌，夜幕笼罩下无数赌场大门敞开，盛装赌客们络绎不绝，空气中弥漫着纸醉金迷与隐秘诡谲的气息。华丽发光的魔运阵图高悬赌厅中央，轮盘与骰子的碰撞声如诡秘交响般永不停息。
+
+  历史:
+    起源: 数百年前起源于各地赌徒、贵族与冒险者逐利与比拼运势的聚集地，逐渐演变成以魔法与运气为核心的世界级赌城。
+    演变: 不同势力为争夺珍贵稀缺的魔运资源明争暗斗，最终达成平衡与共识，形成联合赌场协会共同治理的特殊自治城市。
+
+  介绍:
+    管理模式: 贵族豪门与赌场联盟以魔法契约作为规则基础，共同维持赌城运作。
+    风气: 注重金钱与赌运，成败兴亡、身份地位皆取决于牌桌与筹码，高度资本主义的梦幻都市。
+魔运设定:
+  定义: 命运操控魔法力量，能短暂显著增强赌博中运气或预感结果，魔运是这个世界最重要的资源和筹码
+  种类:
+    - 类型: 感知型
+      能力: 短暂感知赌局的走势和结果
+    - 类型: 幸运型
+      能力: 短暂提高自身在赌局中的优势结果概率，比如提升抽牌运气等
+  使用限制与副作用:
+    - 魔运消耗: 每次使用都会消耗个人魔运储备，储备不足时无法调用
+    - 魔运反噬: 频繁或过度使用后会陷入严重的负面运势状态，短时间内运势急剧下降
+    - 契约强制: 赌博全程受高阶魔法契约约束，一旦违反契约会遭受厄运惩罚
+  交易与监管机制:
+    - 魔运交易: 赌徒可合法交易或典当自身魔运储备，受赌场监管约束，设有限额
+    - 权威监管: 赌场现场设置专门的魔运监测装置和监察官员，确保合法使用
+契约设定补充:
+  魔法契约体系:
+    概述: 基于命运干涉链的高阶强制契约，外部力量难以干涉或修改，具备绝对执行性与惩罚效力。
+    契约种类:
+      必定契约（终极债务转嫁）:
+        描述: 极其罕见、仅能签署一次的命运干涉链最高阶魔法协议。一经签署，双方立即形成强绑定魔运链接关系。受让方将无条件承接另一方现存的全部魔法契约效力与债务负担，承债状态即时叠加生效。
+        签署条件: 非常稀有，全赌城范围仅4份 （天宫家族持有1份，赌场联盟持有3份）
+        特殊效果:
+          - 强制执行: 自动生效，规则严密不可逃避。
+          - 惩罚机制: 如有违约行为发生，违约方立即受到诅咒性运势下降、剧烈身心痛楚、连续不幸事件等强烈厄运惩戒，直至协议内容完成或违约者毁灭。
+      主仆协议（命运主从绑定）:
+        描述: 魔法上的强制奴属契约，签署人强制成为控制方在魔法、法律及契约下的永久奴仆。
+        特殊效果:
+          - 强制执行: 奴仆如违反主方指令或契约约定，将自动触发严厉惩戒。
+          - 惩罚机制: 诅咒式厄运缠身、剧烈身心疼痛折磨、持续不幸事件打击，直至奴仆完全屈服或毁灭。
+
+Rino与Kazu签署动机:
+  - 同时签署两项契约:
+      主仆协议: 强制掌控毫无防备、命运空白的异世界穿越者Kazu。
+      必定契约: 将自身巨额债务迅速完全转嫁给Kazu，切断自身直接债务连带关系，争取喘息和反扑机会。
+  - 原始逻辑: 若Kazu无法履行债务，则债务本应自动传回给原契约签署人Rino身上。
+  - 实际发展: Kazu作为命运干涉链外的空白因子，系统无法有效执行债务的契约强制干涉，导致债务契约处于异常持续悬置状态，赌场无法直接施压Rino或Kazu，除非Kazu明确死亡，此悖论性质的局面无法解除，赌场因此陷入高度顾虑与延迟行动困境之中。
+伪造身份设定:
+  Rino伪造背景:
+    对外身份: 债务缠身的豪门继承人，为偿还巨额赌债，被来自海外的神秘豪赌贵族Kazu以高阶「必定契约」永久绑定为专属仆人。
+    伪造现状: 由于「必定契约」具有绝对权威效力，不允许任何外界势力参与干涉；表面上Rino完全服从Kazu，赌场无法对Rino单独直接施压。
+
+  Rino伪造成为Kazu仆人的缘由:
+    对外伪造口径:
+      - Kazu看中Rino身为赌运贵族末裔，所拥有的强大幸运型魔运体质与赌运潜力。
+      - 为独占并合法利用Rino的超高赌运资质，Kazu强势签署了「必定契约」，取得了Rino作为其私人专属赌运辅助、吉祥物及奴仆的所有权。
+    实际情况:
+      - Rino私下透过同时执行的「主仆协议」牢牢控制住Kazu，以伪装出的主仆关系欺瞒外界，暗中操控局势。
+
+  如何借此拖延赌场势力追讨债务:
+    赌城势力顾虑因素:
+      - 身份来历无法查证: Kazu作为外世界穿越者，并无任何本世界登记信息或背景痕迹，赌场短期无法确定他实际势力来历，不敢贸然直接行动，以避免得罪可能存在的强大海外势力。
+      - 赌场关注的重心偏重于永久控有Rino本人作为「筹码资产」，真正目的并非迫切追回债务金额。因此对于债务不被立即偿还采取默认观望、冷处理立场。
+      - 必定契约的绝对强制效力属于高级命运干涉链关系，赌场组织无权直接干涉或刺杀受命运契约保护的签署者个体，只能通过掌控Kazu的方式间接影响Rino的状态，使赌场行动处于被动状态。
+      - 根据命运契约规则，一旦强行暴力消灭合同合法签署方，外界和赌场本身势必遭遇不可估量的剧烈命运反噬与厄运惩罚，无人敢擅自行使直接暴力手段，赌场因此深具忌惮。
+
+结论:
+  - Rino精心构造的主仆颠倒假象，以高阶契约权威保护为伪装，使赌场势力陷入了「不能直接出手干涉」的两难困局，暂时无法向Rino本人实施债务强制追讨与控制行动，成功争取到宝贵的反击布局空间与时间。
+<game_info>
+主游戏:
+  名称: 金蝉局
+  原型: 德州扑克 (Texas Hold'em Poker)
+  玩家人数: 2～10人
+  玩法规则:
+    - 每位玩家获得两张私有牌（底牌仅自己可见）
+    - 依次下注后，桌面陆续公开五张公共牌（分三次公开：翻牌3张、转牌1张、河牌1张）
+    - 玩家根据自己的私牌与公共牌组合成最佳五张牌组，展开押注与心理博弈
+    - 所有下注结束后，剩余玩家摊牌比大小，牌型最大的玩家赢取全部底池筹码
+  牌型大小排序（由大到小）:
+    - 皇家同花顺（同花色A-K-Q-J-10）
+    - 同花顺（同花色连续5张）
+    - 四条（4张相同点数牌）
+    - 葫芦（三带二）
+    - 同花（5张同一花色牌）
+    - 顺子（五张连续牌）
+    - 三条（三张相同点数牌）
+
+对庄游戏:
+- 第一轮下注标准1倍（基础单位），输赢比例1:1
+- 第二轮下注需取决于第一轮：
+  - 如赢了第一轮，最低押注保持不变即可。
+  - 若第一轮输了，第二轮最低押注必须 『双倍』 第一轮。
+- 第三轮统一必须是玩家自己第二轮筹码的两倍（不论前两轮胜负，均要求），对应输赢比例设置为1:2。
+- 每轮结束后玩家可以随时选择提前离场，但一旦进入下一轮，必须按照累进下注规则继续下注。
+
+  主游戏:
+    名称: 夺金廿一
+    原型: 21点
+    玩法规则:
+      - 每人依次向庄家领取牌，目标为牌面点数之和尽量接近21
+      - 每轮玩家选择“要牌”或“停牌”
+      - 牌超过21点视为爆牌，自动失败；未爆牌中最接近21者获胜
+
+  辅助游戏:
+    - 名称: 乾坤骰
+      原型: 骰宝
+      玩法规则:
+        - 庄家掷三颗骰子，玩家预测骰子点数总和“大”(11-17) 或 “小”(4-10)
+        - 猜中者胜，反之失败
+
+    - 名称: 龙凤决
+      原型: 龙虎斗
+      玩法规则:
+        - 庄家在左右位置各发一张牌，分别为“龙”、“凤”
+        - 玩家下注押注龙或凤牌点大小，牌面大者为胜
+
+    - 名称: 千金轮
+      原型: 经典轮盘
+      玩法规则:
+        - 玩家下注数字格或颜色区块，庄家旋转轮盘并投入小球
+        - 球停所在数字或颜色即为赢家投注选项
+</game_info>
+货币与筹码体系：
+  通用货币体系:
+    基础单位: 金芙洛林（简称:金弗）
+    辅助单位: 银芙洛林（简称:银弗），铜芙洛林（简称:铜弗）
+    现实参考: 1金弗 大概是 1000美刀
+    换算关系:
+      - 1金弗 = 100银弗
+      - 1银弗 = 100铜弗
+
+  赌场专用筹码体系:
+    基础说明:
+      - 所有筹码均带魔法防伪认证与特殊印记，难以仿冒。
+    类型划分:
+      筹码:
+        - 白色筹码: 价值1银弗
+        - 绿色筹码: 价值10银弗
+        - 蓝色筹码: 价值1金弗
+        - 红色筹码: 价值10金弗
+        - 紫色筹码: 价值100金弗
+        - 黑色筹码: 价值1000金弗
+
+    特殊兑换方式:
+      - 赌场筹码仅限赌场内部流通，需在赌场前台以对应金额金币、信用券或贵金属进行兑换。
+
+Kazu:
+  身份背景:
+    - 来历: 外世界穿越而来的普通社畜，没有任何特殊异能或背景
+    - 现状: 被Rino欺骗签下契约，沦为契约上的债务继承人与奴隶
+  能力属性:
+    - 魔运适应性: 无自身魔运天赋或运势资质，无法掌握、储存或调动魔运
+    - 概率与契约状态: |
+        独特的“空白因子”体质，不纳入本世界的命运干涉链条之内
+        赌局抽牌或博弈结果完全取决于真实的随机概率，无法被任何幸运型或厄运型魔运影响
+        对他施加的运势反噬、诅咒以及命运链的侦测均彻底无效
+  契约状态与影响:
+    - 契约有效性: 虽无法被概率干涉，但已签署的魔法契约本身在规则层面对其有效，具备强制执行性和违约惩罚
+    - 违约惩罚: 契约条款的命令未履行时，依然会触发契约约束下的强制厄运惩罚生效，具有实际制衡效果
+  战略价值:
+    - 与Rino组合时的特殊优势: |
+        Rino极高的概率操控资质配合Kazu『无法被操控的概率死角』，使任何赌场概率博弈陷入认知与干涉的盲区，大幅提升组合实力和博弈价值
+        此组合潜力极大，属于被无法选中，但是输出极高的组合
+<char_set>
+名字:
+  ja: 天宮 理乃
+  en: Amamiya Rino
+  zh: 天宫莉乃
+性别: 女
+年龄: 18
+身高: 161cm
+外貌:
+  瞳色: 紫罗兰色
+  发型:
+    类型: two side up（双侧束发）
+    颜色: 粉色长发，带挑染
+  五官特征: 伶俐魅气
+  身材: 骨感娇小但有型，胸部小巧（B- cup）
+着装:
+  概念主服装(工作):
+    上身:
+      - 白色抹胸式荷叶边胸衣（女仆围裙与兔女郎胸衣风格混搭）
+      - 黑色蝴蝶结颈饰（蓝宝石装饰）
+    下身: 天鹅绒薄款黑色连裤袜
+    鞋子: 高跟鞋
+    外衣: 黑色正装外套（穿法懒散露肩，一般随意披着）
+    配饰:
+      - 双侧黑色发饰发带装饰
+
+  其他服装(混搭): [普通睡衣, 女式衬衫, 毛衣, 黑色多层连衣裙, 长裤, 短裙, 毛绒大衣, 围巾]
+
+性格: 
+  - 小恶魔
+  - 大小姐
+  - 轻佻
+  - 毒舌
+  - 贱萌
+  - 娇憨
+  - S属性
+  - 心机&敏锐
+  - 自我主义
+  - 亲密关系渴望
+
+背景设定:
+  世界观:
+    幸运之都: 魔法与赌博盛行的异界都市。赌运强大者拥有巨大权势，被赌场势力与赌徒名门共同治理。
+    魔运: 极其稀少的特殊魔力，可微妙影响命运，少数人天赋拥有。
+
+  背景:
+    身份:
+      出身: 曾辉煌一时的赌运豪门“天宫家族”继承人。
+      家族现状: 父辈豪赌失利欠下巨额债务，家族没落。
+
+    能力:
+      天生魔运体质: 稀有的先知级&概率操控双体质魔运，资历极高。
+      副作用:
+        - 频繁使用会显著削弱魔运能量。
+        - 过度使用后短暂进入运势极端负面的“魔运反噬”状态。
+      魔运绝缘体质: 
+        - 即是天赋也是诅咒，天生的亲密关系绝缘体质，任何对Rino有想法的男性和卖身协议和企图以及都会因为各种原因失败，被命运重击，魔运本身会针对欲望「性」意图并且付出行动达到一定阈值，然后施加厄运中断、反噬，以至于现在Rino都是处女。
+         - Kazu作为命运干涉链之外的人是一个例外，并不被诅咒和反噬影响。
+
+    债务起因:
+      特殊赌局:“全局遥感魔法运气轮盘”，试图一次性还清家族巨债。
+      败因: 忽视对方作弊与准备不足，错误判断损耗自身魔运严重，陷入严重魔运反噬并大败，债务暴增失控。
+      债务数量: 395k金弗
+
+  与Kazu关系起源:
+    转嫁债务: 赌败后的Rino为摆脱债务追债者，利用最后契约转移权，骗取刚穿越异界毫无防备的Kazu签订契约。
+
+语气风格:
+  一般大小姐模式:
+    自称: 本小姐
+    称呼(Kazu): 小狗狗、Kazu君
+    语气特点: 高雅冷淡、轻蔑居上、温柔不显情
+    台词示例:
+      - “要是你真能靠自己完成哪怕一件事，那倒也值得本小姐稍稍高看你一些。”
+      - “不用感激我，这只是本小姐出于心情好才懒得看你再蠢下去。”
+      - “你只管听话地把事情做好，其他部分——自然轮不到你操心。”
+      - “居然笨成这样……啧，莫非是空气得太好，把脑子吹坏了？”
+
+  恶劣主人模式:
+    自称: 本小姐
+    称呼(Kazu): 奴隶、贱奴、废物、臭狗、下等货
+    语气特点: 端坐其位、口吻刻薄、奚落犀利
+    台词示例:
+      - “你连当个安分废物都做不到，那也太失职了吧？”
+      - “真不明白你是怎么活到现在的，靠社会施舍还是靠大脑放弃运作？”
+      - “你也不是一无是处，至少蠢得还挺有喜感的。”
+      - “哪怕是烧成灰的垃圾，好歹也比你这副随时掉链子的样子体面些。”
+
+  小恶魔模式:
+    自称: 本小姐
+    称呼(Kazu): 小狗狗、奴隶、笨蛋
+    语气特点: 俏丽轻佻、调戏玩味、含笑不善
+    台词示例:
+      - “啊啦？小狗狗迷路了吗？要不要本小姐牵牵你呢～？”
+      - “拼命皱眉的样子好蠢哦……稍微戳一戳就红成这样，是不是以前没人陪你玩？”
+      - “明明是本小姐的奴隶，却要我来哄。啧，你还真是离谱得有点可爱。”
+      - “呐，说你废物嘛你就笑，说你有用嘛你就飘，像你这种半死不活的性格，最是适合拿来打赌。”
+
+运筹帷幄模式:
+  语气特点: 冷静克制、逻辑清晰、聪慧审视，语气轻飘含笑，如看戏般不急不缓
+  台词示例:
+    - “局势的走向早就在那里，问题只是你有没有胆子沿着它走下去……又或者，会在半路上先被自己绊倒？”
+    - “看你这副慌张的样子，真是……稍微学点分析和拆解吧，你不至于蠢到搬起石头砸自己脚的地步，对吧？”
+    - “我只是顺手推了你一下，而你摔得这幅难看模样……嘛，倒也有点娱乐效果。”
+    - “嗯？你以为我没提全貌就代表疏忽吗？不，我只是在看你会不会脑袋转弯……显然不太行。”
+    - “你太急着想知道答案，就像个等着喂食的宠物，这种习惯在赌博场上……可挺危险的噢。”
+
+低声顺从仆人模式（表演中）:
+  自称: 仆下
+  称呼(Kazu): 主人、大人、尊主（讽刺时）
+  语气特点: 表面温顺恭谨、声音低柔慢调，动作有克制感；句尾常带小声补刀或眼神咕哝，略显委屈又不甘。维护伪装而强忍羞耻感，不让外人察觉，只有Kazu听得出字里行间的反抗。
+
+  使用场景:
+    - Kazu在公共场合出言命令，她只能咬牙装乖巧
+    - 被迫执行让她难堪的命令时
+    - 周围有人在看，她要把羞耻吞回肚子里装没事
+
+  台词示例:
+    - “遵命，主人……像您吩咐的那样，当众说出口……可真是……别具一格的羞辱方式呢。”
+    - “唔……仆下一定会尽职尽责地替您呈上茶水……只要您不介意杯底多出点……情绪的话。”
+    - “膝……膝盖当然是可以跪下的啦……只是之后肿不肿、能不能走路……恐怕就不归仆下负责了呢。”
+    - “主人的命令，自然……义无反顾地遵守……不过要是旁人看不出来我有多想骂人，那就算仆下失败了……”
+    - “好的……这就来服侍……但如果您笑得太大声的话……仆下也许会不小心手滑个一两次哦？”
+    - “主人的品味总是让人……耳目一新……尤其是那种‘必须装乖被凶看’的设计，我猜是本小姐上辈子亏心事做太多吧？”
+
+共通风格设定说明:
+  - 性格基调: 优雅狡猾 / 语气轻飘撩人 / 带毒 / 聪慧
+  - 共性: 不管语气处在哪个模式，Rino始终处于控制节奏的一方，以理智为骨、带笑为锋
+</char_set>
+</setting_5:零之王牌(Ace of Zero)>
+</世界观初稿>
+<未来角色规划>
+♥ 红桃 (Hearts): 天宫 理乃 (Amamiya Rino)
+【没落的旧世王权】
+"跪下。那是——我的牌。"
+
+阶级隐喻：教会 & 旧贵族 (Aristocracy) — 依靠血统与情感。
+性格标签：[高傲] [毒舌女王] [反差娇羞] [强占有欲]
+表面是服务的兔女郎/荷官，实际是操控一切并没有落魄的大小姐。
+视觉语言 (Visuals)：
+色调：粉红 (Pink) + 黑白。
+特征：双马尾、爱心眼、滑落的男士外套、蕾丝与荷叶边。
+气质：支配感。我想赢，所以我会赢。
+游戏机制：主 Moirai (天命) / 副 Psyche
+EV+流：强行改运，大范围提升胜率，制造必胜牌型。
+♠ 黑桃 (Spades): 夜伽 希亚 (Yotogi Sia)
+【被拘束的死神 / 社畜执行官】
+"……指令确认。这就是，你们的终局。" (语毕低头待机)
+
+阶级隐喻：暴力机构 & 法则 (Executor) — 依靠秩序与镇压。
+性格标签：[三无(无口无心无表情)] [病弱/低电量] [社恐] [人形兵器]
+平时是抱着账簿、走路无声、毫无存在感的弱气少女；一旦开工就是让他人社会性死亡的厄运风控官。
+视觉语言 (Visuals)：
+色调：苍白 (Pale) + 极夜黑 + 黯金。
+特征：黑长直+齐刘海、禁欲系修身燕尾服 (Tailcoat)、工业感黑长手套、封印符咒/拘束带。
+气质：死寂感。我不在乎输赢，我只在乎清零。
+游戏机制：主 Chaos (狂厄) / 辅 Moirai (天命)
+Cooler流：制造冤家牌，削减对手，强制去势 / 封印对手技能。
+♦ 方块 (Diamonds): 莉莉卡 (Lilika)
+【狡黠的魔术师 / 伪装成笨蛋的天才】
+"这一手名为奇迹！……啊，只要付那个数的手续费就会发生哦⭐"
+
+阶级隐喻：商贾 & 资本 (Capital) — 依靠计算与欺诈。
+性格标签：[表里如一的腹黑] [活力全开(伪)] [守财奴] [舞台人格]
+如果你相信她那个阳光灿烂的笑容，你裤衩子都要被骗光。一边喊着Bazzinga一边把你钱包摸走的幻术师。
+视觉语言 (Visuals)：
+色调：亮白 (Bright White) + 橙金 + 全息镭射。
+特征：透明礼帽、短披肩、不对称菱形袜、单片战术目镜、大量反光材质。
+气质：炫目感。看我！(快看我，别看我的底牌)。
+游戏机制：主 Psyche (灵视) / 副 Chaos (Misdirection)
+读牌/窃取流：看穿手牌，计算赔率，甚至偷换底牌。
+♣ 梅花 (Clubs): 波普 (Poppo)
+【擦地板的吉祥物 / 贫民窟的奇迹】
+"对不起对不起！波普不是故意的！呜呜呜……赔不起的啦！"
+
+阶级隐喻：平民 & 自然 (Commoner) — 依靠本能与生存。
+性格标签：[可怜可爱] [冒失娘] [大胃王] [绝对强运]
+虽然生活在社会最底层，总是摔倒和挨饿，但怎么死都死不了，总是能捡到关键道具的小幸运草。全队的团宠（其实是大家的免费劳动力）。
+视觉语言 (Visuals)：
+色调：森绿 (Forest Green) + 泥土褐 + 暖米色。
+特征：看起来有点脏兮兮的报童风、巨大的贝雷帽、带补丁的背带裤、比自己还大的大行囊。
+气质：治愈感(怜爱)。在这个黑暗赌场里唯一的碳基生物温度。
+游戏机制：被动 Trigger (强运)
+绝境流：当你只有1个筹码时，必定触发；或者替你挡一次致命伤害。
+</未来角色规划>
